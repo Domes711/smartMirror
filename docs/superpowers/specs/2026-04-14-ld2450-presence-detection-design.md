@@ -19,7 +19,7 @@ LD2450 (UART) → Python daemon → presence logic → GPIO17 pulse → relay �
 1. **`ld2450_daemon.py`** — systemd service that:
    - Reads UART from `/dev/ttyAMA0` at 256000 baud
    - Parses LD2450 binary frame protocol
-   - Filters targets: distance ≤ 1500mm (1.5m)
+   - Filters targets: rectangular zone `abs(X) ≤ 400mm AND 0 < Y ≤ 1500mm` (±40cm wide, 1.5m deep)
    - Tracks state: `PRESENT` / `ABSENT`
    - On `ABSENT → PRESENT` transition: short GPIO17 pulse (turn display ON)
    - After 2 minutes continuous `ABSENT`: short GPIO17 pulse (turn display OFF)
@@ -41,13 +41,13 @@ LD2450 (UART) → Python daemon → presence logic → GPIO17 pulse → relay �
 ## Data Flow
 
 **Presence detected:**
-1. LD2450 sends frame with target at distance ≤ 1500mm
+1. LD2450 sends frame with target where `abs(X) ≤ 400mm AND 0 < Y ≤ 1500mm`
 2. Daemon transitions state to `PRESENT`
 3. Daemon pulses GPIO17 for 100ms
 4. Relay closes → simulates button press → display turns ON
 
 **Absence timeout:**
-1. No targets within 1.5m for 2 minutes
+1. No targets in zone (`abs(X) ≤ 400mm AND 0 < Y ≤ 1500mm`) for 2 minutes
 2. Daemon transitions state to `ABSENT`
 3. Daemon pulses GPIO17 for 100ms
 4. Relay closes → simulates button press → display turns OFF
@@ -57,7 +57,7 @@ LD2450 (UART) → Python daemon → presence logic → GPIO17 pulse → relay �
 Binary frames at 256000 baud. Each frame:
 - Header: `FD FC FB FA`
 - Data: up to 3 targets, each with X (mm), Y (mm), speed (cm/s)
-- Distance = `sqrt(X² + Y²)` in mm
+- Detection zone: `abs(X) ≤ 400mm AND 0 < Y ≤ 1500mm` (rectangle ±40cm wide, 1.5m deep)
 - Footer: `04 03 02 01`
 
 ## Sensor Placement

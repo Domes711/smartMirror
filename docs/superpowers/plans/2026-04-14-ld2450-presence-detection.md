@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Integrate HLK-LD2450 radar sensor with Raspberry Pi to detect presence within 1.5m and control display power via GPIO17 relay (simulating button press) — display ON when someone approaches, OFF after 2 minutes without presence.
+**Goal:** Integrate HLK-LD2450 radar sensor with Raspberry Pi to detect presence in a rectangular zone (±40cm wide, 1.5m deep) and control display power via GPIO17 relay (simulating button press) — display ON when someone approaches, OFF after 2 minutes without presence.
 
-**Architecture:** A Python daemon reads LD2450 binary frames from UART `/dev/ttyAMA0` at 256000 baud, calculates target distances, tracks presence state, and pulses GPIO17 to trigger a relay on state changes. A systemd service ensures the daemon runs on boot.
+**Architecture:** A Python daemon reads LD2450 binary frames from UART `/dev/ttyAMA0` at 256000 baud, filters targets by rectangular zone (`abs(X) ≤ 400mm AND 0 < Y ≤ 1500mm`), tracks presence state, and pulses GPIO17 to trigger a relay on state changes. A systemd service ensures the daemon runs on boot.
 
 **Tech Stack:** Python 3, pyserial, RPi.GPIO, systemd
 
@@ -173,7 +173,8 @@ FRAME_FOOTER = bytes([0x04, 0x03, 0x02, 0x01])
 FRAME_MIN_LEN = 10  # header(4) + length(2) + data(0+) + footer(4)
 
 GPIO_RELAY = 17
-PRESENCE_DISTANCE_MM = 1500
+PRESENCE_X_MM = 400     # half-width of detection zone (±40cm)
+PRESENCE_Y_MM = 1500    # depth of detection zone (1.5m)
 ABSENCE_TIMEOUT_SEC = 120
 RELAY_PULSE_MS = 100
 
@@ -242,34 +243,39 @@ cat >> ~/ld2450/test_ld2450.py << 'EOF'
 
 from ld2450_daemon import PresenceTracker
 
-def test_presence_detected_when_target_within_range():
-    tracker = PresenceTracker(distance_mm=1500, timeout_sec=120)
-    targets = [(0, 1000, 0)]  # 1000mm away
+def test_presence_detected_when_target_in_zone():
+    tracker = PresenceTracker(x_mm=400, y_mm=1500, timeout_sec=120)
+    targets = [(200, 1000, 0)]  # x=200 ≤ 400, y=1000 ≤ 1500 → in zone
     event = tracker.update(targets)
     assert event == 'PRESENT'
 
 def test_no_event_when_already_present():
-    tracker = PresenceTracker(distance_mm=1500, timeout_sec=120)
-    tracker.update([(0, 1000, 0)])  # first: PRESENT
-    event = tracker.update([(0, 1000, 0)])  # second: no change
+    tracker = PresenceTracker(x_mm=400, y_mm=1500, timeout_sec=120)
+    tracker.update([(200, 1000, 0)])  # first: PRESENT
+    event = tracker.update([(200, 1000, 0)])  # second: no change
+    assert event is None
+
+def test_no_event_when_target_too_wide():
+    tracker = PresenceTracker(x_mm=400, y_mm=1500, timeout_sec=120)
+    event = tracker.update([(600, 1000, 0)])  # x=600 > 400 → outside zone
     assert event is None
 
 def test_no_event_when_target_too_far():
-    tracker = PresenceTracker(distance_mm=1500, timeout_sec=120)
-    event = tracker.update([(0, 2000, 0)])  # 2000mm > 1500mm
+    tracker = PresenceTracker(x_mm=400, y_mm=1500, timeout_sec=120)
+    event = tracker.update([(200, 2000, 0)])  # y=2000 > 1500 → outside zone
     assert event is None
 
 def test_absent_event_after_timeout():
-    tracker = PresenceTracker(distance_mm=1500, timeout_sec=0)
-    tracker.update([(0, 1000, 0)])   # PRESENT
-    tracker.update([(0, 2000, 0)])   # no target in range, timeout=0 → immediate ABSENT
-    event = tracker.update([(0, 2000, 0)])
+    tracker = PresenceTracker(x_mm=400, y_mm=1500, timeout_sec=0)
+    tracker.update([(200, 1000, 0)])   # PRESENT
+    tracker.update([(600, 2000, 0)])   # outside zone, timeout=0 → immediate ABSENT
+    event = tracker.update([(600, 2000, 0)])
     assert event == 'ABSENT'
 
 def test_no_absent_event_before_timeout():
-    tracker = PresenceTracker(distance_mm=1500, timeout_sec=9999)
-    tracker.update([(0, 1000, 0)])   # PRESENT
-    event = tracker.update([(0, 2000, 0)])  # no target but timeout not elapsed
+    tracker = PresenceTracker(x_mm=400, y_mm=1500, timeout_sec=9999)
+    tracker.update([(200, 1000, 0)])   # PRESENT
+    event = tracker.update([(600, 2000, 0)])  # outside zone but timeout not elapsed
     assert event is None
 EOF
 echo 'Presence tests added'
@@ -292,8 +298,9 @@ cat >> ~/ld2450/ld2450_daemon.py << 'EOF'
 
 
 class PresenceTracker:
-    def __init__(self, distance_mm: int, timeout_sec: int):
-        self.distance_mm = distance_mm
+    def __init__(self, x_mm: int, y_mm: int, timeout_sec: int):
+        self.x_mm = x_mm      # half-width of detection zone (±x_mm)
+        self.y_mm = y_mm      # depth of detection zone (0 to y_mm)
         self.timeout_sec = timeout_sec
         self._present = False
         self._last_seen = None  # time when presence was last detected
@@ -301,12 +308,12 @@ class PresenceTracker:
     def update(self, targets: list):
         """
         Feed new targets. Returns 'PRESENT', 'ABSENT', or None.
-        - 'PRESENT': someone just entered range
-        - 'ABSENT': no one in range for timeout_sec seconds
+        - 'PRESENT': someone just entered the rectangular zone
+        - 'ABSENT': no one in zone for timeout_sec seconds
         - None: no state change
         """
         in_range = any(
-            calculate_distance(x, y) <= self.distance_mm
+            abs(x) <= self.x_mm and 0 < y <= self.y_mm
             for x, y, _ in targets
             if not (x == 0 and y == 0)
         )
@@ -390,7 +397,8 @@ def read_frame(ser: serial.Serial) -> bytes:
 def main():
     setup_gpio()
     tracker = PresenceTracker(
-        distance_mm=PRESENCE_DISTANCE_MM,
+        x_mm=PRESENCE_X_MM,
+        y_mm=PRESENCE_Y_MM,
         timeout_sec=ABSENCE_TIMEOUT_SEC
     )
     try:
