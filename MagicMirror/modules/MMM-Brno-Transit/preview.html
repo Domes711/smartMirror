@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>MMM-Brno-Transit · design preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        /* MagicMirror-like global */
+        :root {
+            --color-text: #fff;
+            --color-text-dimmed: #999;
+            --color-text-bright: #fff;
+            --font-primary: "Roboto Condensed", sans-serif;
+        }
+        html, body {
+            background: #000;
+            color: var(--color-text);
+            font-family: var(--font-primary);
+            font-weight: 400;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            min-height: 100vh;
+            padding: 40px 60px 80px;
+            box-sizing: border-box;
+        }
+
+        h1.page-title {
+            font-weight: 100;
+            font-size: 28px;
+            color: var(--color-text-dimmed);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin: 0 0 8px;
+        }
+        h1.page-title small {
+            display: block;
+            font-size: 14px;
+            letter-spacing: 2px;
+            margin-top: 6px;
+            color: #555;
+        }
+
+        .variants {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 50px;
+            margin-top: 60px;
+        }
+
+        .variant {
+            min-height: 200px;
+        }
+        .variant-label {
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #555;
+            margin-bottom: 16px;
+            border-bottom: 1px dashed #222;
+            padding-bottom: 6px;
+        }
+
+        /* MM "top_right" style: content right-aligned */
+        .mm-region-right {
+            text-align: right;
+        }
+
+        /* MM module wrapper */
+        .module {
+            display: inline-block;
+            text-align: left;
+            margin-bottom: 30px;
+        }
+
+        /* MM header (.module-header) */
+        .module-header {
+            font-family: var(--font-primary);
+            font-weight: 400;
+            font-size: 15px;
+            color: var(--color-text);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px solid #666;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+            line-height: 1;
+        }
+
+        /* MMM-Brno-Transit */
+        .mmbt {
+            font-family: var(--font-primary);
+        }
+        .mmbt-row {
+            display: grid;
+            grid-template-columns: 24px 36px 1fr;
+            column-gap: 14px;
+            align-items: baseline;
+            padding: 6px 0;
+            line-height: 1;
+        }
+        .mmbt-icon {
+            font-size: 16px;
+            color: #999;
+            text-align: center;
+            line-height: 1;
+        }
+        .mmbt-line {
+            font-weight: 700;
+            font-size: 22px;
+            color: var(--color-text-bright);
+            font-feature-settings: "tnum";
+            font-variant-numeric: tabular-nums;
+        }
+        .mmbt-times {
+            font-size: 18px;
+            font-weight: 300;
+            white-space: nowrap;
+        }
+        .mmbt-time {
+            color: var(--color-text-bright);
+        }
+        .mmbt-time + .mmbt-time {
+            margin-left: 12px;
+            color: var(--color-text-dimmed);
+            font-size: 16px;
+        }
+        .mmbt-empty {
+            color: #555;
+            font-style: italic;
+            font-weight: 300;
+        }
+
+        /* Reference modules so we can compare style */
+        .ref-clock-time {
+            font-size: 60px;
+            font-weight: 100;
+            line-height: 0.95;
+            letter-spacing: -2px;
+        }
+        .ref-clock-date {
+            font-size: 16px;
+            color: var(--color-text-dimmed);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 4px;
+        }
+        .ref-weather {
+            font-size: 36px;
+            font-weight: 300;
+        }
+        .ref-weather i {
+            margin-right: 8px;
+            color: #ddd;
+        }
+        .ref-weather-loc {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #777;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="page-title">
+        MMM-Brno-Transit
+        <small>design preview · open in browser</small>
+    </h1>
+
+    <div class="variants">
+
+        <!-- ───────────────────────── default 2 lines, 2 departures each -->
+        <div class="variant">
+            <div class="variant-label">A · default · 2 lines / 2 departures</div>
+            <div class="mm-region-right">
+                <div class="module">
+                    <div class="module-header">Vlhká</div>
+                    <div class="mmbt">
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-train-tram"></i></span>
+                            <span class="mmbt-line">9</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">3 min</span>
+                                <span class="mmbt-time">13 min</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-bus"></i></span>
+                            <span class="mmbt-line">67</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">12 min</span>
+                                <span class="mmbt-time">42 min</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────── perLine: 1 -->
+        <div class="variant">
+            <div class="variant-label">B · perLine: 1 (just the next one)</div>
+            <div class="mm-region-right">
+                <div class="module">
+                    <div class="module-header">Vlhká</div>
+                    <div class="mmbt">
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-train-tram"></i></span>
+                            <span class="mmbt-line">9</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">3 min</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-bus"></i></span>
+                            <span class="mmbt-line">67</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">12 min</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────── all modes (icon set demo) -->
+        <div class="variant">
+            <div class="variant-label">C · all GTFS route_types (icon demo)</div>
+            <div class="mm-region-right">
+                <div class="module">
+                    <div class="module-header">Vlhká</div>
+                    <div class="mmbt">
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-train-tram"></i></span>
+                            <span class="mmbt-line">9</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">3 min</span>
+                                <span class="mmbt-time">13 min</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-bus"></i></span>
+                            <span class="mmbt-line">67</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">12 min</span>
+                                <span class="mmbt-time">42 min</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-bus-simple"></i></span>
+                            <span class="mmbt-line">25</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">7 min</span>
+                                <span class="mmbt-time">22 min</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-train"></i></span>
+                            <span class="mmbt-line">S2</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">14 min</span>
+                                <span class="mmbt-time">44 min</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────── empty state (out of service / night) -->
+        <div class="variant">
+            <div class="variant-label">D · linka mimo provoz (none scheduled)</div>
+            <div class="mm-region-right">
+                <div class="module">
+                    <div class="module-header">Vlhká</div>
+                    <div class="mmbt">
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-train-tram"></i></span>
+                            <span class="mmbt-line">9</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">3 min</span>
+                                <span class="mmbt-time">13 min</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-bus"></i></span>
+                            <span class="mmbt-line">67</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-empty">— mimo provoz</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────── HH:MM mode (>60 min ahead) -->
+        <div class="variant">
+            <div class="variant-label">E · spoj &gt;60 min away → HH:MM</div>
+            <div class="mm-region-right">
+                <div class="module">
+                    <div class="module-header">Vlhká</div>
+                    <div class="mmbt">
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-train-tram"></i></span>
+                            <span class="mmbt-line">9</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">22 min</span>
+                                <span class="mmbt-time">04:35</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-bus"></i></span>
+                            <span class="mmbt-line">67</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">04:48</span>
+                                <span class="mmbt-time">05:18</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────── side-by-side with weather (style check) -->
+        <div class="variant">
+            <div class="variant-label">F · style check vs weather above it</div>
+            <div class="mm-region-right">
+                <div class="module">
+                    <div class="ref-weather">
+                        <i class="fa-solid fa-cloud"></i>12°
+                    </div>
+                    <div class="ref-weather-loc">Brno</div>
+                </div>
+                <div class="module">
+                    <div class="module-header">Vlhká</div>
+                    <div class="mmbt">
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-train-tram"></i></span>
+                            <span class="mmbt-line">9</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">3 min</span>
+                                <span class="mmbt-time">13 min</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-bus"></i></span>
+                            <span class="mmbt-line">67</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time">12 min</span>
+                                <span class="mmbt-time">42 min</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
