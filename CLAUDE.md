@@ -24,7 +24,7 @@ how to restore them.
 - `docs/superpowers/specs/` — approved design specs
 - `docs/superpowers/plans/` — task-by-task implementation plans
 - `MagicMirror/config/config.js` — mirror of `~/MagicMirror/config/config.js`
-- `MagicMirror/modules/MMM-Greeting/` — our own module
+- `MagicMirror/modules/MMM-FaceRecoIndicator/` — our own module
 - `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos
 - `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
 - `ld2450/` — mirror of `~/ld2450/` (daemon, tests, `ld2450.service`)
