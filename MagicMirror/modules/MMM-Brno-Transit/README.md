@@ -66,6 +66,13 @@ Pick the one with the headsign you actually take.
 
 ## Cache
 
-GTFS zip + extracted .txt files live under `cache/`. The directory is
-created on first run and refreshed every `gtfsRefreshHours`. Safe to
-delete — it'll be re-downloaded.
+On first run the helper downloads the GTFS zip, extracts the 6 files
+it needs, parses them into a slim in-memory index (just your lines /
+your stop), writes `cache/compiled.json` + `cache/meta.json`, and
+**deletes the zip + raw .txt files**. Steady-state footprint is a few
+MB instead of ~250 MB. Boot after the first run loads `compiled.json`
+directly — no parsing, near-instant.
+
+`compiled.json` is invalidated automatically if you change
+`stopName`, `stopId`, `lines`, or `gtfsUrl` in config, or when
+`gtfsRefreshHours` elapses. Safe to delete `cache/` — it'll rebuild.

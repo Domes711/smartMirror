@@ -15,10 +15,14 @@ const NodeHelper = require("node_helper");
 const Log = require("logger");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const AdmZip = require("adm-zip");
 
 const CACHE_DIR_NAME = "cache";
 const ZIP_NAME = "gtfs.zip";
+const COMPILED_NAME = "compiled.json";
+const META_NAME = "meta.json";
+const COMPILED_VERSION = 1;
 const FILES = {
     stops: "stops.txt",
     routes: "routes.txt",
@@ -77,8 +81,7 @@ module.exports = NodeHelper.create({
         if (!fs.existsSync(this.cacheDir)) {
             fs.mkdirSync(this.cacheDir, { recursive: true });
         }
-        await this._ensureGtfs();
-        this._buildIndexes();
+        await this._loadGtfsIndex();
         this._scheduleRefresh();
         this._scheduleGtfsRefresh();
         this._startRealtime();
@@ -86,29 +89,61 @@ module.exports = NodeHelper.create({
         this._tick();
     },
 
-    _ensureGtfs: async function () {
-        const zipPath = path.join(this.cacheDir, ZIP_NAME);
+    /**
+     * Load or rebuild the GTFS index.
+     *
+     *   1. If compiled.json exists + meta says it matches current config
+     *      + is within TTL → load it directly (no download, no re-parse).
+     *   2. Otherwise → download zip, extract the 6 GTFS txt files, parse
+     *      them into the slim in-memory index, write compiled.json +
+     *      meta.json, then delete the zip and the .txt files from disk.
+     *
+     * This keeps the cache dir at a few MB between refreshes instead of
+     * ~250 MB of raw GTFS.
+     */
+    _loadGtfsIndex: async function () {
         const ttlMs = (this.config.gtfsRefreshHours || 168) * 3600 * 1000;
-        const fresh = fs.existsSync(zipPath)
-            && (Date.now() - fs.statSync(zipPath).mtimeMs) < ttlMs;
-        if (!fresh) {
-            Log.info("[MMM-Brno-Transit] downloading GTFS:", this.config.gtfsUrl);
-            const res = await fetch(this.config.gtfsUrl);
-            if (!res.ok) throw new Error(`GTFS download HTTP ${res.status}`);
-            const buf = Buffer.from(await res.arrayBuffer());
-            fs.writeFileSync(zipPath, buf);
-            const zip = new AdmZip(zipPath);
-            for (const name of Object.values(FILES)) {
-                const entry = zip.getEntry(name);
-                if (!entry) throw new Error("GTFS missing " + name);
-                fs.writeFileSync(path.join(this.cacheDir, name), entry.getData());
+        const meta = this._readMeta();
+        const compiledPath = path.join(this.cacheDir, COMPILED_NAME);
+        const cfgHash = this._configHash();
+
+        const reusable = meta
+            && meta.version === COMPILED_VERSION
+            && meta.configHash === cfgHash
+            && (Date.now() - meta.compiledAt) < ttlMs
+            && fs.existsSync(compiledPath);
+
+        if (reusable) {
+            try {
+                this._loadCompiled(compiledPath);
+                Log.info("[MMM-Brno-Transit] using cached compiled index (age "
+                    + Math.round((Date.now() - meta.compiledAt) / 3600000) + " h)");
+                return;
+            } catch (err) {
+                Log.warn("[MMM-Brno-Transit] compiled.json unusable, re-parsing:", err.message);
             }
-            Log.info("[MMM-Brno-Transit] GTFS extracted");
-        } else {
-            Log.info("[MMM-Brno-Transit] using cached GTFS (age "
-                + Math.round((Date.now() - fs.statSync(zipPath).mtimeMs) / 3600000)
-                + " h)");
         }
+
+        await this._downloadAndExtract();
+        this._parseAndBuildIndexes();
+        this._saveCompiled(compiledPath, cfgHash);
+        this._cleanRawGtfs();
+    },
+
+    _downloadAndExtract: async function () {
+        Log.info("[MMM-Brno-Transit] downloading GTFS:", this.config.gtfsUrl);
+        const res = await fetch(this.config.gtfsUrl);
+        if (!res.ok) throw new Error(`GTFS download HTTP ${res.status}`);
+        const buf = Buffer.from(await res.arrayBuffer());
+        const zipPath = path.join(this.cacheDir, ZIP_NAME);
+        fs.writeFileSync(zipPath, buf);
+        const zip = new AdmZip(zipPath);
+        for (const name of Object.values(FILES)) {
+            const entry = zip.getEntry(name);
+            if (!entry) throw new Error("GTFS missing " + name);
+            fs.writeFileSync(path.join(this.cacheDir, name), entry.getData());
+        }
+        Log.info("[MMM-Brno-Transit] GTFS extracted");
     },
 
     _scheduleGtfsRefresh: function () {
@@ -116,13 +151,80 @@ module.exports = NodeHelper.create({
         const ttlMs = (this.config.gtfsRefreshHours || 168) * 3600 * 1000;
         this.gtfsTimer = setInterval(async () => {
             try {
-                await this._ensureGtfs();
-                this._buildIndexes();
+                await this._loadGtfsIndex();
                 this._tick();
             } catch (err) {
                 Log.error("[MMM-Brno-Transit] GTFS refresh failed:", err);
             }
         }, ttlMs);
+    },
+
+    // --- compiled cache helpers --------------------------------------------
+
+    _configHash: function () {
+        const relevant = {
+            stopName: this.config.stopName,
+            stopId: this.config.stopId || null,
+            lines: this.config.lines || [],
+            gtfsUrl: this.config.gtfsUrl
+        };
+        return crypto.createHash("sha256")
+            .update(JSON.stringify(relevant))
+            .digest("hex");
+    },
+
+    _readMeta: function () {
+        const p = path.join(this.cacheDir, META_NAME);
+        if (!fs.existsSync(p)) return null;
+        try { return JSON.parse(fs.readFileSync(p, "utf-8")); }
+        catch (_) { return null; }
+    },
+
+    _loadCompiled: function (compiledPath) {
+        const raw = JSON.parse(fs.readFileSync(compiledPath, "utf-8"));
+        this.indexes = {
+            routesById: raw.routesById,
+            tripsById: raw.tripsById,
+            stopTimesByTrip: raw.stopTimesByTrip,
+            serviceDays: raw.serviceDays,
+            wantedLines: new Map(raw.wantedLinesEntries),
+            stopIdSet: new Set(raw.stopIdArray)
+        };
+        this._logDiscoveredDirections();
+    },
+
+    _saveCompiled: function (compiledPath, cfgHash) {
+        const toSerialize = {
+            routesById: this.indexes.routesById,
+            tripsById: this.indexes.tripsById,
+            stopTimesByTrip: this.indexes.stopTimesByTrip,
+            serviceDays: this.indexes.serviceDays,
+            wantedLinesEntries: Array.from(this.indexes.wantedLines.entries()),
+            stopIdArray: Array.from(this.indexes.stopIdSet)
+        };
+        fs.writeFileSync(compiledPath, JSON.stringify(toSerialize));
+        fs.writeFileSync(path.join(this.cacheDir, META_NAME), JSON.stringify({
+            version: COMPILED_VERSION,
+            compiledAt: Date.now(),
+            configHash: cfgHash
+        }));
+        const size = Math.round(fs.statSync(compiledPath).size / 1024);
+        Log.info(`[MMM-Brno-Transit] compiled index saved (${size} KB)`);
+    },
+
+    _cleanRawGtfs: function () {
+        const names = [ZIP_NAME, ...Object.values(FILES)];
+        let freed = 0;
+        for (const n of names) {
+            const p = path.join(this.cacheDir, n);
+            try {
+                freed += fs.statSync(p).size;
+                fs.unlinkSync(p);
+            } catch (_) { /* missing is fine */ }
+        }
+        if (freed > 0) {
+            Log.info(`[MMM-Brno-Transit] cleaned raw GTFS (freed ${Math.round(freed / 1024 / 1024)} MB)`);
+        }
     },
 
     _scheduleRefresh: function () {
@@ -133,7 +235,7 @@ module.exports = NodeHelper.create({
 
     // --- GTFS indexing ------------------------------------------------------
 
-    _buildIndexes: function () {
+    _parseAndBuildIndexes: function () {
         const read = (name) => fs.readFileSync(path.join(this.cacheDir, name), "utf-8");
 
         const stops = parseCsv(read(FILES.stops));
