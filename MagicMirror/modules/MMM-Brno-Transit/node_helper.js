@@ -1,11 +1,14 @@
 /* MMM-Brno-Transit — node_helper
  *
- * Downloads the IDS JMK GTFS zip from data.brno.cz, indexes the parts we
- * care about, and answers "next N departures of line L in direction D
- * from stop S" queries on a refresh tick.
+ * Combines two sources:
+ *   1. GTFS static (data.brno.cz) — scheduled departures per line+direction
+ *   2. WebSocket vehicle stream (gis.brno.cz ArcGIS StreamServer) — live
+ *      delay in minutes per vehicle
  *
- * Cache: zip + extracted txt files live under <module>/cache/. The zip is
- * re-downloaded after gtfsRefreshHours.
+ * For every scheduled departure we try to match a live vehicle running
+ * that exact trip (same route, same final stop, hasn't passed our stop
+ * yet). If matched, the vehicle's delay is added so "X min" reflects
+ * what the bus/tram will actually do, not what the timetable claims.
  */
 
 const NodeHelper = require("node_helper");
@@ -24,15 +27,14 @@ const FILES = {
     calendar: "calendar.txt",
     calendarDates: "calendar_dates.txt"
 };
+const DEFAULT_REALTIME_URL =
+    "wss://gis.brno.cz/ags4/rest/services/ODAE_public_transit_stream/StreamServer/subscribe";
+const DEFAULT_VEHICLE_TTL_SEC = 60;
+const WS_RECONNECT_BASE_MS = 2000;
+const WS_RECONNECT_MAX_MS = 60000;
 
-// GTFS route_type → human label
 const ROUTE_TYPE = {
-    0: "tram",
-    1: "subway",
-    2: "rail",
-    3: "bus",
-    4: "ferry",
-    11: "trolleybus"
+    0: "tram", 1: "subway", 2: "rail", 3: "bus", 4: "ferry", 11: "trolleybus"
 };
 
 module.exports = NodeHelper.create({
@@ -43,6 +45,13 @@ module.exports = NodeHelper.create({
         this.config = null;
         this.refreshTimer = null;
         this.gtfsTimer = null;
+
+        // Real-time state
+        this.ws = null;
+        this.wsReconnectMs = WS_RECONNECT_BASE_MS;
+        this.wsReconnectTimer = null;
+        this.vehicleCache = new Map();      // vehicleId -> { attrs, seenAt }
+        this.vehicleCleanupTimer = null;
     },
 
     socketNotificationReceived: function (notification, payload) {
@@ -72,6 +81,8 @@ module.exports = NodeHelper.create({
         this._buildIndexes();
         this._scheduleRefresh();
         this._scheduleGtfsRefresh();
+        this._startRealtime();
+        this._scheduleVehicleCleanup();
         this._tick();
     },
 
@@ -86,7 +97,6 @@ module.exports = NodeHelper.create({
             if (!res.ok) throw new Error(`GTFS download HTTP ${res.status}`);
             const buf = Buffer.from(await res.arrayBuffer());
             fs.writeFileSync(zipPath, buf);
-            // Extract only the files we need
             const zip = new AdmZip(zipPath);
             for (const name of Object.values(FILES)) {
                 const entry = zip.getEntry(name);
@@ -121,20 +131,17 @@ module.exports = NodeHelper.create({
         this.refreshTimer = setInterval(() => this._tick(), ms);
     },
 
-    // --- indexing -----------------------------------------------------------
+    // --- GTFS indexing ------------------------------------------------------
 
     _buildIndexes: function () {
-        const read = (name) => fs.readFileSync(
-            path.join(this.cacheDir, name), "utf-8");
+        const read = (name) => fs.readFileSync(path.join(this.cacheDir, name), "utf-8");
 
         const stops = parseCsv(read(FILES.stops));
         const routes = parseCsv(read(FILES.routes));
         const calendar = parseCsv(read(FILES.calendar));
         const calendarDates = parseCsv(read(FILES.calendarDates));
 
-        // 1. Stops matching the configured name (case-insensitive). Brno
-        //    IDS stops have one stop_id per platform/direction, all sharing
-        //    the same stop_name.
+        // 1. Target stops
         const wantedName = this.config.stopName.toLowerCase().trim();
         const stopIdSet = new Set();
         for (const s of stops) {
@@ -149,8 +156,8 @@ module.exports = NodeHelper.create({
             throw new Error("No stops matched: " + this.config.stopName);
         }
 
-        // 2. Routes by short_name → for the lines we want.
-        const wantedLines = new Map();        // line -> { dirId? }
+        // 2. Target routes
+        const wantedLines = new Map();
         for (const l of (this.config.lines || [])) {
             wantedLines.set(String(l.line), l);
         }
@@ -166,7 +173,7 @@ module.exports = NodeHelper.create({
             }
         }
 
-        // 3. Trips for those routes (load fully — much smaller than stop_times).
+        // 3. Trips on those routes
         const trips = parseCsv(read(FILES.trips));
         const tripsById = {};
         for (const t of trips) {
@@ -175,45 +182,68 @@ module.exports = NodeHelper.create({
                 routeId: t.route_id,
                 serviceId: t.service_id,
                 directionId: Number(t.direction_id),
-                headsign: t.trip_headsign || ""
+                headsign: t.trip_headsign || "",
+                finalStopId: null,          // filled in below
+                ourStopSeq: null,           // filled in below
+                seqByStop: {}               // stopId -> sequence, for matching vehicle.laststopid
             };
         }
 
-        // 4. Stop times for those trips at our stops, streamed from the file.
-        //    Pre-built: trip_id -> [{stopId, secs}], one entry per relevant stop.
-        const stopTimesByTrip = {};
+        // 4. Stop times for those trips — keep every stop (not just ours) so
+        //    we can map vehicle.laststopid back to a sequence number.
         const stopTimesRaw = read(FILES.stopTimes);
         const lines = stopTimesRaw.split(/\r?\n/);
         const header = parseCsvLine(lines[0]);
         const idxTrip = header.indexOf("trip_id");
         const idxStop = header.indexOf("stop_id");
         const idxDep = header.indexOf("departure_time");
+        const idxSeq = header.indexOf("stop_sequence");
+
+        // per-trip metadata while scanning
+        const tripMaxSeq = {};
+        const tripMaxSeqStop = {};
+        const stopTimesByTrip = {};         // tripId -> [{stopId, secs, seq}] (only for our target stops, used for queries)
+
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i];
             if (!line) continue;
             const cells = parseCsvLine(line);
             const tripId = cells[idxTrip];
             if (!tripsById[tripId]) continue;
+
             const stopId = cells[idxStop];
-            if (!stopIdSet.has(stopId)) continue;
+            const seq = Number(cells[idxSeq]);
             const secs = parseGtfsTime(cells[idxDep]);
-            (stopTimesByTrip[tripId] = stopTimesByTrip[tripId] || []).push({
-                stopId, secs
-            });
+
+            tripsById[tripId].seqByStop[stopId] = seq;
+            if (tripMaxSeq[tripId] === undefined || seq > tripMaxSeq[tripId]) {
+                tripMaxSeq[tripId] = seq;
+                tripMaxSeqStop[tripId] = stopId;
+            }
+
+            if (stopIdSet.has(stopId)) {
+                (stopTimesByTrip[tripId] = stopTimesByTrip[tripId] || []).push({
+                    stopId, secs, seq
+                });
+                tripsById[tripId].ourStopSeq = seq;
+            }
+        }
+        for (const tripId of Object.keys(tripsById)) {
+            tripsById[tripId].finalStopId = tripMaxSeqStop[tripId] || null;
         }
 
-        // 5. Service calendar.
+        // 5. Service calendar
         const serviceDays = {};
         for (const c of calendar) {
             serviceDays[c.service_id] = {
-                start: c.start_date,                  // YYYYMMDD
+                start: c.start_date,
                 end: c.end_date,
                 days: [
                     Number(c.sunday), Number(c.monday), Number(c.tuesday),
                     Number(c.wednesday), Number(c.thursday), Number(c.friday),
                     Number(c.saturday)
                 ],
-                exceptions: {}                         // YYYYMMDD -> 1|2
+                exceptions: {}
             };
         }
         for (const ex of calendarDates) {
@@ -233,17 +263,16 @@ module.exports = NodeHelper.create({
         Log.info(
             `[MMM-Brno-Transit] indexed: ${stopIdSet.size} stop_ids, `
             + `${Object.keys(tripsById).length} trips, `
-            + `${Object.keys(stopTimesByTrip).length} stop_times`
+            + `${Object.keys(stopTimesByTrip).length} trips through our stop`
         );
         this._logDiscoveredDirections();
     },
 
     _logDiscoveredDirections: function () {
-        // Helps the user pick directionId.
-        const seen = {}; // line -> { dirId -> headsign sample }
-        for (const tripId of Object.keys(this.indexes.tripsById)) {
+        const seen = {};
+        for (const tripId of Object.keys(this.indexes.stopTimesByTrip)) {
             const tr = this.indexes.tripsById[tripId];
-            if (!this.indexes.stopTimesByTrip[tripId]) continue;
+            if (!tr) continue;
             const route = this.indexes.routesById[tr.routeId];
             if (!route) continue;
             const line = route.shortName;
@@ -258,6 +287,84 @@ module.exports = NodeHelper.create({
                 Log.info(`  line ${line}, directionId ${dir} → "${seen[line][dir]}"`);
             }
         }
+    },
+
+    // --- real-time WebSocket ------------------------------------------------
+
+    _startRealtime: function () {
+        const url = this.config.realtimeUrl || DEFAULT_REALTIME_URL;
+        if (!url) return;
+        // Lazy require so module also works if ws isn't installed.
+        let WebSocket;
+        try { WebSocket = require("ws"); }
+        catch (e) {
+            Log.warn("[MMM-Brno-Transit] 'ws' not installed — real-time disabled");
+            return;
+        }
+
+        try {
+            const ws = new WebSocket(url);
+            this.ws = ws;
+
+            ws.on("open", () => {
+                Log.info("[MMM-Brno-Transit] real-time stream connected");
+                this.wsReconnectMs = WS_RECONNECT_BASE_MS;
+            });
+
+            ws.on("message", (data) => this._onRealtimeMessage(data));
+
+            ws.on("close", () => {
+                Log.warn("[MMM-Brno-Transit] real-time stream closed, reconnecting in "
+                    + Math.round(this.wsReconnectMs / 1000) + " s");
+                this._scheduleReconnect();
+            });
+
+            ws.on("error", (err) => {
+                Log.warn("[MMM-Brno-Transit] real-time error:", err.message);
+                try { ws.close(); } catch (_) { /* ignore */ }
+            });
+        } catch (err) {
+            Log.error("[MMM-Brno-Transit] real-time connect failed:", err);
+            this._scheduleReconnect();
+        }
+    },
+
+    _scheduleReconnect: function () {
+        if (this.wsReconnectTimer) return;
+        this.wsReconnectTimer = setTimeout(() => {
+            this.wsReconnectTimer = null;
+            this.wsReconnectMs = Math.min(this.wsReconnectMs * 2, WS_RECONNECT_MAX_MS);
+            this._startRealtime();
+        }, this.wsReconnectMs);
+    },
+
+    _onRealtimeMessage: function (data) {
+        let obj;
+        try { obj = JSON.parse(data.toString()); }
+        catch (_) { return; }
+        // Esri StreamServer sends { attributes: {...}, geometry: {...} }
+        const a = obj.attributes || obj;
+        if (!a) return;
+        if (a.isinactive) return;
+
+        const id = a.id != null ? String(a.id) : null;
+        if (!id) return;
+
+        this.vehicleCache.set(id, {
+            attrs: a,
+            seenAt: Date.now()
+        });
+    },
+
+    _scheduleVehicleCleanup: function () {
+        if (this.vehicleCleanupTimer) clearInterval(this.vehicleCleanupTimer);
+        const ttlMs = (this.config.vehicleTtlSec || DEFAULT_VEHICLE_TTL_SEC) * 1000;
+        this.vehicleCleanupTimer = setInterval(() => {
+            const cutoff = Date.now() - ttlMs;
+            for (const [id, v] of this.vehicleCache) {
+                if (v.seenAt < cutoff) this.vehicleCache.delete(id);
+            }
+        }, Math.max(5000, ttlMs / 2));
     },
 
     // --- query --------------------------------------------------------------
@@ -289,7 +396,7 @@ module.exports = NodeHelper.create({
 
     _nextDepartures: function (line, directionId, now) {
         const perLine = this.config.perLine || 2;
-        const horizonSec = 12 * 3600; // look 12 h ahead
+        const horizonSec = 12 * 3600;
         const nowSecToday = now.getHours() * 3600
             + now.getMinutes() * 60 + now.getSeconds();
         const todayStr = ymd(now);
@@ -304,36 +411,54 @@ module.exports = NodeHelper.create({
             if (directionId !== undefined && trip.directionId !== directionId) continue;
 
             for (const st of this.indexes.stopTimesByTrip[tripId]) {
-                // Today branch: trip's service active today, departure ahead.
                 if (this._serviceActive(trip.serviceId, todayStr)
                     && st.secs >= nowSecToday
                     && st.secs - nowSecToday <= horizonSec) {
-                    matches.push({
-                        epochSec: nowSecToday + (st.secs - nowSecToday),
-                        absSec: st.secs,
-                        date: todayStr
-                    });
+                    matches.push({ tripId, absSec: st.secs });
                 }
-                // Yesterday-after-midnight branch: GTFS times >24:00 belong to
-                // services that started "yesterday" but depart today.
                 if (this._serviceActive(trip.serviceId, yestStr)
-                    && st.secs >= 24 * 3600
-                    && (st.secs - 24 * 3600) >= nowSecToday
-                    && (st.secs - 24 * 3600) - nowSecToday <= horizonSec) {
-                    matches.push({
-                        epochSec: nowSecToday + ((st.secs - 24*3600) - nowSecToday),
-                        absSec: st.secs - 24 * 3600,
-                        date: todayStr
-                    });
+                    && st.secs >= 24 * 3600) {
+                    const todayActual = st.secs - 24 * 3600;
+                    if (todayActual >= nowSecToday
+                        && todayActual - nowSecToday <= horizonSec) {
+                        matches.push({ tripId, absSec: todayActual });
+                    }
                 }
             }
         }
 
         matches.sort((a, b) => a.absSec - b.absSec);
-        return matches.slice(0, perLine).map((m) => ({
-            secsFromNow: m.absSec - nowSecToday,
-            displayHm: secsToHm(m.absSec)
-        }));
+        return matches.slice(0, perLine).map((m) => {
+            const vehicle = this._matchVehicle(m.tripId, line);
+            const scheduledSecs = m.absSec;
+            const delayMin = vehicle ? Number(vehicle.attrs.delay) || 0 : null;
+            const actualSecs = scheduledSecs + (delayMin || 0) * 60;
+            return {
+                secsFromNow: actualSecs - nowSecToday,
+                displayHm: secsToHm(actualSecs),
+                realtime: vehicle !== null,
+                delayMin,
+                scheduledHm: delayMin ? secsToHm(scheduledSecs) : null
+            };
+        });
+    },
+
+    _matchVehicle: function (tripId, line) {
+        const trip = this.indexes.tripsById[tripId];
+        if (!trip || trip.finalStopId == null || trip.ourStopSeq == null) return null;
+
+        let best = null;
+        for (const v of this.vehicleCache.values()) {
+            const a = v.attrs;
+            if (String(a.linename) !== String(line)) continue;
+            if (String(a.finalstopid) !== String(trip.finalStopId)) continue;
+            const lastSeq = trip.seqByStop[String(a.laststopid)];
+            if (lastSeq == null) continue;              // vehicle on a different route variant
+            if (lastSeq >= trip.ourStopSeq) continue;   // vehicle has passed our stop already
+            // Prefer the vehicle closest to our stop (highest sequence < ours).
+            if (!best || lastSeq > best.lastSeq) best = { attrs: a, lastSeq };
+        }
+        return best ? { attrs: best.attrs } : null;
     },
 
     _serviceActive: function (serviceId, dateStr) {
@@ -343,7 +468,7 @@ module.exports = NodeHelper.create({
         if (ex === 1) return true;
         if (ex === 2) return false;
         if (!sd.start || dateStr < sd.start || dateStr > sd.end) return false;
-        const dow = dayOfWeek(dateStr);   // 0..6, sunday=0 to match GTFS array
+        const dow = dayOfWeek(dateStr);
         return sd.days[dow] === 1;
     }
 });
@@ -388,7 +513,6 @@ function parseCsvLine(line) {
 }
 
 function parseGtfsTime(hms) {
-    // HH:MM:SS where HH may be > 23. Returns seconds from midnight (may exceed 86400).
     if (!hms) return -1;
     const p = hms.split(":");
     return Number(p[0]) * 3600 + Number(p[1]) * 60 + Number(p[2] || 0);
@@ -417,5 +541,5 @@ function dayOfWeek(yyyymmdd) {
     const y = Number(yyyymmdd.slice(0, 4));
     const m = Number(yyyymmdd.slice(4, 6)) - 1;
     const d = Number(yyyymmdd.slice(6, 8));
-    return new Date(y, m, d).getDay(); // 0 = Sunday
+    return new Date(y, m, d).getDay();
 }

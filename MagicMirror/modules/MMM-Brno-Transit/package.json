@@ -5,6 +5,7 @@
     "main": "MMM-Brno-Transit.js",
     "private": true,
     "dependencies": {
-        "adm-zip": "^0.5.10"
+        "adm-zip": "^0.5.10",
+        "ws": "^8.16.0"
     }
 }

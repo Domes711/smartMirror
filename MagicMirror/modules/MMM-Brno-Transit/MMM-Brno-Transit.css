@@ -47,6 +47,27 @@
     font-size: 16px;
 }
 
+.mmbt-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: #fff;
+    vertical-align: middle;
+    transform: translateY(-2px);
+    animation: mmbt-pulse 1.8s ease-in-out infinite;
+}
+
+.mmbt-time + .mmbt-time .mmbt-dot {
+    background: #999;
+}
+
+@keyframes mmbt-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
+
 .mmbt-empty {
     color: #555;
     font-style: italic;

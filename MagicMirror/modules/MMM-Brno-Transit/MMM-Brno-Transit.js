@@ -15,6 +15,8 @@ Module.register("MMM-Brno-Transit", {
         refreshSec: 60,
         perLine: 2,
         minutesThreshold: 60,                    // <= -> "X min", > -> "HH:MM"
+        realtimeUrl: undefined,                  // helper falls back to the default
+        vehicleTtlSec: 60,                       // drop stale vehicles
         lines: []                                // [{ line, directionId }]
     },
 
@@ -103,8 +105,16 @@ Module.register("MMM-Brno-Transit", {
         } else {
             for (const it of dep.items) {
                 const t = document.createElement("span");
-                t.className = "mmbt-time";
-                t.textContent = this._formatTime(it);
+                t.className = "mmbt-time" + (it.realtime ? " mmbt-rt" : "");
+                if (it.realtime) {
+                    const dot = document.createElement("span");
+                    dot.className = "mmbt-dot";
+                    t.appendChild(dot);
+                }
+                t.appendChild(document.createTextNode(this._formatTime(it)));
+                if (it.realtime && typeof it.delayMin === "number" && it.delayMin !== 0) {
+                    t.title = `scheduled ${it.scheduledHm || "?"} · delay ${it.delayMin > 0 ? "+" : ""}${it.delayMin} min`;
+                }
                 times.appendChild(t);
             }
         }

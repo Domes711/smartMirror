@@ -134,6 +134,22 @@
             font-style: italic;
             font-weight: 300;
         }
+        .mmbt-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin-right: 7px;
+            border-radius: 50%;
+            background: #fff;
+            vertical-align: middle;
+            transform: translateY(-2px);
+            animation: mmbt-pulse 1.8s ease-in-out infinite;
+        }
+        .mmbt-time + .mmbt-time .mmbt-dot { background: #999; }
+        @keyframes mmbt-pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.4; }
+        }
 
         /* Reference modules so we can compare style */
         .ref-clock-time {
@@ -320,6 +336,38 @@
                             <span class="mmbt-times">
                                 <span class="mmbt-time">04:48</span>
                                 <span class="mmbt-time">05:18</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────── realtime: with live delay dot -->
+        <div class="variant">
+            <div class="variant-label">G · realtime · live delay (· = data from stream)</div>
+            <div class="mm-region-right">
+                <div class="module">
+                    <div class="module-header">Vlhká</div>
+                    <div class="mmbt">
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-train-tram"></i></span>
+                            <span class="mmbt-line">9</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time" title="scheduled 14:32 · delay +2 min">
+                                    <span class="mmbt-dot"></span>5 min
+                                </span>
+                                <span class="mmbt-time">13 min</span>
+                            </span>
+                        </div>
+                        <div class="mmbt-row">
+                            <span class="mmbt-icon"><i class="fa-solid fa-bus"></i></span>
+                            <span class="mmbt-line">67</span>
+                            <span class="mmbt-times">
+                                <span class="mmbt-time" title="on time">
+                                    <span class="mmbt-dot"></span>12 min
+                                </span>
+                                <span class="mmbt-time">42 min</span>
                             </span>
                         </div>
                     </div>

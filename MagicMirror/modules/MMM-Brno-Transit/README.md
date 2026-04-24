@@ -1,18 +1,26 @@
 # MMM-Brno-Transit
 
-Shows next departures from a Brno IDS JMK stop. Uses the official GTFS
-schedule from [data.brno.cz](https://data.brno.cz/datasets/379d2e9a7907460c8ca7fda1f3e84328)
-— no scraping, no API key. Mode (tram / bus / trolleybus / rail) is
-auto-derived from GTFS `route_type`, you don't put it in config.
+Shows next departures from a Brno IDS JMK stop. Two data sources in
+combination:
+
+- **GTFS static** from [data.brno.cz](https://data.brno.cz/datasets/379d2e9a7907460c8ca7fda1f3e84328)
+  for scheduled departures (no key, no scraping).
+- **Real-time vehicle stream** (ArcGIS StreamServer on `gis.brno.cz`) for
+  live delays; a small dot next to the time marks departures where a
+  matching vehicle is active. Falls back to scheduled-only if the
+  stream is unavailable.
+
+Mode (tram / bus / trolleybus / rail) is auto-derived from GTFS
+`route_type`, you don't put it in config.
 
 Black-and-white, MagicMirror look. See `preview.html` for a static
-design mock that opens in any browser.
+design mock (variants A-G) that opens in any browser.
 
 ## Install (on the Pi)
 
 ```bash
 cd ~/MagicMirror/modules/MMM-Brno-Transit
-npm install        # pulls adm-zip
+npm install        # pulls adm-zip + ws
 ```
 
 ## Configure
@@ -31,6 +39,7 @@ Get the current direct GTFS .zip URL: open the dataset page above, click
         gtfsRefreshHours: 168,            // re-download GTFS once a week
         refreshSec: 60,                   // recompute next departures every minute
         perLine: 2,                       // how many upcoming departures per line
+        // realtimeUrl, vehicleTtlSec — optional, defaults work for Brno
         lines: [
             { line: "9",  directionId: 0 },
             { line: "67", directionId: 1 }
