@@ -133,7 +133,12 @@ Module.register("MMM-Brno-Transit", {
     },
 
     _formatTime: function (it) {
-        const min = Math.max(0, Math.round(it.secsFromNow / 60));
+        // Compute the live countdown from the absolute arrival time each
+        // render, so ticks between helper updates still tick down smoothly
+        // and any delay change from the stream is reflected immediately
+        // after the next helper tick.
+        const diffSec = Math.max(0, Math.round((it.arrivalMs - Date.now()) / 1000));
+        const min = Math.round(diffSec / 60);
         if (min <= this.config.minutesThreshold) return `${min} min`;
         return it.displayHm;
     },

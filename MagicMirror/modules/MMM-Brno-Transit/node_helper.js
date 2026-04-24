@@ -530,13 +530,18 @@ module.exports = NodeHelper.create({
         }
 
         matches.sort((a, b) => a.absSec - b.absSec);
+        const nowMs = now.getTime();
         return matches.slice(0, perLine).map((m) => {
             const vehicle = this._matchVehicle(m.tripId, line);
             const scheduledSecs = m.absSec;
             const delayMin = vehicle ? Number(vehicle.attrs.delay) || 0 : null;
             const actualSecs = scheduledSecs + (delayMin || 0) * 60;
+            // Absolute arrival timestamp so the frontend can refresh the
+            // "X min" countdown on each render, without waiting for the
+            // next helper tick.
+            const arrivalMs = nowMs + (actualSecs - nowSecToday) * 1000;
             return {
-                secsFromNow: actualSecs - nowSecToday,
+                arrivalMs,
                 displayHm: secsToHm(actualSecs),
                 realtime: vehicle !== null,
                 delayMin,
