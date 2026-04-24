@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>MMM-Brno-Transit · live demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="./MMM-Brno-Transit.css">
+    <style>
+        html, body {
+            background: #000; color: #fff;
+            font-family: "Roboto Condensed", sans-serif;
+            margin: 0; padding: 40px 50px;
+        }
+        .mm-region { text-align: right; }
+        .module { display: inline-block; text-align: left; }
+        .module-header {
+            font-size: 15px; font-weight: 400;
+            text-transform: uppercase; letter-spacing: 2px;
+            border-bottom: 1px solid #666;
+            padding-bottom: 6px; margin-bottom: 12px;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="mm-region">
+        <div class="module">
+            <div class="module-header" id="stop-name">Vlhká</div>
+            <div id="mount"></div>
+        </div>
+    </div>
+
+    <script>
+        // Stub just enough MagicMirror framework for the module to boot.
+        window.Log = console;
+        window.Module = {
+            _def: null,
+            register: function (name, def) { this._def = def; }
+        };
+    </script>
+    <script src="./MMM-Brno-Transit.js"></script>
+    <script>
+        const def = window.Module._def;
+        const mountEl = document.getElementById("mount");
+
+        const mod = Object.assign({}, def);
+        mod.config = Object.assign({}, def.defaults, { stopName: "Vlhká" });
+        mod.payload = null;
+        mod.errorMsg = null;
+        mod.updateDom = function () {
+            const el = this.getDom();
+            mountEl.innerHTML = "";
+            mountEl.appendChild(el);
+        };
+        mod.sendSocketNotification = function () { /* no helper here */ };
+
+        // Live countdown — re-render every second so "X min" ticks down
+        setInterval(() => mod.updateDom(), 500);
+
+        const NOW = () => Date.now();
+        const scenarios = {
+            realtime: () => ({
+                stopName: "Vlhká",
+                departures: [
+                    { line: "9", mode: "tram", items: [
+                        { arrivalMs: NOW() + 3 * 60 * 1000 + 20 * 1000,
+                          displayHm: "14:35", realtime: true, delayMin: 2, scheduledHm: "14:33" },
+                        { arrivalMs: NOW() + 13 * 60 * 1000,
+                          displayHm: "14:45", realtime: true, delayMin: 1, scheduledHm: "14:44" }
+                    ]},
+                    { line: "67", mode: "bus", items: [
+                        { arrivalMs: NOW() + 7 * 60 * 1000 + 10 * 1000,
+                          displayHm: "14:39", realtime: true, delayMin: 0, scheduledHm: null },
+                        { arrivalMs: NOW() + 37 * 60 * 1000,
+                          displayHm: "15:09", realtime: false, delayMin: null, scheduledHm: null }
+                    ]}
+                ],
+                generatedAt: new Date().toISOString()
+            }),
+            scheduled: () => ({
+                stopName: "Vlhká",
+                departures: [
+                    { line: "9", mode: "tram", items: [
+                        { arrivalMs: NOW() + 3 * 60 * 1000,
+                          displayHm: "14:33", realtime: false, delayMin: null, scheduledHm: null },
+                        { arrivalMs: NOW() + 13 * 60 * 1000,
+                          displayHm: "14:43", realtime: false, delayMin: null, scheduledHm: null }
+                    ]},
+                    { line: "67", mode: "bus", items: [
+                        { arrivalMs: NOW() + 12 * 60 * 1000,
+                          displayHm: "14:42", realtime: false, delayMin: null, scheduledHm: null },
+                        { arrivalMs: NOW() + 42 * 60 * 1000,
+                          displayHm: "15:12", realtime: false, delayMin: null, scheduledHm: null }
+                    ]}
+                ],
+                generatedAt: new Date().toISOString()
+            }),
+            rush: () => ({
+                stopName: "Vlhká",
+                departures: [
+                    { line: "9", mode: "tram", items: [
+                        { arrivalMs: NOW() + 5 * 60 * 1000,
+                          displayHm: "17:35", realtime: true, delayMin: 4, scheduledHm: "17:31" },
+                        { arrivalMs: NOW() + 12 * 60 * 1000,
+                          displayHm: "17:42", realtime: true, delayMin: 3, scheduledHm: "17:39" }
+                    ]},
+                    { line: "67", mode: "bus", items: [
+                        { arrivalMs: NOW() + 8 * 60 * 1000,
+                          displayHm: "17:38", realtime: true, delayMin: 5, scheduledHm: "17:33" },
+                        { arrivalMs: NOW() + 25 * 60 * 1000,
+                          displayHm: "17:55", realtime: false, delayMin: null, scheduledHm: null }
+                    ]}
+                ],
+                generatedAt: new Date().toISOString()
+            }),
+            empty: () => ({
+                stopName: "Vlhká",
+                departures: [
+                    { line: "9", mode: "tram", items: [
+                        { arrivalMs: NOW() + 3 * 60 * 1000,
+                          displayHm: "02:33", realtime: true, delayMin: 1, scheduledHm: "02:32" }
+                    ]},
+                    { line: "67", mode: "bus", items: [] }
+                ],
+                generatedAt: new Date().toISOString()
+            })
+        };
+
+        function apply() {
+            const name = (location.hash || "#realtime").slice(1);
+            const maker = scenarios[name] || scenarios.realtime;
+            mod.payload = maker();
+            mod.errorMsg = null;
+            mod.updateDom();
+        }
+        window.addEventListener("hashchange", apply);
+        apply();
+    </script>
+</body>
+</html>

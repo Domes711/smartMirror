@@ -9,3 +9,4 @@ venv/
 # MagicMirror module artefacts
 node_modules/
 MagicMirror/modules/MMM-Brno-Transit/cache/
+MagicMirror/modules/MMM-Brno-Transit/render-*.png
