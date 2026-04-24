@@ -92,6 +92,23 @@ let config = {
                     }
                 ]
             }
+        },
+        {
+            module: "MMM-HA-Reminders",
+            position: "top_left",
+            classes: "Domes",
+            header: "Reminders",
+            config: {
+                haUrl: "http://homeassistant.local:8123",
+                // Real HA long-lived token lives only on the Pi.
+                haToken: "HA_TOKEN_PLACEHOLDER",
+                todoEntities: ["todo.iphone_reminders"],
+                maxItems: 6,
+                showDueDate: true,
+                showCompleted: false,
+                refreshSec: 60,
+                language: "cs"
+            }
         }
     ]
 };

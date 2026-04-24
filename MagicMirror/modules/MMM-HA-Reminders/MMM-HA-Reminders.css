@@ -1,0 +1,60 @@
+.mmhar {
+    text-align: left;
+    display: inline-block;
+}
+
+.mmhar-row {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    column-gap: 12px;
+    align-items: baseline;
+    padding: 5px 0;
+    line-height: 1.15;
+}
+
+.mmhar-status {
+    grid-template-columns: 1fr;
+}
+
+.mmhar-icon {
+    font-size: 14px;
+    color: #999;
+    text-align: center;
+    line-height: 1;
+}
+
+.mmhar-body {
+    display: block;
+}
+
+.mmhar-title {
+    font-size: 18px;
+    font-weight: 400;
+    color: #fff;
+}
+
+.mmhar-due {
+    font-size: 13px;
+    font-weight: 300;
+    color: #888;
+    margin-top: 2px;
+}
+
+.mmhar-overdue {
+    color: #bbb;
+}
+
+.mmhar-done .mmhar-title {
+    color: #777;
+    text-decoration: line-through;
+}
+.mmhar-done .mmhar-icon {
+    color: #666;
+}
+
+.mmhar-empty {
+    color: #555;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 16px;
+}

@@ -26,6 +26,7 @@ how to restore them.
 - `MagicMirror/config/config.js` — mirror of `~/MagicMirror/config/config.js`
 - `MagicMirror/modules/MMM-FaceRecoIndicator/` — our own module
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
+- `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
 - `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos
 - `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
 - `ld2450/` — mirror of `~/ld2450/` (daemon, tests, `ld2450.service`)
