@@ -49,6 +49,10 @@ class PresenceTracker:
         self._present = False
         self._last_seen = None  # time when presence was last detected
 
+    @property
+    def is_present(self) -> bool:
+        return self._present
+
     def update(self, targets: list):
         """
         Feed new targets. Returns 'PRESENT', 'ABSENT', or None.
