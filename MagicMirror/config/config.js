@@ -48,6 +48,20 @@ let config = {
             }
         },
         {
+            module: "MMM-Brno-Transit",
+            position: "top_right",
+            config: {
+                stopName: "Vlhká",
+                // Get the current direct .zip URL from
+                // https://data.brno.cz/datasets/379d2e9a7907460c8ca7fda1f3e84328
+                gtfsUrl: "FILL_IN_FROM_DATA_BRNO_CZ",
+                lines: [
+                    { line: "9",  directionId: 0 },
+                    { line: "67", directionId: 1 }
+                ]
+            }
+        },
+        {
             module: "newsfeed",
             position: "bottom_bar",
             config: {

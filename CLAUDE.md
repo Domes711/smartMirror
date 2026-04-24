@@ -25,6 +25,7 @@ how to restore them.
 - `docs/superpowers/plans/` — task-by-task implementation plans
 - `MagicMirror/config/config.js` — mirror of `~/MagicMirror/config/config.js`
 - `MagicMirror/modules/MMM-FaceRecoIndicator/` — our own module
+- `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos
 - `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
 - `ld2450/` — mirror of `~/ld2450/` (daemon, tests, `ld2450.service`)
@@ -43,6 +44,7 @@ can be rebuilt from scratch.
 | MagicMirror² core | https://github.com/MagicMirrorOrg/MagicMirror | `~/MagicMirror/` | TBD |
 | MMM-Face-Reco-DNN | https://github.com/nischi/MMM-Face-Reco-DNN | `~/MagicMirror/modules/MMM-Face-Reco-DNN/` | TBD |
 | MMM-GoogleCalendar | TBD | `~/MagicMirror/modules/MMM-GoogleCalendar/` | TBD |
+| IDS JMK GTFS feed | https://data.brno.cz/datasets/379d2e9a7907460c8ca7fda1f3e84328 | downloaded by `MMM-Brno-Transit/node_helper.js` into its `cache/`, refreshed weekly | n/a |
 
 **Update flow (run on Pi):**
 
