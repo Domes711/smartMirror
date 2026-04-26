@@ -12,6 +12,7 @@
   :root {
     --ring-size: 280px;
     --avatar-size: 96px;
+    --error-size: 144px;
     --face-color: #ffffff;
     --accent: #ffffff;
     --error: rgba(255,255,255,0.55);
@@ -289,8 +290,8 @@
 
   /* ============ ERROR STATE ============ */
   .profile.error .scanner {
-    width: var(--avatar-size);
-    height: var(--avatar-size);
+    width: var(--error-size);
+    height: var(--error-size);
   }
   .profile.error .ring {
     border-style: solid;
@@ -399,6 +400,7 @@
     :root {
       --ring-size: min(72vw, 240px);
       --avatar-size: 80px;
+      --error-size: 120px;
     }
     .stage { gap: 24px; padding: 20px 14px; }
     .status { font-size: 16px; }
@@ -455,9 +457,6 @@
     var scanner = document.getElementById('scanner');
     var status  = document.getElementById('status');
 
-    var SCAN_MS = 3000;
-    var pendingTimer = null;
-
     function playIntro() {
       // Re-trigger the scanner reveal animation by re-adding the class.
       scanner.classList.remove('intro');
@@ -476,7 +475,6 @@
     }
 
     function setState(state) {
-      clearTimeout(pendingTimer);
       profile.classList.remove('success', 'error');
 
       if (state === 'success') {
@@ -496,9 +494,6 @@
 
     function runScan() {
       setState('scan');
-      pendingTimer = setTimeout(function () {
-        setState(Math.random() > 0.35 ? 'success' : 'error');
-      }, SCAN_MS);
     }
 
     scanner.addEventListener('click', function () { runScan(); });
