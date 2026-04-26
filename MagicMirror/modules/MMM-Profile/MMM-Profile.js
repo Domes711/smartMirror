@@ -163,7 +163,12 @@ Module.register("MMM-Profile", {
         const mods = MM.getModules().enumerate(() => true);
         for (const mod of mods) {
             if (mod.name === "MMM-Profile") continue;
-            const id = (mod.data && mod.data.id) || mod.name;
+            // Opt-in management: only modules with an explicit `id` field
+            // in config.js are repositioned/hidden. Everything else (alert,
+            // updatenotification, etc.) keeps whatever position config.js
+            // gave it and stays visible the whole time.
+            const id = mod.data && mod.data.id;
+            if (!id) continue;
             const pos = wantedById.get(id);
             const el = document.getElementById(mod.identifier);
             if (!el) continue;
