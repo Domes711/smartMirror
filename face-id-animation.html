@@ -132,7 +132,8 @@
   .face .mouth   {
     animation-delay: 0.9s;
     d: path("M38 62 Q50 70 62 62");
-    transition: d 0.5s cubic-bezier(.4,1.6,.4,1);
+    transform-origin: 50% 63%;
+    transition: d 0.45s cubic-bezier(.4,1.6,.4,1), transform 0.35s ease;
   }
 
   @keyframes draw {
@@ -295,51 +296,48 @@
   }
   .profile.error .ring::after { opacity: 0; }
   .profile.error .face { stroke: var(--error); }
-  .profile.error .scan-line,
-  .profile.error .dots {
+  /* Stop the sweeping line, keep the dot mesh alive */
+  .profile.error .scan-line {
     opacity: 0;
     animation: none;
   }
 
-  /* Eyes turn into small X marks (use stroke length trick) */
+  /* Eyes shrink to nothing */
   .profile.error .face .eye-l,
-  .profile.error .face .eye-r { opacity: 0; transition: opacity 0.3s ease; }
-
-  /* Mouth becomes a sad/flat line */
-  .profile.error .face .mouth {
-    d: path("M38 62 Q50 56 62 62");
-  }
-
-  /* Big X cross */
-  .cross {
-    position: absolute;
-    width: 38%;
-    height: 38%;
-    stroke: var(--error);
-    stroke-width: 8;
-    stroke-linecap: round;
-    fill: none;
+  .profile.error .face .eye-r {
     opacity: 0;
-    transform: scale(0.6);
-    transition: opacity 0.3s ease, transform 0.4s cubic-bezier(.2,.9,.3,1.4);
+    transform: scale(0);
+    transform-origin: 50% 50%;
+    transition: opacity 0.2s ease, transform 0.25s ease;
+  }
+  /* Outline fades while the cross emerges */
+  .profile.error .face .outline {
+    opacity: 0;
+    transition: opacity 0.35s ease 0.15s;
   }
 
-  .cross path {
+  /* Smile morphs into the first diagonal of the cross */
+  .profile.error .face .mouth {
+    d: path("M30 30 Q50 50 70 70");
+    stroke-width: 7;
+  }
+
+  /* Second diagonal of the cross is rendered as a hidden stroke
+     inside the face SVG and drawn on error */
+  .face .x-stroke {
     stroke-dasharray: 80;
     stroke-dashoffset: 80;
+    stroke-width: 7;
+    opacity: 0;
+    animation: none;
+    transition: opacity 0.1s ease;
+  }
+  .profile.error .face .x-stroke {
+    opacity: 1;
+    animation: drawStroke 0.3s ease 0.2s forwards;
   }
 
-  .profile.error .face { opacity: 0; }
-  .profile.error .cross {
-    opacity: 1;
-    transform: scale(1);
-  }
-  .profile.error .cross path:nth-child(1) {
-    animation: drawStroke 0.35s ease 0.05s forwards;
-  }
-  .profile.error .cross path:nth-child(2) {
-    animation: drawStroke 0.35s ease 0.3s forwards;
-  }
+  .profile.error .face { opacity: 1; }
 
   @keyframes drawStroke {
     to { stroke-dashoffset: 0; }
@@ -422,11 +420,7 @@
           <path class="eye-l" d="M38 42 v6"/>
           <path class="eye-r" d="M62 42 v6"/>
           <path class="mouth" d="M38 62 Q50 70 62 62"/>
-        </svg>
-
-        <svg class="cross" viewBox="0 0 100 100" aria-hidden="true">
-          <path d="M28 28 L72 72"/>
-          <path d="M72 28 L28 72"/>
+          <path class="x-stroke" d="M70 30 L30 70"/>
         </svg>
 
         <div class="avatar" aria-hidden="true">
