@@ -388,30 +388,13 @@
 <script>
   (function () {
     var profile = document.getElementById('profile');
-    var SCAN_MS    = 3000;
-    var SUCCESS_MS = 2600;
-    var ERROR_MS   = 2400;
-
-    function setState(state) {
-      profile.classList.remove('success', 'error');
-      if (state === 'success') profile.classList.add('success');
-      else if (state === 'error') profile.classList.add('error');
-    }
-
-    function step(state, delay, next) {
-      setState(state);
-      setTimeout(next, delay);
-    }
-
-    function cycle() {
-      step('scan', SCAN_MS, function () {
-        step('success', SUCCESS_MS, function () {
-          step('error', ERROR_MS, cycle);
-        });
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        setTimeout(function () {
+          profile.classList.add('success');
+        }, 600);
       });
-    }
-
-    cycle();
+    });
   })();
 </script>
 </body>
