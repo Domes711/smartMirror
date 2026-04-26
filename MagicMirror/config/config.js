@@ -1,3 +1,14 @@
+/* MagicMirror config.js
+ *
+ * Each module that should be controlled by MMM-Profile (positioned and
+ * shown/hidden per the active page) MUST carry a custom `id` field.
+ * Modules without `id` (alert, updatenotification, MMM-Profile itself)
+ * are unmanaged: their `position` from this file stands and they're
+ * always visible.
+ */
+
+const pages = require("./pages.js");
+
 let config = {
     address: "localhost",
     port: 8080,
@@ -13,22 +24,26 @@ let config = {
     units: "metric",
 
     modules: [
+        // ── unmanaged: stay where config.js puts them, always visible ──
         { module: "alert" },
         { module: "updatenotification", position: "top_bar" },
-        { module: "clock", position: "top_left" },
-        { module: "MMM-FaceRecoIndicator", position: "top_center" },
+
+        // ── MMM-Profile: the controller. Lives at top_center forever. ──
         {
-            module: "MMM-Face-Reco-DNN",
+            module: "MMM-Profile",
+            position: "top_center",
             config: {
-                usernameTimeout: 120000,
-                interval: 2,
-                users: ["Domes"],
-                welcomeMessage: ""
+                defaultUser: "default",
+                pages: pages
             }
         },
+
+        // ── managed: id required, position decided by pages.js ──
+        { id: "clock", module: "clock" },
+
         {
+            id: "weather_current",
             module: "weather",
-            position: "top_right",
             config: {
                 weatherProvider: "openmeteo",
                 type: "current",
@@ -37,8 +52,8 @@ let config = {
             }
         },
         {
+            id: "weather_forecast",
             module: "weather",
-            position: "top_right",
             header: "Weather Forecast",
             config: {
                 weatherProvider: "openmeteo",
@@ -47,9 +62,10 @@ let config = {
                 lon: 16.6166969
             }
         },
+
         {
+            id: "transit",
             module: "MMM-Brno-Transit",
-            position: "top_right",
             config: {
                 stopName: "Vlhká",
                 // Get the current direct .zip URL from
@@ -61,9 +77,10 @@ let config = {
                 ]
             }
         },
+
         {
+            id: "news",
             module: "newsfeed",
-            position: "bottom_bar",
             config: {
                 feeds: [
                     {
@@ -77,11 +94,11 @@ let config = {
                 broadcastNewsUpdates: true
             }
         },
+
         {
+            id: "calendar_domes",
             module: "MMM-GoogleCalendar",
             header: "Moro systems",
-            position: "top_left",
-            classes: "Domes",
             config: {
                 calendars: [
                     {
@@ -93,10 +110,10 @@ let config = {
                 ]
             }
         },
+
         {
+            id: "reminders_domes",
             module: "MMM-HA-Reminders",
-            position: "top_left",
-            classes: "Domes",
             header: "Reminders",
             config: {
                 haUrl: "http://homeassistant.local:8123",
