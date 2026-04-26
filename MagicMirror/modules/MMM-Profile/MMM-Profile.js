@@ -1,20 +1,21 @@
 /* MMM-Profile
  *
- * Presence-driven profile + page scheduler. Receives events from the Pi
- * (via node_helper's HTTP route), maintains the (presence, user) state
- * machine, renders the Face ID-style indicator at top_center and remaps
- * every other module on the mirror to the active page's layout.
+ * Frontend half of the presence-driven profile + page scheduler.
+ * State machine and cron-driven page resolution live in node_helper.js
+ * (cron-parser is a Node module). This file:
  *
- * State machine (per spec 2026-04-26-mmm-profile-design.md):
+ *   - Sends pages config to the helper on start (MMP_INIT)
+ *   - Receives MMP_STATE { state, currentUser, layout } and:
+ *       - re-renders the indicator (Face ID dots / avatar / "?" badge)
+ *       - reparents every other module's DOM wrapper into the region
+ *         declared by the layout, hides those not in the layout
  *
- *   asleep
- *     ──presence_on──► scanning ──user_recognized(X)─► user (X)
- *                              ──user_unknown─────────► user (default)
- *   user
- *     ──presence_off─► dimming (60 s timer)
- *   dimming
- *     ──presence_on──► user (cancel timer, no re-recognize)
- *     ──timer expires─► asleep
+ * State semantics (from the spec):
+ *   asleep   – all managed modules hidden, indicator hidden
+ *   scanning – default user's current-window layout, Face ID animation
+ *   user     – user's current-window layout, avatar + name
+ *   dimming  – visually identical to user; we're just waiting to see if
+ *              presence comes back within dimTimeoutMs
  */
 
 Module.register("MMM-Profile", {
@@ -28,84 +29,52 @@ Module.register("MMM-Profile", {
     },
 
     start: function () {
-        this.state = "asleep";          // asleep | scanning | user | dimming
+        this.state = "asleep";
         this.currentUser = null;
-        this.dimTimer = null;
-        this.activePageKey = null;
+        this.activeLayout = [];
+        this.activeLayoutKey = null;
+        this.domReady = false;
 
-        this.sendSocketNotification("MMP_INIT", {});
+        this.sendSocketNotification("MMP_INIT", {
+            pages: this.config.pages,
+            defaultUser: this.config.defaultUser,
+            dimTimeoutMs: this.config.dimTimeoutMs
+        });
     },
 
     getStyles: function () {
         return ["MMM-Profile.css"];
     },
 
+    notificationReceived: function (notification) {
+        if (notification === "DOM_OBJECTS_CREATED") {
+            this.domReady = true;
+            this._project(this.activeLayout);
+        }
+    },
+
     socketNotificationReceived: function (notification, payload) {
-        if (notification !== "MMP_EVENT" || !payload) return;
-        switch (payload.event) {
-            case "presence_on":     this._onPresenceOn();              break;
-            case "presence_off":    this._onPresenceOff();             break;
-            case "user_recognized": this._onUserRecognized(payload.user); break;
-            case "user_unknown":    this._onUserUnknown();             break;
-        }
-    },
+        if (notification !== "MMP_STATE" || !payload) return;
+        this.state = payload.state || "asleep";
+        this.currentUser = payload.currentUser || null;
+        this.activeLayout = Array.isArray(payload.layout) ? payload.layout : [];
 
-    // --- transitions --------------------------------------------------------
-
-    _onPresenceOn: function () {
-        if (this._cancelDimTimer()) {
-            // Re-entry within the dim window: stay on the same user, no
-            // re-recognition, no UI change.
-            this.state = "user";
-            this._render();
-            return;
-        }
-        // Fresh wake-up.
-        this.state = "scanning";
-        this.currentUser = null;
-        this._render();
-    },
-
-    _onUserRecognized: function (user) {
-        if (!user) return this._onUserUnknown();
-        this.state = "user";
-        this.currentUser = user;
-        this._render();
-    },
-
-    _onUserUnknown: function () {
-        this.state = "user";
-        this.currentUser = this.config.defaultUser;
-        this._render();
-    },
-
-    _onPresenceOff: function () {
-        if (this.state === "asleep") return;
-        this.state = "dimming";
-        this._cancelDimTimer();
-        this.dimTimer = setTimeout(() => {
-            this.dimTimer = null;
-            this.state = "asleep";
-            this.currentUser = null;
-            this._render();
-        }, this.config.dimTimeoutMs);
-        // No visual change during dimming — UI stays as it was per spec.
-    },
-
-    _cancelDimTimer: function () {
-        if (this.dimTimer) {
-            clearTimeout(this.dimTimer);
-            this.dimTimer = null;
-            return true;
-        }
-        return false;
-    },
-
-    _render: function () {
         this.updateDom(250);
+
+        const key = this._layoutKey(this.activeLayout);
+        if (key !== this.activeLayoutKey) {
+            this.activeLayoutKey = key;
+            if (this.domReady) this._project(this.activeLayout);
+        }
     },
 
-    // --- DOM ---------------------------------------------------------------
+    _layoutKey: function (layout) {
+        // Stable string for diffing; order matters because positions could
+        // shift even with the same set of ids.
+        return layout.map((e) => e.id + "@" + e.position).join("|");
+    },
+
+    // --- indicator UI -----------------------------------------------------
 
     getDom: function () {
         const wrap = document.createElement("div");
@@ -125,8 +94,7 @@ Module.register("MMM-Profile", {
                 wrap.appendChild(this._buildBadge(letter, display));
             }
         }
-        // asleep -> empty container (CSS hides it)
-
+        // asleep: empty wrapper (CSS hides it)
         return wrap;
     },
 
@@ -176,5 +144,39 @@ Module.register("MMM-Profile", {
         wrap.appendChild(text);
 
         return wrap;
+    },
+
+    // --- DOM remap of other modules ---------------------------------------
+
+    /**
+     * Move every module's DOM wrapper to the region declared in `layout`,
+     * show it; hide everything else. We carry a `lockString` so other
+     * modules' show/hide notifications can't fight us.
+     */
+    _project: function (layout) {
+        const wantedById = new Map();
+        for (const entry of layout) {
+            if (!entry || !entry.id || !entry.position) continue;
+            wantedById.set(entry.id, entry.position);
+        }
+
+        const mods = MM.getModules().enumerate(() => true);
+        for (const mod of mods) {
+            if (mod.name === "MMM-Profile") continue;
+            const id = (mod.data && mod.data.id) || mod.name;
+            const pos = wantedById.get(id);
+            const el = document.getElementById(mod.identifier);
+            if (!el) continue;
+            if (pos) {
+                const region = document.querySelector(
+                    ".region." + pos.replace(/_/g, "."));
+                if (region && el.parentElement !== region) {
+                    region.appendChild(el);
+                }
+                mod.show(0, () => {}, { lockString: "mmm-profile" });
+            } else {
+                mod.hide(0, () => {}, { lockString: "mmm-profile" });
+            }
+        }
     }
 });
