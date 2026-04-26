@@ -13,8 +13,8 @@
     --ring-size: 280px;
     --avatar-size: 96px;
     --face-color: #ffffff;
-    --accent: #34c759;
-    --error: #ff3b30;
+    --accent: #ffffff;
+    --error: rgba(255,255,255,0.55);
     --bg: #000000;
     --scan-duration: 3.2s;
   }
@@ -139,7 +139,7 @@
       rgba(255,255,255,0.95) 80%,
       transparent);
     box-shadow: 0 0 12px rgba(255,255,255,0.85),
-                0 0 24px rgba(120,180,255,0.45);
+                0 0 24px rgba(255,255,255,0.35);
     border-radius: 2px;
     top: 18%;
     animation: sweep 2.2s ease-in-out infinite;
@@ -181,7 +181,7 @@
     inset: 6%;
     border-radius: 50%;
     overflow: hidden;
-    background: linear-gradient(135deg, #5b8def 0%, #8a5bef 100%);
+    background: linear-gradient(135deg, #2a2a2a 0%, #6e6e6e 100%);
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -335,6 +335,57 @@
     to { stroke-dashoffset: 0; }
   }
 
+  /* Status text */
+  .status {
+    font-size: 18px;
+    letter-spacing: 0.4px;
+    color: rgba(255,255,255,0.85);
+    min-height: 24px;
+    text-align: center;
+    transition: color 0.4s ease;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative;
+    z-index: 10;
+  }
+
+  .controls button {
+    background: rgba(255,255,255,0.08);
+    color: var(--face-color);
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 12px 20px;
+    border-radius: 999px;
+    font-size: 14px;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    font-family: inherit;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(255,255,255,0.2);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .controls button:active {
+    background: rgba(255,255,255,0.28);
+  }
+
+  .controls button:hover {
+    background: rgba(255,255,255,0.18);
+    border-color: rgba(255,255,255,0.45);
+  }
+
+  .hint {
+    color: rgba(255,255,255,0.4);
+    font-size: 13px;
+    letter-spacing: 0.3px;
+    text-align: center;
+  }
+
   /* Mobile tweaks */
   @media (max-width: 480px), (max-height: 720px) {
     :root {
@@ -342,6 +393,7 @@
       --avatar-size: 80px;
     }
     .stage { gap: 24px; padding: 20px 14px; }
+    .status { font-size: 16px; }
     .profile-info .name { font-size: 19px; }
     .profile-info .subtitle { font-size: 13px; }
     .profile.success .profile-info { max-width: 200px; }
@@ -383,18 +435,73 @@
       </div>
     </div>
 
+    <div class="status" id="status">Skenování obličeje…</div>
+
+    <div class="controls">
+      <button data-action="scan">Skenovat</button>
+      <button data-action="success">Úspěch</button>
+      <button data-action="error">Chyba</button>
+    </div>
+
+    <div class="hint">Klikněte na scanner nebo stiskněte mezerník pro restart</div>
   </div>
 
 <script>
   (function () {
     var profile = document.getElementById('profile');
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        setTimeout(function () {
-          profile.classList.add('success');
-        }, 600);
-      });
+    var scanner = document.getElementById('scanner');
+    var status  = document.getElementById('status');
+
+    var SCAN_MS = 3000;
+    var pendingTimer = null;
+
+    function setState(state) {
+      clearTimeout(pendingTimer);
+      profile.classList.remove('success', 'error');
+
+      if (state === 'success') {
+        profile.classList.add('success');
+        status.textContent = 'Obličej rozpoznán';
+        status.style.color = '#ffffff';
+      } else if (state === 'error') {
+        profile.classList.add('error');
+        status.textContent = 'Obličej nerozpoznán';
+        status.style.color = 'rgba(255,255,255,0.55)';
+      } else {
+        status.textContent = 'Skenování obličeje…';
+        status.style.color = 'rgba(255,255,255,0.85)';
+      }
+    }
+
+    function runScan() {
+      setState('scan');
+      pendingTimer = setTimeout(function () {
+        setState(Math.random() > 0.35 ? 'success' : 'error');
+      }, SCAN_MS);
+    }
+
+    scanner.addEventListener('click', function () { runScan(); });
+
+    document.addEventListener('keydown', function (e) {
+      var tag = (e.target && e.target.tagName) || '';
+      if (tag === 'BUTTON') return;
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        runScan();
+      }
     });
+
+    var buttons = document.querySelectorAll('.controls button');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener('click', function () {
+        var action = this.getAttribute('data-action');
+        if (action === 'scan')         runScan();
+        else if (action === 'success') setState('success');
+        else if (action === 'error')   setState('error');
+      });
+    }
+
+    runScan();
   })();
 </script>
 </body>
