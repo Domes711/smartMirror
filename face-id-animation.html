@@ -66,15 +66,43 @@
       height 0.7s cubic-bezier(.2,.8,.2,1) 0.5s;
   }
 
-  /* Scan-state intro: scanner starts invisible and pops in */
+  /* Scan-state intro: scanner drops in from above with a bounce */
   .scanner.intro {
-    animation: scannerIntro 0.95s cubic-bezier(.2,.8,.2,1) both;
+    animation: scannerIntro 1.15s cubic-bezier(.2,.7,.2,1.1) both;
   }
 
   @keyframes scannerIntro {
-    0%   { opacity: 0; transform: scale(0.55); filter: blur(10px); }
-    55%  { opacity: 1; filter: blur(0); }
-    100% { opacity: 1; transform: scale(1); filter: blur(0); }
+    0% {
+      opacity: 0;
+      transform: translateY(-220px) scale(0.55);
+      filter: blur(14px);
+    }
+    35% {
+      opacity: 1;
+      filter: blur(0);
+    }
+    70% {
+      transform: translateY(14px) scale(1.04);
+    }
+    85% {
+      transform: translateY(-4px) scale(0.99);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  /* Scan line drops in from above the face and starts sweeping */
+  .scanner.intro .scan-line {
+    animation: lineDrop 0.5s ease 0.4s both, sweep 2.2s ease-in-out infinite 0.9s;
+  }
+
+  @keyframes lineDrop {
+    0%   { top: -40%; opacity: 0; }
+    60%  { opacity: 1; }
+    100% { top: 18%; opacity: 1; }
   }
 
   /* Dashed rotating ring (scanning) */
