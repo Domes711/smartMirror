@@ -24,12 +24,13 @@ how to restore them.
 - `docs/superpowers/specs/` — approved design specs
 - `docs/superpowers/plans/` — task-by-task implementation plans
 - `MagicMirror/config/config.js` — mirror of `~/MagicMirror/config/config.js`
-- `MagicMirror/modules/MMM-FaceRecoIndicator/` — our own module
+- `MagicMirror/config/pages.js` — per-(user, time-window) layouts consumed by MMM-Profile
+- `MagicMirror/modules/MMM-Profile/` — our own module (presence-driven profile + page scheduler; absorbed the former MMM-FaceRecoIndicator)
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
-- `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos
+- `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos (used by `ld2450/face_reco_once.py`)
 - `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
-- `ld2450/` — mirror of `~/ld2450/` (daemon, tests, `ld2450.service`)
+- `ld2450/` — mirror of `~/ld2450/` (radar daemon, single-shot face_reco_once.py, tests, `ld2450.service`)
 
 As each plan task is completed on the Pi, the matching files above are copied
 back into this repo and committed. Nothing here is deployed automatically —
