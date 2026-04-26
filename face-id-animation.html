@@ -17,11 +17,11 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
-    height: 100%;
+    min-height: 100%;
     background: var(--bg);
     color: var(--face-color);
     font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .stage {
@@ -31,6 +31,7 @@
     align-items: center;
     justify-content: center;
     gap: 36px;
+    padding: 24px 16px;
   }
 
   /* Profile row contains the scanner + name. In scan/error state the
@@ -51,6 +52,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
     transition:
       width 0.7s cubic-bezier(.2,.8,.2,1) 0.5s,
       height 0.7s cubic-bezier(.2,.8,.2,1) 0.5s;
@@ -348,13 +351,19 @@
     background: rgba(255,255,255,0.08);
     color: var(--face-color);
     border: 1px solid rgba(255,255,255,0.15);
-    padding: 8px 16px;
+    padding: 12px 20px;
     border-radius: 999px;
-    font-size: 13px;
+    font-size: 14px;
     letter-spacing: 0.3px;
     cursor: pointer;
     font-family: inherit;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(255,255,255,0.2);
     transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .controls button:active {
+    background: rgba(255,255,255,0.22);
   }
 
   .controls button:hover {
@@ -366,6 +375,20 @@
     color: rgba(255,255,255,0.4);
     font-size: 13px;
     letter-spacing: 0.3px;
+    text-align: center;
+  }
+
+  /* Mobile tweaks */
+  @media (max-width: 480px), (max-height: 720px) {
+    :root {
+      --ring-size: min(72vw, 240px);
+      --avatar-size: 80px;
+    }
+    .stage { gap: 24px; padding: 20px 14px; }
+    .status { font-size: 16px; }
+    .profile-info .name { font-size: 19px; }
+    .profile-info .subtitle { font-size: 13px; }
+    .profile.success .profile-info { max-width: 200px; }
   }
 </style>
 </head>
@@ -452,6 +475,8 @@
 
   scanner.addEventListener('click', () => runScan());
   document.addEventListener('keydown', (e) => {
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'BUTTON') return;
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       runScan();
@@ -462,8 +487,8 @@
     btn.addEventListener('click', () => {
       const action = btn.dataset.action;
       if (action === 'scan')         runScan();
-      else if (action === 'success') runScan('success');
-      else if (action === 'error')   runScan('error');
+      else if (action === 'success') setState('success');
+      else if (action === 'error')   setState('error');
     });
   });
 
