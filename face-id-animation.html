@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Face ID Animation</title>
 <style>
   :root {
@@ -195,16 +198,6 @@
     fill: rgba(255,255,255,0.92);
   }
 
-  /* Status text */
-  .status {
-    font-size: 18px;
-    letter-spacing: 0.4px;
-    color: rgba(255,255,255,0.85);
-    min-height: 24px;
-    text-align: center;
-    transition: color 0.4s ease;
-  }
-
   /* Profile name (hidden by default) */
   .profile-info {
     display: flex;
@@ -342,47 +335,6 @@
     to { stroke-dashoffset: 0; }
   }
 
-  /* Controls */
-  .controls {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content: center;
-    position: relative;
-    z-index: 10;
-  }
-
-  .controls button {
-    background: rgba(255,255,255,0.08);
-    color: var(--face-color);
-    border: 1px solid rgba(255,255,255,0.15);
-    padding: 12px 20px;
-    border-radius: 999px;
-    font-size: 14px;
-    letter-spacing: 0.3px;
-    cursor: pointer;
-    font-family: inherit;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: rgba(255,255,255,0.2);
-    transition: background 0.2s ease, border-color 0.2s ease;
-  }
-
-  .controls button:active {
-    background: rgba(255,255,255,0.22);
-  }
-
-  .controls button:hover {
-    background: rgba(255,255,255,0.16);
-    border-color: rgba(255,255,255,0.3);
-  }
-
-  .hint {
-    color: rgba(255,255,255,0.4);
-    font-size: 13px;
-    letter-spacing: 0.3px;
-    text-align: center;
-  }
-
   /* Mobile tweaks */
   @media (max-width: 480px), (max-height: 720px) {
     :root {
@@ -390,7 +342,6 @@
       --avatar-size: 80px;
     }
     .stage { gap: 24px; padding: 20px 14px; }
-    .status { font-size: 16px; }
     .profile-info .name { font-size: 19px; }
     .profile-info .subtitle { font-size: 13px; }
     .profile.success .profile-info { max-width: 200px; }
@@ -435,31 +386,33 @@
   </div>
 
 <script>
-  const profile = document.getElementById('profile');
+  (function () {
+    var profile = document.getElementById('profile');
+    var SCAN_MS    = 3000;
+    var SUCCESS_MS = 2600;
+    var ERROR_MS   = 2400;
 
-  const SCAN_MS    = 3000;
-  const SUCCESS_MS = 2600;
-  const ERROR_MS   = 2400;
-
-  function setState(state) {
-    profile.classList.remove('success', 'error');
-    if (state === 'success') profile.classList.add('success');
-    else if (state === 'error') profile.classList.add('error');
-  }
-
-  async function loop() {
-    while (true) {
-      setState('scan');
-      await wait(SCAN_MS);
-      setState('success');
-      await wait(SUCCESS_MS);
-      setState('error');
-      await wait(ERROR_MS);
+    function setState(state) {
+      profile.classList.remove('success', 'error');
+      if (state === 'success') profile.classList.add('success');
+      else if (state === 'error') profile.classList.add('error');
     }
-  }
 
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  loop();
+    function step(state, delay, next) {
+      setState(state);
+      setTimeout(next, delay);
+    }
+
+    function cycle() {
+      step('scan', SCAN_MS, function () {
+        step('success', SUCCESS_MS, function () {
+          step('error', ERROR_MS, cycle);
+        });
+      });
+    }
+
+    cycle();
+  })();
 </script>
 </body>
 </html>
