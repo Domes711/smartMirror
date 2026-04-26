@@ -433,11 +433,20 @@
      Sits below the name inside .profile-info. Visible only in
      success state when count > 0. Driven from
      window.faceID.notifications(N) or success(name, count). */
+  @property --grad-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
   .notifications {
+    position: relative;
     display: none;
     align-items: center;
     gap: 7px;
-    margin-top: 4px;
+    margin-top: 6px;
+    padding: 5px 12px;
+    border-radius: 12px;
     color: rgba(255,255,255,0.75);
     line-height: 1;
   }
@@ -445,6 +454,38 @@
   .notifications.visible {
     display: inline-flex;
     animation: notifFadeIn 0.5s ease both;
+  }
+
+  /* One-shot animated gradient line that traces the border once
+     and then fades away. Uses the @property + conic-gradient mask
+     trick for a hardware-accelerated trace without SVG. */
+  .notifications.visible::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(
+      from var(--grad-angle),
+      rgba(255,255,255,0) 0deg,
+      rgba(255,255,255,0) 290deg,
+      rgba(255,255,255,0.45) 340deg,
+      rgba(255,255,255,1) 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    animation: borderSweep 1.7s ease 0.25s forwards;
+    pointer-events: none;
+  }
+
+  @keyframes borderSweep {
+    0%   { --grad-angle: 0deg;   opacity: 0; }
+    10%  { --grad-angle: 36deg;  opacity: 1; }
+    75%  { --grad-angle: 360deg; opacity: 1; }
+    100% { --grad-angle: 360deg; opacity: 0; }
   }
 
   @keyframes notifFadeIn {
