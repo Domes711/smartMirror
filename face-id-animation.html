@@ -288,56 +288,56 @@
   }
 
   /* ============ ERROR STATE ============ */
+  .profile.error .scanner {
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+  }
   .profile.error .ring {
     border-style: solid;
     border-color: var(--error);
+    border-width: 4px;
     animation: none;
     transform: rotate(0deg);
   }
   .profile.error .ring::after { opacity: 0; }
-  .profile.error .face { stroke: var(--error); }
-  /* Stop the sweeping line, keep the dot mesh alive */
+  .profile.error .face { stroke: var(--error); opacity: 1; }
+  /* Stop the sweeping line; pause dot pulse but keep dots visible */
   .profile.error .scan-line {
     opacity: 0;
     animation: none;
   }
+  .profile.error .dots {
+    animation: none;
+    opacity: 0.45;
+  }
 
-  /* Eyes shrink to nothing */
+  /* Smile + eyes + outline all fade out cleanly */
+  .profile.error .face .mouth,
   .profile.error .face .eye-l,
   .profile.error .face .eye-r {
     opacity: 0;
-    transform: scale(0);
-    transform-origin: 50% 50%;
-    transition: opacity 0.2s ease, transform 0.25s ease;
+    transition: opacity 0.2s ease;
   }
-  /* Outline fades while the cross emerges */
   .profile.error .face .outline {
     opacity: 0;
-    transition: opacity 0.35s ease 0.15s;
+    transition: opacity 0.3s ease;
   }
 
-  /* Smile morphs into the first diagonal of the cross */
-  .profile.error .face .mouth {
-    d: path("M30 30 Q50 50 70 70");
-    stroke-width: 7;
-  }
-
-  /* Second diagonal of the cross is rendered as a hidden stroke
-     inside the face SVG and drawn on error */
+  /* Two hidden diagonals inside the face SVG that draw in to form
+     the X cross on error */
   .face .x-stroke {
     stroke-dasharray: 80;
     stroke-dashoffset: 80;
-    stroke-width: 7;
+    stroke-width: 8;
     opacity: 0;
     animation: none;
-    transition: opacity 0.1s ease;
   }
   .profile.error .face .x-stroke {
     opacity: 1;
-    animation: drawStroke 0.3s ease 0.2s forwards;
+    transition: opacity 0.1s ease;
   }
-
-  .profile.error .face { opacity: 1; }
+  .profile.error .face .x1 { animation: drawStroke 0.3s ease 0.15s forwards; }
+  .profile.error .face .x2 { animation: drawStroke 0.3s ease 0.35s forwards; }
 
   @keyframes drawStroke {
     to { stroke-dashoffset: 0; }
@@ -420,7 +420,8 @@
           <path class="eye-l" d="M38 42 v6"/>
           <path class="eye-r" d="M62 42 v6"/>
           <path class="mouth" d="M38 62 Q50 70 62 62"/>
-          <path class="x-stroke" d="M70 30 L30 70"/>
+          <path class="x-stroke x1" d="M30 30 L70 70"/>
+          <path class="x-stroke x2" d="M70 30 L30 70"/>
         </svg>
 
         <div class="avatar" aria-hidden="true">
