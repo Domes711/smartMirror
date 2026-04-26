@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>MMM-GoogleCalendar · preview (current upstream)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="./calendar.css">
+<style>
+  /* Subset of MagicMirror's base CSS so the calendar renders the
+     same way it does on the mirror. */
+  :root {
+    --font-size: 20px;
+    --font-size-small: 17.5px;
+    --font-primary: "Roboto Condensed", sans-serif;
+    --color-text: #fff;
+    --color-text-dimmed: #aaa;
+    --color-text-bright: #fff;
+    --gap-body-top: 60px;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    color: var(--color-text);
+    font-family: var(--font-primary);
+    font-size: var(--font-size);
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  .stage {
+    padding: 40px 60px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+    max-width: 600px;
+  }
+
+  .module {
+    display: block;
+  }
+
+  .module-header {
+    font-size: 15px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 1px solid #666;
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+    line-height: 1;
+    color: #fff;
+  }
+
+  .small {
+    font-size: var(--font-size-small);
+    line-height: 1.25;
+  }
+
+  .normal { color: var(--color-text); }
+  .dimmed { color: var(--color-text-dimmed); }
+  .bright { color: var(--color-text-bright); font-weight: 400; }
+  .light  { font-weight: 300; }
+  .thin   { font-weight: 100; }
+
+  .align-right { text-align: right; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  td {
+    padding: 1px 0;
+    vertical-align: top;
+  }
+
+  /* Note: this is a static replica of what getDom() produces with
+     timeFormat: "dateheaders" (the default). When config differs,
+     the markup differs too. */
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <!-- ============ Default config (timeFormat: "dateheaders") ============ -->
+  <div class="module">
+    <header class="module-header">Moro systems</header>
+    <table class="small">
+      <tr class="normal">
+        <td colspan="3" style="padding-top: 10px;">Po, 28.4.</td>
+      </tr>
+      <tr class="normal event">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Daily standup</td>
+        <td class="time light">9:00</td>
+      </tr>
+      <tr class="normal event">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Code review s Petrem</td>
+        <td class="time light">11:30</td>
+      </tr>
+      <tr class="normal event">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Lunch · Veverka</td>
+        <td class="time light">13:00</td>
+      </tr>
+
+      <tr class="normal">
+        <td colspan="3" style="padding-top: 10px;">Út, 29.4.</td>
+      </tr>
+      <tr class="normal event">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Sprint planning</td>
+        <td class="time light">10:00 – 11:00</td>
+      </tr>
+      <tr class="normal event">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">1:1 s Honzou</td>
+        <td class="time light">14:00</td>
+      </tr>
+
+      <tr class="normal">
+        <td colspan="3" style="padding-top: 10px;">St, 30.4.</td>
+      </tr>
+      <tr class="normal event">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Návštěva u zubaře</td>
+        <td class="time light">8:00</td>
+      </tr>
+      <tr class="normal event">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Brno → Praha · Train</td>
+        <td class="time light">17:30</td>
+      </tr>
+
+      <tr class="normal">
+        <td colspan="3" style="padding-top: 10px;">Čt, 1.5.</td>
+      </tr>
+      <tr class="normal event">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Svátek práce</td>
+        <td class="time light">Celý den</td>
+      </tr>
+
+      <tr class="normal" style="opacity: 0.7;">
+        <td colspan="3" style="padding-top: 10px;">Pá, 2.5.</td>
+      </tr>
+      <tr class="normal event" style="opacity: 0.6;">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Workshop · UX</td>
+        <td class="time light">9:00 – 16:00</td>
+      </tr>
+      <tr class="normal event" style="opacity: 0.4;">
+        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
+        <td class="title bright">Návrat domů</td>
+        <td class="time light">17:30</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ============ Empty state ============ -->
+  <div class="module">
+    <header class="module-header">Empty / Loading state</header>
+    <table class="small dimmed">No upcoming events.</table>
+  </div>
+
+</div>
+
+</body>
+</html>
