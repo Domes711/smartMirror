@@ -30,8 +30,14 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  .stage {
+  body {
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .stage {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -424,14 +430,12 @@
   }
 
   /* ============ TEST-ONLY CONTROL PANEL ============
-     Visually separated from the animation. Hide for production by
-     setting `[data-test-only] { display: none }` or removing the
-     <aside> from the DOM. */
+     Lives in normal flow below the animation so it never overlaps
+     the scanner. Hide for production by setting
+     `[data-test-only] { display: none }` or removing the <aside>. */
   .test-panel {
-    position: fixed;
-    left: 50%;
-    bottom: 20px;
-    transform: translateX(-50%);
+    align-self: center;
+    margin: 0 auto 28px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -440,9 +444,6 @@
     border-radius: 18px;
     background: rgba(255,255,255,0.04);
     border: 1px dashed rgba(255,255,255,0.18);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    z-index: 50;
   }
 
   .test-label {
@@ -493,7 +494,7 @@
     .stage { gap: 24px; padding: 20px 14px; }
     .profile-info .name { font-size: 19px; }
     .profile.success .profile-info { max-width: 200px; }
-    .test-panel { bottom: 12px; padding: 10px 12px 12px; }
+    .test-panel { margin-bottom: 16px; padding: 10px 12px 12px; }
     .controls button { padding: 9px 14px; font-size: 12px; }
   }
 </style>
