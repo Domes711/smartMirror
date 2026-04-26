@@ -1,0 +1,102 @@
+/* MMM-Profile — indicator UI styles
+ *
+ * Lifted from the previous MMM-FaceRecoIndicator with the .mmfr- prefix
+ * renamed to .mmp- and a few state classes added for the presence
+ * lifecycle (asleep / scanning / user / dimming).
+ */
+
+.mmp {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    font-family: "Roboto", "Helvetica Neue", sans-serif;
+    min-height: 120px;
+}
+
+.mmp[data-state="asleep"] {
+    /* the indicator itself disappears while the mirror is asleep */
+    visibility: hidden;
+}
+
+/* ---- scanning ---------------------------------------------------------- */
+
+.mmp-scan {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.mmp-scan-svg {
+    width: 110px;
+    height: 110px;
+    animation: mmp-rotate 6s linear infinite;
+}
+
+.mmp-dot {
+    fill: #fff;
+    opacity: 0.25;
+    animation: mmp-pulse 1.5s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+@keyframes mmp-rotate {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes mmp-pulse {
+    0%, 100% { opacity: 0.2; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.4); }
+}
+
+.mmp-label {
+    font-size: 0.7em;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    opacity: 0.6;
+}
+
+/* ---- recognized / unknown / dimming ----------------------------------- */
+
+.mmp-badge {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: mmp-fadein 0.45s ease-out;
+}
+
+.mmp-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: #000;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 500;
+}
+
+.mmp[data-state="unknown"] .mmp-avatar {
+    animation: mmp-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes mmp-breathe {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 1;   }
+}
+
+.mmp-name {
+    font-size: 1.5em;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+}
+
+@keyframes mmp-fadein {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0);    }
+}
