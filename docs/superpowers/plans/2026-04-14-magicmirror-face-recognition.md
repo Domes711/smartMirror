@@ -1,5 +1,11 @@
 # MagicMirror Face Recognition Implementation Plan
 
+> **SUPERSEDED** by the [MMM-Profile plan](2026-04-26-mmm-profile.md) on
+> 2026-04-26. Tasks 1-3 (system deps, MMM-Face-Reco-DNN install, encode
+> training photos) are still relevant — `face_reco_once.py` reuses the
+> trained pickle. Tasks 4-6 (MMM-Greeting, full config wiring, end-to-end
+> test) are obsolete and replaced by the MMM-Profile flow. Kept for context.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add face recognition to MagicMirror on Raspberry Pi so that when Domes is detected, his profile activates (Google Calendar visible, "Hi, Domes" greeting shown); after 2 minutes without a face, the anonymous profile returns.

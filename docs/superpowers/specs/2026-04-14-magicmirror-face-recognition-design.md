@@ -1,4 +1,11 @@
 # MagicMirror Face Recognition — Design Spec
+
+> **SUPERSEDED** by [MMM-Profile design](2026-04-26-mmm-profile-design.md)
+> on 2026-04-26. Continuous face recognition + MMM-FaceRecoIndicator are
+> replaced by on-demand `face_reco_once.py` triggered by the LD2450 daemon,
+> with a single MMM-Profile module driving both the indicator UI and the
+> page layout. Kept for historical context.
+
 **Date:** 2026-04-14
 **Status:** Approved
 
