@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Face ID Animation</title>
+<style>
+  :root {
+    --ring-size: 280px;
+    --avatar-size: 96px;
+    --error-size: 144px;
+    --face-color: #ffffff;
+    --accent: #ffffff;
+    --error: rgba(255,255,255,0.55);
+    --bg: #000000;
+    --scan-duration: 3.2s;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--face-color);
+    font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .stage {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 36px;
+    padding: 24px 16px;
+  }
+
+  /* Profile row contains the scanner + name. In scan/error state the
+     name is hidden; on success the scanner shrinks and slides next to
+     the name. */
+  .profile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    transition: gap 0.6s ease 0.6s;
+  }
+
+  .scanner {
+    position: relative;
+    width: var(--ring-size);
+    height: var(--ring-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    transform-origin: center center;
+    transition:
+      width 0.7s cubic-bezier(.2,.8,.2,1) 0.5s,
+      height 0.7s cubic-bezier(.2,.8,.2,1) 0.5s;
+  }
+
+  /* Scan-state intro: scanner drops in from above with a bounce */
+  .scanner.intro {
+    animation: scannerIntro 1.15s cubic-bezier(.2,.7,.2,1.1) both;
+  }
+
+  @keyframes scannerIntro {
+    0% {
+      opacity: 0;
+      transform: translateY(-220px) scale(0.55);
+      filter: blur(14px);
+    }
+    35% {
+      opacity: 1;
+      filter: blur(0);
+    }
+    70% {
+      transform: translateY(14px) scale(1.04);
+    }
+    85% {
+      transform: translateY(-4px) scale(0.99);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  /* Hold the scan line hidden inside the ring until the scanner has
+     fully settled, then fade it in and start sweeping. */
+  .scanner.intro .scan-line {
+    top: 18%;
+    animation: lineFadeIn 0.35s ease 1.45s both,
+               sweep 2.2s ease-in-out infinite 1.8s;
+  }
+
+  @keyframes lineFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* Dashed rotating ring rendered via SVG so dashes have a uniform
+     length around the full circumference. */
+  .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: spin var(--scan-duration) linear infinite;
+  }
+
+  .ring svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .ring-circle {
+    fill: none;
+    stroke: rgba(255,255,255,0.9);
+    stroke-width: 1.5;
+    stroke-linecap: butt;
+    transition:
+      stroke 0.4s ease,
+      stroke-width 0.4s ease,
+      stroke-dasharray 0.3s ease;
+  }
+
+  .ring::after {
+    content: "";
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: opacity 0.4s ease;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Face SVG */
+  .face {
+    position: absolute;
+    width: 58%;
+    height: 58%;
+    stroke: var(--face-color);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.25));
+    transition:
+      stroke 0.5s ease,
+      opacity 0.4s ease 0.7s;
+  }
+
+  .face path,
+  .face circle {
+    stroke-dasharray: 240;
+    stroke-dashoffset: 240;
+    animation: draw 1.4s ease forwards;
+  }
+
+  .face .outline { animation-delay: 0.0s; }
+  .face .eye-l   { animation-delay: 0.5s; }
+  .face .eye-r   { animation-delay: 0.65s; }
+  .face .mouth   {
+    animation-delay: 0.9s;
+    d: path("M38 62 Q50 70 62 62");
+    transform-origin: 50% 63%;
+    transition: d 0.45s cubic-bezier(.4,1.6,.4,1), transform 0.35s ease;
+  }
+
+  @keyframes draw {
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* Scan line sweeping over the face */
+  .scan-line {
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent,
+      rgba(255,255,255,0.95) 20%,
+      rgba(255,255,255,0.95) 80%,
+      transparent);
+    box-shadow: 0 0 12px rgba(255,255,255,0.85),
+                0 0 24px rgba(255,255,255,0.35);
+    border-radius: 2px;
+    top: 18%;
+    animation: sweep 2.2s ease-in-out infinite;
+    opacity: 0.95;
+    transition: opacity 0.3s ease;
+  }
+
+  @keyframes sweep {
+    0%   { top: 18%; opacity: 0; }
+    10%  { opacity: 1; }
+    50%  { top: 78%; opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 18%; opacity: 0; }
+  }
+
+  /* Dot mesh overlay (Face ID dots) */
+  .dots {
+    position: absolute;
+    inset: 14%;
+    border-radius: 50%;
+    background-image: radial-gradient(rgba(255,255,255,0.55) 1px, transparent 1.6px);
+    background-size: 14px 14px;
+    mix-blend-mode: screen;
+    opacity: 0.55;
+    animation: pulseDots 2.2s ease-in-out infinite;
+    -webkit-mask-image: radial-gradient(circle, #000 60%, transparent 75%);
+            mask-image: radial-gradient(circle, #000 60%, transparent 75%);
+    transition: opacity 0.3s ease;
+  }
+
+  @keyframes pulseDots {
+    0%, 100% { opacity: 0.35; transform: scale(1); }
+    50%      { opacity: 0.75; transform: scale(1.04); }
+  }
+
+  /* Avatar photo revealed on success */
+  .avatar {
+    position: absolute;
+    inset: 6%;
+    border-radius: 50%;
+    overflow: hidden;
+    background: linear-gradient(135deg, #2a2a2a 0%, #6e6e6e 100%);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.6);
+    transition:
+      opacity 0.4s ease 0.9s,
+      transform 0.5s cubic-bezier(.2,.8,.2,1.2) 0.9s;
+  }
+
+  .avatar svg {
+    width: 80%;
+    height: 90%;
+    fill: rgba(255,255,255,0.92);
+  }
+
+  /* Profile name (hidden by default) */
+  .profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateX(-12px);
+    transition:
+      max-width 0.6s ease 0.7s,
+      opacity 0.4s ease 1s,
+      transform 0.5s ease 1s;
+  }
+
+  .profile-info .name {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  /* ============ SUCCESS STATE ============ */
+  .profile.success .ring {
+    animation: spin 1.6s linear infinite, pulseRing 0.6s ease;
+  }
+  .profile.success .ring-circle {
+    stroke: var(--accent);
+    stroke-dasharray: none;
+    stroke-width: 2.5;
+  }
+
+  @keyframes pulseRing {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.06); }
+    100% { transform: scale(1); }
+  }
+
+  .profile.success .face { stroke: var(--accent); }
+  .profile.success .scan-line,
+  .profile.success .dots,
+  .profile.success .ring::after { opacity: 0; }
+
+  /* Smile morphs into checkmark */
+  .profile.success .face .mouth {
+    d: path("M32 52 L46 66 L70 38");
+    stroke-width: 8;
+  }
+  /* Eyes fade away */
+  .profile.success .face .eye-l,
+  .profile.success .face .eye-r { opacity: 0; transition: opacity 0.4s ease; }
+  /* Outline fades to make room for the avatar */
+  .profile.success .face .outline { opacity: 0; transition: opacity 0.4s ease 0.6s; }
+
+  /* After the morph, shrink scanner, freeze ring, reveal avatar */
+  .profile.success .scanner {
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+  }
+  .profile.success .ring {
+    animation: spin 6s linear infinite;
+  }
+  .profile.success .face {
+    opacity: 0;
+  }
+  .profile.success .avatar {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .profile.success {
+    gap: 18px;
+  }
+  .profile.success .profile-info {
+    max-width: 240px;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* ============ ERROR STATE ============ */
+  .profile.error .scanner {
+    width: var(--error-size);
+    height: var(--error-size);
+  }
+  .profile.error .ring {
+    animation: none;
+    transform: rotate(0deg);
+  }
+  .profile.error .ring-circle {
+    stroke: var(--error);
+    stroke-dasharray: none;
+    stroke-width: 2.5;
+  }
+  .profile.error .ring::after { opacity: 0; }
+  .profile.error .face { stroke: var(--error); opacity: 1; }
+  /* Stop the sweeping line; pause dot pulse but keep dots visible */
+  .profile.error .scan-line {
+    opacity: 0;
+    animation: none;
+  }
+  .profile.error .dots {
+    animation: none;
+    opacity: 0.45;
+  }
+
+  /* Smile + eyes + outline all fade out cleanly */
+  .profile.error .face .mouth,
+  .profile.error .face .eye-l,
+  .profile.error .face .eye-r {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .profile.error .face .outline {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  /* Two hidden diagonals inside the face SVG that draw in to form
+     the X cross on error */
+  .face .x-stroke {
+    stroke-dasharray: 80;
+    stroke-dashoffset: 80;
+    stroke-width: 8;
+    opacity: 0;
+    animation: none;
+  }
+  .profile.error .face .x-stroke {
+    opacity: 1;
+    transition: opacity 0.1s ease;
+  }
+  .profile.error .face .x1 { animation: drawStroke 0.3s ease 0.15s forwards; }
+  .profile.error .face .x2 { animation: drawStroke 0.3s ease 0.35s forwards; }
+
+  @keyframes drawStroke {
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* Status text */
+  .status {
+    font-size: 18px;
+    letter-spacing: 0.4px;
+    color: rgba(255,255,255,0.85);
+    min-height: 24px;
+    text-align: center;
+    transition: color 0.4s ease;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative;
+    z-index: 10;
+  }
+
+  .controls button {
+    background: rgba(255,255,255,0.08);
+    color: var(--face-color);
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 12px 20px;
+    border-radius: 999px;
+    font-size: 14px;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    font-family: inherit;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(255,255,255,0.2);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .controls button:active {
+    background: rgba(255,255,255,0.28);
+  }
+
+  .controls button:hover {
+    background: rgba(255,255,255,0.18);
+    border-color: rgba(255,255,255,0.45);
+  }
+
+  .hint {
+    color: rgba(255,255,255,0.4);
+    font-size: 13px;
+    letter-spacing: 0.3px;
+    text-align: center;
+  }
+
+  /* Mobile tweaks */
+  @media (max-width: 480px), (max-height: 720px) {
+    :root {
+      --ring-size: min(72vw, 240px);
+      --avatar-size: 80px;
+      --error-size: 120px;
+    }
+    .stage { gap: 24px; padding: 20px 14px; }
+    .status { font-size: 16px; }
+    .profile-info .name { font-size: 19px; }
+    .profile.success .profile-info { max-width: 200px; }
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="profile" id="profile">
+      <div class="scanner intro" id="scanner">
+        <div class="ring">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="ring-circle" cx="50" cy="50" r="49"
+                    pathLength="60"
+                    stroke-dasharray="1 1"/>
+          </svg>
+        </div>
+        <div class="dots"></div>
+        <div class="scan-line"></div>
+
+        <svg class="face" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="outline" cx="50" cy="50" r="34"/>
+          <path class="eye-l" d="M38 42 v6"/>
+          <path class="eye-r" d="M62 42 v6"/>
+          <path class="mouth" d="M38 62 Q50 70 62 62"/>
+          <path class="x-stroke x1" d="M30 30 L70 70"/>
+          <path class="x-stroke x2" d="M70 30 L30 70"/>
+        </svg>
+
+        <div class="avatar" aria-hidden="true">
+          <!-- placeholder user silhouette -->
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="38" r="18"/>
+            <path d="M14 96 C14 70 30 60 50 60 C70 60 86 70 86 96 Z"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="profile-info">
+        <div class="name">Tomáš Novák</div>
+      </div>
+    </div>
+
+    <div class="status" id="status">Skenování obličeje…</div>
+
+    <div class="controls">
+      <button data-action="scan">Skenovat</button>
+      <button data-action="success">Úspěch</button>
+      <button data-action="error">Chyba</button>
+    </div>
+
+    <div class="hint">Klikněte na scanner nebo stiskněte mezerník pro restart</div>
+  </div>
+
+<script>
+  (function () {
+    var profile = document.getElementById('profile');
+    var scanner = document.getElementById('scanner');
+    var status  = document.getElementById('status');
+
+    function playIntro() {
+      // Re-trigger the scanner reveal animation by re-adding the class.
+      scanner.classList.remove('intro');
+      void scanner.offsetWidth;
+      scanner.classList.add('intro');
+
+      // Restart the SVG draw animations on each face element.
+      var parts = scanner.querySelectorAll('.face .outline, .face .eye-l, .face .eye-r, .face .mouth');
+      for (var i = 0; i < parts.length; i++) {
+        parts[i].style.animation = 'none';
+      }
+      void scanner.offsetWidth;
+      for (var j = 0; j < parts.length; j++) {
+        parts[j].style.animation = '';
+      }
+    }
+
+    function setState(state) {
+      profile.classList.remove('success', 'error');
+
+      if (state === 'success') {
+        profile.classList.add('success');
+        status.textContent = 'Obličej rozpoznán';
+        status.style.color = '#ffffff';
+      } else if (state === 'error') {
+        profile.classList.add('error');
+        status.textContent = 'Obličej nerozpoznán';
+        status.style.color = 'rgba(255,255,255,0.55)';
+      } else {
+        status.textContent = 'Skenování obličeje…';
+        status.style.color = 'rgba(255,255,255,0.85)';
+        playIntro();
+      }
+    }
+
+    function runScan() {
+      setState('scan');
+    }
+
+    scanner.addEventListener('click', function () { runScan(); });
+
+    document.addEventListener('keydown', function (e) {
+      var tag = (e.target && e.target.tagName) || '';
+      if (tag === 'BUTTON') return;
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        runScan();
+      }
+    });
+
+    var buttons = document.querySelectorAll('.controls button');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener('click', function () {
+        var action = this.getAttribute('data-action');
+        if (action === 'scan')         runScan();
+        else if (action === 'success') setState('success');
+        else if (action === 'error')   setState('error');
+      });
+    }
+
+    runScan();
+  })();
+</script>
+</body>
+</html>
