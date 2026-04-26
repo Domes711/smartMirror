@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Face ID Animation</title>
+<style>
+  :root {
+    --ring-size: 280px;
+    --face-color: #ffffff;
+    --accent: #34c759;
+    --bg: #000000;
+    --scan-duration: 3.2s;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--face-color);
+    font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+
+  .stage {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 36px;
+  }
+
+  .scanner {
+    position: relative;
+    width: var(--ring-size);
+    height: var(--ring-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Dashed rotating ring (scanning) */
+  .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 3px dashed rgba(255,255,255,0.85);
+    animation: spin var(--scan-duration) linear infinite;
+    transition: border-color 0.4s ease, transform 0.6s ease;
+  }
+
+  .ring::after {
+    content: "";
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Face SVG */
+  .face {
+    width: 58%;
+    height: 58%;
+    stroke: var(--face-color);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.25));
+    transition: stroke 0.5s ease, transform 0.6s ease;
+  }
+
+  .face path,
+  .face circle {
+    stroke-dasharray: 240;
+    stroke-dashoffset: 240;
+    animation: draw 1.4s ease forwards;
+  }
+
+  .face .outline { animation-delay: 0.0s; }
+  .face .eye-l   { animation-delay: 0.5s; }
+  .face .eye-r   { animation-delay: 0.65s; }
+  .face .mouth   { animation-delay: 0.9s; }
+
+  @keyframes draw {
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* Scan line sweeping over the face */
+  .scan-line {
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent,
+      rgba(255,255,255,0.95) 20%,
+      rgba(255,255,255,0.95) 80%,
+      transparent);
+    box-shadow: 0 0 12px rgba(255,255,255,0.85),
+                0 0 24px rgba(120,180,255,0.45);
+    border-radius: 2px;
+    top: 18%;
+    animation: sweep 2.2s ease-in-out infinite;
+    opacity: 0.95;
+  }
+
+  @keyframes sweep {
+    0%   { top: 18%; opacity: 0; }
+    10%  { opacity: 1; }
+    50%  { top: 78%; opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 18%; opacity: 0; }
+  }
+
+  /* Dot mesh overlay (Face ID dots) */
+  .dots {
+    position: absolute;
+    inset: 14%;
+    border-radius: 50%;
+    background-image: radial-gradient(rgba(255,255,255,0.55) 1px, transparent 1.6px);
+    background-size: 14px 14px;
+    mix-blend-mode: screen;
+    opacity: 0.55;
+    animation: pulseDots 2.2s ease-in-out infinite;
+    -webkit-mask-image: radial-gradient(circle, #000 60%, transparent 75%);
+            mask-image: radial-gradient(circle, #000 60%, transparent 75%);
+  }
+
+  @keyframes pulseDots {
+    0%, 100% { opacity: 0.35; transform: scale(1); }
+    50%      { opacity: 0.75; transform: scale(1.04); }
+  }
+
+  /* Status text */
+  .status {
+    font-size: 18px;
+    letter-spacing: 0.4px;
+    color: rgba(255,255,255,0.85);
+    min-height: 24px;
+    text-align: center;
+    transition: color 0.4s ease;
+  }
+
+  /* Success state */
+  .scanner.success .ring {
+    border-style: solid;
+    border-color: var(--accent);
+    animation: spin 1.6s linear infinite, pulseRing 0.6s ease;
+  }
+
+  @keyframes pulseRing {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.06); }
+    100% { transform: scale(1); }
+  }
+
+  .scanner.success .face { stroke: var(--accent); }
+  .scanner.success .scan-line,
+  .scanner.success .dots { opacity: 0; }
+
+  .check {
+    position: absolute;
+    width: 38%;
+    height: 38%;
+    stroke: var(--accent);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 0.4s ease, transform 0.4s cubic-bezier(.2,.9,.3,1.4);
+  }
+
+  .check path {
+    stroke-dasharray: 80;
+    stroke-dashoffset: 80;
+  }
+
+  .scanner.success .face { opacity: 0; }
+  .scanner.success .check {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .scanner.success .check path {
+    animation: drawCheck 0.5s ease forwards;
+  }
+
+  @keyframes drawCheck {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .hint {
+    color: rgba(255,255,255,0.4);
+    font-size: 13px;
+    letter-spacing: 0.3px;
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="scanner" id="scanner">
+      <div class="ring"></div>
+      <div class="dots"></div>
+      <div class="scan-line"></div>
+
+      <svg class="face" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="outline" cx="50" cy="50" r="34"/>
+        <path class="eye-l" d="M38 42 v6"/>
+        <path class="eye-r" d="M62 42 v6"/>
+        <path class="mouth" d="M38 64 q12 8 24 0"/>
+      </svg>
+
+      <svg class="check" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M22 52 L44 72 L78 32"/>
+      </svg>
+    </div>
+
+    <div class="status" id="status">Skenování obličeje…</div>
+    <div class="hint">Klikněte pro restart</div>
+  </div>
+
+<script>
+  const scanner = document.getElementById('scanner');
+  const status  = document.getElementById('status');
+
+  const SCAN_MS = 3200;
+
+  function runScan() {
+    scanner.classList.remove('success');
+    status.textContent = 'Skenování obličeje…';
+    status.style.color = 'rgba(255,255,255,0.85)';
+
+    setTimeout(() => {
+      scanner.classList.add('success');
+      status.textContent = 'Obličej rozpoznán';
+      status.style.color = 'var(--accent)';
+    }, SCAN_MS);
+  }
+
+  scanner.addEventListener('click', runScan);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') runScan();
+  });
+
+  runScan();
+</script>
+</body>
+</html>
