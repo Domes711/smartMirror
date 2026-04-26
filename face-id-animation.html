@@ -59,9 +59,21 @@
     justify-content: center;
     cursor: pointer;
     touch-action: manipulation;
+    transform-origin: center center;
     transition:
       width 0.7s cubic-bezier(.2,.8,.2,1) 0.5s,
       height 0.7s cubic-bezier(.2,.8,.2,1) 0.5s;
+  }
+
+  /* Scan-state intro: scanner starts invisible and pops in */
+  .scanner.intro {
+    animation: scannerIntro 0.95s cubic-bezier(.2,.8,.2,1) both;
+  }
+
+  @keyframes scannerIntro {
+    0%   { opacity: 0; transform: scale(0.55); filter: blur(10px); }
+    55%  { opacity: 1; filter: blur(0); }
+    100% { opacity: 1; transform: scale(1); filter: blur(0); }
   }
 
   /* Dashed rotating ring (scanning) */
@@ -403,7 +415,7 @@
 <body>
   <div class="stage">
     <div class="profile" id="profile">
-      <div class="scanner" id="scanner">
+      <div class="scanner intro" id="scanner">
         <div class="ring"></div>
         <div class="dots"></div>
         <div class="scan-line"></div>
@@ -455,6 +467,23 @@
     var SCAN_MS = 3000;
     var pendingTimer = null;
 
+    function playIntro() {
+      // Re-trigger the scanner reveal animation by re-adding the class.
+      scanner.classList.remove('intro');
+      void scanner.offsetWidth;
+      scanner.classList.add('intro');
+
+      // Restart the SVG draw animations on each face element.
+      var parts = scanner.querySelectorAll('.face .outline, .face .eye-l, .face .eye-r, .face .mouth');
+      for (var i = 0; i < parts.length; i++) {
+        parts[i].style.animation = 'none';
+      }
+      void scanner.offsetWidth;
+      for (var j = 0; j < parts.length; j++) {
+        parts[j].style.animation = '';
+      }
+    }
+
     function setState(state) {
       clearTimeout(pendingTimer);
       profile.classList.remove('success', 'error');
@@ -470,6 +499,7 @@
       } else {
         status.textContent = 'Skenování obličeje…';
         status.style.color = 'rgba(255,255,255,0.85)';
+        playIntro();
       }
     }
 
