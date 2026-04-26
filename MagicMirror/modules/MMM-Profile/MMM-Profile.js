@@ -1,28 +1,29 @@
 /* MMM-Profile
  *
- * Frontend half of the presence-driven profile + page scheduler.
- * State machine and cron-driven page resolution live in node_helper.js
- * (cron-parser is a Node module). This file:
+ * Frontend half of the presence-driven profile + page scheduler. The DOM
+ * shape and animation are mirrored from tests/face-id-animation.html so
+ * the mirror produces the same Face ID look the demo shows. State logic
+ * + cron-driven page resolution live in node_helper.js.
  *
- *   - Sends pages config to the helper on start (MMP_INIT)
- *   - Receives MMP_STATE { state, currentUser, layout } and:
- *       - re-renders the indicator (Face ID dots / avatar / "?" badge)
- *       - reparents every other module's DOM wrapper into the region
- *         declared by the layout, hides those not in the layout
+ * Helper protocol:
+ *   FE → BE   MMP_INIT { pages, defaultUser, dimTimeoutMs }
+ *   BE → FE   MMP_STATE { state, currentUser, layout }
+ *               state: "asleep" | "scanning" | "user" | "dimming"
  *
- * State semantics (from the spec):
- *   asleep   – all managed modules hidden, indicator hidden
- *   scanning – default user's current-window layout, Face ID animation
- *   user     – user's current-window layout, avatar + name
- *   dimming  – visually identical to user; we're just waiting to see if
- *              presence comes back within dimTimeoutMs
+ * State → animation class on .profile:
+ *   asleep    -> wrapper hidden via [data-state="asleep"]
+ *   scanning  -> .profile (no class) — ring + face + sweep + dots
+ *   user (X)  -> .profile.success — checkmark morph + avatar reveal + name
+ *   user (def)-> .profile.error   — X cross
+ *   dimming   -> keeps the previous .success / .error class
  */
 
 Module.register("MMM-Profile", {
     defaults: {
         defaultUser: "default",
-        unknownLabel: "Unknown",
-        scanningLabel: "scanning",
+        scanningStatus: "Skenování obličeje…",
+        recognizedStatus: "Obličej rozpoznán",
+        unknownStatus: "Obličej nerozpoznán",
         userDisplayNames: {},
         dimTimeoutMs: 60 * 1000,
         pages: null
@@ -59,7 +60,7 @@ Module.register("MMM-Profile", {
         this.currentUser = payload.currentUser || null;
         this.activeLayout = Array.isArray(payload.layout) ? payload.layout : [];
 
-        this.updateDom(250);
+        this.updateDom(0);
 
         const key = this._layoutKey(this.activeLayout);
         if (key !== this.activeLayoutKey) {
@@ -69,8 +70,6 @@ Module.register("MMM-Profile", {
     },
 
     _layoutKey: function (layout) {
-        // Stable string for diffing; order matters because positions could
-        // shift even with the same set of ids.
         return layout.map((e) => e.id + "@" + e.position).join("|");
     },
 
@@ -81,78 +80,147 @@ Module.register("MMM-Profile", {
         wrap.className = "mmp";
         wrap.dataset.state = this.state;
 
-        if (this.state === "scanning") {
-            wrap.appendChild(this._buildScanning());
-        } else if (this.state === "user" || this.state === "dimming") {
-            const user = this.currentUser || this.config.defaultUser;
-            if (user === this.config.defaultUser) {
-                wrap.appendChild(this._buildBadge("?", this.config.unknownLabel));
-                wrap.dataset.state = "unknown";
-            } else {
-                const letter = user.charAt(0).toUpperCase();
-                const display = this.config.userDisplayNames[user] || user;
-                wrap.appendChild(this._buildBadge(letter, display));
-            }
-        }
-        // asleep: empty wrapper (CSS hides it)
+        if (this.state === "asleep") return wrap;
+
+        const profileClass = this._profileClass();
+        const display = this._displayName();
+        const status  = this._statusText();
+
+        wrap.appendChild(this._buildProfile(profileClass, display));
+        wrap.appendChild(this._buildStatus(status));
         return wrap;
     },
 
-    _buildScanning: function () {
-        const wrap = document.createElement("div");
-        wrap.className = "mmp-scan";
+    _profileClass: function () {
+        if (this.state === "scanning") return "";
+        if (this.state === "user" || this.state === "dimming") {
+            return (this.currentUser
+                && this.currentUser !== this.config.defaultUser) ? "success" : "error";
+        }
+        return "";
+    },
 
+    _displayName: function () {
+        if (!this.currentUser || this.currentUser === this.config.defaultUser) return "";
+        return this.config.userDisplayNames[this.currentUser] || this.currentUser;
+    },
+
+    _statusText: function () {
+        if (this.state === "scanning") return this.config.scanningStatus;
+        if (this.state === "user" || this.state === "dimming") {
+            return (this.currentUser && this.currentUser !== this.config.defaultUser)
+                ? this.config.recognizedStatus
+                : this.config.unknownStatus;
+        }
+        return "";
+    },
+
+    _buildProfile: function (extraClass, displayName) {
+        const profile = document.createElement("div");
+        profile.className = "profile" + (extraClass ? " " + extraClass : "");
+
+        const scanner = document.createElement("div");
+        scanner.className = "scanner";
+        if (this.state === "scanning") scanner.classList.add("intro");
+
+        scanner.appendChild(this._buildRing());
+        scanner.appendChild(el("div", "dots"));
+        scanner.appendChild(el("div", "scan-line"));
+        scanner.appendChild(this._buildFaceSvg());
+        scanner.appendChild(this._buildAvatarSvg());
+
+        profile.appendChild(scanner);
+        profile.appendChild(this._buildProfileInfo(displayName));
+        return profile;
+    },
+
+    _buildStatus: function (text) {
+        const s = document.createElement("div");
+        s.className = "mmp-status";
+        s.textContent = text;
+        return s;
+    },
+
+    _buildRing: function () {
+        const NS = "http://www.w3.org/2000/svg";
+        const ring = document.createElement("div");
+        ring.className = "ring";
+        const svg = document.createElementNS(NS, "svg");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        svg.setAttribute("aria-hidden", "true");
+        const circle = document.createElementNS(NS, "circle");
+        circle.setAttribute("class", "ring-circle");
+        circle.setAttribute("cx", "50");
+        circle.setAttribute("cy", "50");
+        circle.setAttribute("r", "49");
+        circle.setAttribute("pathLength", "60");
+        circle.setAttribute("stroke-dasharray", "1 1");
+        svg.appendChild(circle);
+        ring.appendChild(svg);
+        return ring;
+    },
+
+    _buildFaceSvg: function () {
         const NS = "http://www.w3.org/2000/svg";
         const svg = document.createElementNS(NS, "svg");
-        svg.setAttribute("viewBox", "-60 -60 120 120");
-        svg.setAttribute("class", "mmp-scan-svg");
+        svg.setAttribute("class", "face");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        svg.setAttribute("aria-hidden", "true");
 
-        const DOTS = 24;
-        const RADIUS = 48;
-        for (let i = 0; i < DOTS; i++) {
-            const angle = (i / DOTS) * Math.PI * 2;
-            const dot = document.createElementNS(NS, "circle");
-            dot.setAttribute("cx", Math.cos(angle) * RADIUS);
-            dot.setAttribute("cy", Math.sin(angle) * RADIUS);
-            dot.setAttribute("r", 2.5);
-            dot.setAttribute("class", "mmp-dot");
-            dot.style.animationDelay = ((i / DOTS) * 1.5).toFixed(3) + "s";
-            svg.appendChild(dot);
-        }
+        const outline = document.createElementNS(NS, "circle");
+        outline.setAttribute("class", "outline");
+        outline.setAttribute("cx", "50");
+        outline.setAttribute("cy", "50");
+        outline.setAttribute("r", "34");
+        svg.appendChild(outline);
+
+        svg.appendChild(this._svgPath("eye-l", "M38 42 v6"));
+        svg.appendChild(this._svgPath("eye-r", "M62 42 v6"));
+        svg.appendChild(this._svgPath("mouth", "M38 62 Q50 70 62 62"));
+        svg.appendChild(this._svgPath("x-stroke x1", "M30 30 L70 70"));
+        svg.appendChild(this._svgPath("x-stroke x2", "M70 30 L30 70"));
+        return svg;
+    },
+
+    _svgPath: function (cls, d) {
+        const NS = "http://www.w3.org/2000/svg";
+        const p = document.createElementNS(NS, "path");
+        p.setAttribute("class", cls);
+        p.setAttribute("d", d);
+        return p;
+    },
+
+    _buildAvatarSvg: function () {
+        const NS = "http://www.w3.org/2000/svg";
+        const wrap = document.createElement("div");
+        wrap.className = "avatar";
+        wrap.setAttribute("aria-hidden", "true");
+        const svg = document.createElementNS(NS, "svg");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        const head = document.createElementNS(NS, "circle");
+        head.setAttribute("cx", "50");
+        head.setAttribute("cy", "38");
+        head.setAttribute("r", "18");
+        svg.appendChild(head);
+        const body = document.createElementNS(NS, "path");
+        body.setAttribute("d", "M14 96 C14 70 30 60 50 60 C70 60 86 70 86 96 Z");
+        svg.appendChild(body);
         wrap.appendChild(svg);
-
-        const label = document.createElement("div");
-        label.className = "mmp-label";
-        label.textContent = this.config.scanningLabel;
-        wrap.appendChild(label);
-
         return wrap;
     },
 
-    _buildBadge: function (letter, name) {
-        const wrap = document.createElement("div");
-        wrap.className = "mmp-badge";
-
-        const avatar = document.createElement("div");
-        avatar.className = "mmp-avatar";
-        avatar.textContent = letter;
-        wrap.appendChild(avatar);
-
-        const text = document.createElement("div");
-        text.className = "mmp-name";
-        text.textContent = name;
-        wrap.appendChild(text);
-
-        return wrap;
+    _buildProfileInfo: function (name) {
+        const info = document.createElement("div");
+        info.className = "profile-info";
+        const nameEl = document.createElement("div");
+        nameEl.className = "name";
+        nameEl.textContent = name || "";
+        info.appendChild(nameEl);
+        return info;
     },
 
     // --- DOM remap of other modules ---------------------------------------
 
-    /**
-     * Move every module's DOM wrapper to the region declared in `layout`,
-     * show it; hide everything else. We carry a `lockString` so other
-     * modules' show/hide notifications can't fight us.
-     */
     _project: function (layout) {
         const wantedById = new Map();
         for (const entry of layout) {
@@ -163,20 +231,16 @@ Module.register("MMM-Profile", {
         const mods = MM.getModules().enumerate(() => true);
         for (const mod of mods) {
             if (mod.name === "MMM-Profile") continue;
-            // Opt-in management: only modules with an explicit `id` field
-            // in config.js are repositioned/hidden. Everything else (alert,
-            // updatenotification, etc.) keeps whatever position config.js
-            // gave it and stays visible the whole time.
             const id = mod.data && mod.data.id;
             if (!id) continue;
             const pos = wantedById.get(id);
-            const el = document.getElementById(mod.identifier);
-            if (!el) continue;
+            const elNode = document.getElementById(mod.identifier);
+            if (!elNode) continue;
             if (pos) {
                 const region = document.querySelector(
                     ".region." + pos.replace(/_/g, "."));
-                if (region && el.parentElement !== region) {
-                    region.appendChild(el);
+                if (region && elNode.parentElement !== region) {
+                    region.appendChild(elNode);
                 }
                 mod.show(0, () => {}, { lockString: "mmm-profile" });
             } else {
@@ -185,3 +249,9 @@ Module.register("MMM-Profile", {
         }
     }
 });
+
+function el(tag, className) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    return e;
+}

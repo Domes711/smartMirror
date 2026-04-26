@@ -80,6 +80,29 @@ two users), each instance must have a unique `id`.
 page layout — the active layout's `position` wins. Convention: omit
 `position` in `config.js` for modules managed by MMM-Profile.
 
+## Visual design
+
+The Face ID animation (scanning ring + face SVG + sweep + dot mesh, the
+checkmark / X-cross morph for success / error, the avatar reveal, the
+`scannerIntro` drop-in) is defined in **`tests/face-id-animation.html`** at
+the repository root. `MMM-Profile.css` mirrors that file's CSS so the
+mirror produces the same look. Treat the test HTML as the source of
+truth; `MMM-Profile.css` follows it.
+
+State → animation class on `.profile`:
+
+| MMM-Profile state | DOM class | Visual |
+|---|---|---|
+| `asleep` | (wrapper hidden) | nothing |
+| `scanning` | `.profile` (no class) | scanning ring + face + sweep + dots |
+| `user` (recognized) | `.profile.success` | checkmark morph, avatar reveal, name slides in |
+| `user` (default/unknown) | `.profile.error` | face fades, X-cross draws |
+| `dimming` | previous `.success` / `.error` kept | unchanged |
+
+Open `tests/face-id-animation.html` in a browser to see the animation
+in isolation, with controls for switching between scan / success /
+error states.
+
 ## Notes
 
 - `cron-parser` is the only npm dependency.
