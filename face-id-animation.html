@@ -232,11 +232,6 @@
     letter-spacing: 0.2px;
   }
 
-  .profile-info .subtitle {
-    font-size: 14px;
-    color: rgba(255,255,255,0.55);
-  }
-
   /* ============ SUCCESS STATE ============ */
   .profile.success .ring {
     border-style: solid;
@@ -301,7 +296,10 @@
   .profile.error .ring::after { opacity: 0; }
   .profile.error .face { stroke: var(--error); }
   .profile.error .scan-line,
-  .profile.error .dots { opacity: 0; }
+  .profile.error .dots {
+    opacity: 0;
+    animation: none;
+  }
 
   /* Eyes turn into small X marks (use stroke length trick) */
   .profile.error .face .eye-l,
@@ -407,7 +405,6 @@
     .stage { gap: 24px; padding: 20px 14px; }
     .status { font-size: 16px; }
     .profile-info .name { font-size: 19px; }
-    .profile-info .subtitle { font-size: 13px; }
     .profile.success .profile-info { max-width: 200px; }
   }
 </style>
@@ -443,7 +440,6 @@
 
       <div class="profile-info">
         <div class="name">Tomáš Novák</div>
-        <div class="subtitle">Vítejte zpět</div>
       </div>
     </div>
 
