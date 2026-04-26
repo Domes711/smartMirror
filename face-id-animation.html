@@ -94,15 +94,17 @@
     }
   }
 
-  /* Scan line drops in from above the face and starts sweeping */
+  /* Hold the scan line hidden inside the ring until the scanner has
+     fully settled, then fade it in and start sweeping. */
   .scanner.intro .scan-line {
-    animation: lineDrop 0.5s ease 0.4s both, sweep 2.2s ease-in-out infinite 0.9s;
+    top: 18%;
+    animation: lineFadeIn 0.35s ease 1.2s both,
+               sweep 2.2s ease-in-out infinite 1.55s;
   }
 
-  @keyframes lineDrop {
-    0%   { top: -40%; opacity: 0; }
-    60%  { opacity: 1; }
-    100% { top: 18%; opacity: 1; }
+  @keyframes lineFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
   }
 
   /* Dashed rotating ring (scanning) */
