@@ -1,4 +1,11 @@
 # LD2450 Presence Detection — Design Spec
+
+> **EXTENDED** by [MMM-Profile design](2026-04-26-mmm-profile-design.md)
+> on 2026-04-26. The radar zone parsing and GPIO relay logic in this spec
+> remain accurate; the daemon additionally posts presence events to the
+> mirror and triggers `face_reco_once.py` on PRESENT enter. Read this spec
+> first for the radar fundamentals, then the MMM-Profile spec for the wiring.
+
 **Date:** 2026-04-14
 **Status:** Approved
 

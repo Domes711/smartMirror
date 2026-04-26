@@ -1,0 +1,8 @@
+{
+    "name": "mmm-ha-reminders",
+    "version": "0.1.0",
+    "description": "MagicMirror module that displays iPhone Reminders via Home Assistant's todo domain.",
+    "main": "MMM-HA-Reminders.js",
+    "private": true,
+    "dependencies": {}
+}

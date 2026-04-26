@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>MMM-HA-Reminders · live demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="./MMM-HA-Reminders.css">
+    <style>
+        html, body {
+            background: #000; color: #fff;
+            font-family: "Roboto Condensed", sans-serif;
+            margin: 0; padding: 40px 50px;
+        }
+        .module { display: inline-block; }
+        .module-header {
+            font-size: 15px; font-weight: 400;
+            text-transform: uppercase; letter-spacing: 2px;
+            border-bottom: 1px solid #666;
+            padding-bottom: 6px; margin-bottom: 12px;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="module">
+        <div class="module-header">Reminders</div>
+        <div id="mount"></div>
+    </div>
+    <script>
+        window.Log = console;
+        window.Module = { _def: null, register: function (n, d) { this._def = d; } };
+    </script>
+    <script src="./MMM-HA-Reminders.js"></script>
+    <script>
+        const def = window.Module._def;
+        const mountEl = document.getElementById("mount");
+
+        const mod = Object.assign({}, def);
+        mod.config = Object.assign({}, def.defaults, { header: "Reminders", language: "cs" });
+        mod.items = null;
+        mod.errorMsg = null;
+        mod.updateDom = function () {
+            const el = this.getDom();
+            mountEl.innerHTML = "";
+            mountEl.appendChild(el);
+        };
+        mod.sendSocketNotification = function () {};
+
+        setInterval(() => mod.updateDom(), 5000);
+
+        function iso(d) { return d.toISOString(); }
+        function isoDate(d) { return d.toISOString().slice(0, 10); }
+
+        const now = new Date();
+        const today18 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0);
+        const tomorrow = new Date(now.getTime() + 24 * 3600 * 1000);
+        const threeDays = new Date(now.getTime() + 3 * 24 * 3600 * 1000);
+        const nextWeek = new Date(now.getTime() + 9 * 24 * 3600 * 1000);
+        const yesterday = new Date(now.getTime() - 24 * 3600 * 1000);
+
+        const scenarios = {
+            mixed: () => [
+                { summary: "Koupit mléko", status: "needs_action", due: null },
+                { summary: "Zavolat mámě", status: "needs_action", due: iso(today18) },
+                { summary: "Zaplatit fakturu", status: "needs_action", due: isoDate(tomorrow) },
+                { summary: "Vyzvednout balík", status: "needs_action", due: isoDate(threeDays) },
+                { summary: "Dentist", status: "needs_action", due: isoDate(nextWeek) }
+            ],
+            overdue: () => [
+                { summary: "Odevzdat tax report", status: "needs_action", due: isoDate(yesterday) },
+                { summary: "Koupit mléko", status: "needs_action", due: null },
+                { summary: "Zavolat mámě", status: "needs_action", due: iso(today18) }
+            ],
+            empty: () => [],
+            completed: () => [
+                { summary: "Koupit mléko", status: "completed", due: null },
+                { summary: "Koupit chleba", status: "needs_action", due: null },
+                { summary: "Zaplatit fakturu", status: "needs_action", due: isoDate(tomorrow) }
+            ]
+        };
+
+        function apply() {
+            const name = (location.hash || "#mixed").slice(1);
+            const maker = scenarios[name] || scenarios.mixed;
+            mod.items = maker();
+            mod.errorMsg = null;
+            // "completed" scenario also enables showCompleted so you can see the strike-through
+            mod.config = Object.assign({}, def.defaults, {
+                header: "Reminders",
+                language: "cs",
+                showCompleted: name === "completed"
+            });
+            mod.updateDom();
+        }
+        window.addEventListener("hashchange", apply);
+        apply();
+    </script>
+</body>
+</html>

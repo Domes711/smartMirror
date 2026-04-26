@@ -1,5 +1,11 @@
 # LD2450 Presence Detection Implementation Plan
 
+> **EXTENDED** by the [MMM-Profile plan](2026-04-26-mmm-profile.md) on
+> 2026-04-26. Tasks here (Python deps, parser, tracker, GPIO, systemd) are
+> still required — they're prerequisites for the daemon. The MMM-Profile
+> plan adds Task 3 of its own that augments the daemon with HTTP POST + a
+> face_reco_once.py subprocess trigger. Run this plan first, then that one.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Integrate HLK-LD2450 radar sensor with Raspberry Pi to detect presence in a rectangular zone (±40cm wide, 1.5m deep) and control display power via GPIO17 relay (simulating button press) — display ON when someone approaches, OFF after 2 minutes without presence.

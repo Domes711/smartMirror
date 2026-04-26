@@ -1,0 +1,10 @@
+{
+    "name": "mmm-profile",
+    "version": "0.1.0",
+    "description": "Presence-driven user profile + page scheduling for the smart mirror. Receives presence + face-recognition events from the LD2450 daemon over HTTP, runs the (presence, user, time-of-day) state machine, renders the Face ID-style indicator and re-arranges every other module on the mirror per the active page layout.",
+    "main": "MMM-Profile.js",
+    "private": true,
+    "dependencies": {
+        "cron-parser": "^4.9.0"
+    }
+}

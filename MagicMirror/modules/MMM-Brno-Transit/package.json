@@ -1,0 +1,11 @@
+{
+    "name": "mmm-brno-transit",
+    "version": "0.1.0",
+    "description": "MagicMirror module showing next departures from a Brno IDS JMK stop, computed from the official GTFS feed on data.brno.cz.",
+    "main": "MMM-Brno-Transit.js",
+    "private": true,
+    "dependencies": {
+        "adm-zip": "^0.5.10",
+        "ws": "^8.16.0"
+    }
+}
