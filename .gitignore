@@ -11,3 +11,4 @@ node_modules/
 MagicMirror/modules/MMM-Brno-Transit/cache/
 MagicMirror/modules/MMM-Brno-Transit/render-*.png
 MagicMirror/modules/MMM-HA-Reminders/render-*.png
+MagicMirror/modules/MMM-Profile/tests/render-*.png
