@@ -429,6 +429,78 @@
     to { stroke-dashoffset: 0; }
   }
 
+  /* ============ NOTIFICATIONS ROW ============
+     Visible only in success state when count > 0. Driven from
+     window.faceID.notifications(N) or success(name, count). */
+  .notifications {
+    align-self: center;
+    display: none;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 22px 14px 18px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.22);
+    color: var(--face-color);
+    box-shadow: 0 0 0 0 rgba(255,255,255,0);
+  }
+
+  .notifications.visible {
+    display: inline-flex;
+    animation: notifPop 0.65s cubic-bezier(.2,.8,.2,1.25) both,
+               notifGlow 1.4s ease 0.4s 2;
+  }
+
+  @keyframes notifPop {
+    0%   { opacity: 0; transform: translateY(28px) scale(0.8); }
+    65%  { opacity: 1; transform: translateY(-4px) scale(1.04); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes notifGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    50%      { box-shadow: 0 0 22px 2px rgba(255,255,255,0.35); }
+  }
+
+  .bell-icon {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    transform-origin: 50% 18%;
+  }
+
+  .notifications.visible .bell-icon {
+    animation: bellShake 0.9s ease 0.45s 2;
+  }
+
+  @keyframes bellShake {
+    0%, 100% { transform: rotate(0); }
+    15%      { transform: rotate(-16deg); }
+    30%      { transform: rotate(12deg); }
+    45%      { transform: rotate(-8deg); }
+    60%      { transform: rotate(6deg); }
+    80%      { transform: rotate(-2deg); }
+  }
+
+  .notif-text {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 7px;
+    line-height: 1;
+  }
+
+  .notif-count {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  .notif-label {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    letter-spacing: 0.3px;
+  }
+
   /* ============ TEST-ONLY CONTROL PANEL ============
      Lives in normal flow below the animation so it never overlaps
      the scanner. Hide for production by setting
@@ -535,6 +607,19 @@
         <div class="name">Tomáš Novák</div>
       </div>
     </div>
+
+    <div class="notifications" id="notifications" aria-hidden="true">
+      <svg class="bell-icon" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 8 a6 6 0 0 1 12 0 c0 7 3 9 3 9 H 3 s3 -2 3 -9"/>
+        <path d="M10 21 a 2 2 0 0 0 4 0"/>
+      </svg>
+      <span class="notif-text">
+        <span class="notif-count">0</span>
+        <span class="notif-label">notifikací</span>
+      </span>
+    </div>
   </div>
 
   <!-- Test-only control panel. Hide or remove for production use;
@@ -544,14 +629,35 @@
     <div class="controls">
       <button data-action="scan">Skenovat</button>
       <button data-action="success">Úspěch</button>
+      <button data-action="success-notif">Úspěch + 3 notif</button>
       <button data-action="error">Chyba</button>
     </div>
   </aside>
 
 <script>
   (function () {
-    var profile = document.getElementById('profile');
-    var scanner = document.getElementById('scanner');
+    var profile  = document.getElementById('profile');
+    var scanner  = document.getElementById('scanner');
+    var notifEl  = document.getElementById('notifications');
+    var notifNum = notifEl.querySelector('.notif-count');
+    var notifLab = notifEl.querySelector('.notif-label');
+    var notifCount = 0;
+
+    function plural(n) {
+      if (n === 1) return 'notifikace';
+      if (n >= 2 && n <= 4) return 'notifikace';
+      return 'notifikací';
+    }
+
+    function refreshNotifications() {
+      notifNum.textContent = notifCount;
+      notifLab.textContent = plural(notifCount);
+      var shouldShow = notifCount > 0 && profile.classList.contains('success');
+      // Re-trigger the entrance animation by toggling the class.
+      notifEl.classList.remove('visible');
+      void notifEl.offsetWidth;
+      if (shouldShow) notifEl.classList.add('visible');
+    }
 
     function playIntro() {
       // Re-trigger the scanner reveal animation by re-adding the class.
@@ -579,6 +685,8 @@
       if (state === 'success')      profile.classList.add('success');
       else if (state === 'error')   profile.classList.add('error');
       else                          playIntro();
+
+      refreshNotifications();
     }
 
     function runScan() {
@@ -588,14 +696,19 @@
     // Public API for Magic Mirror or any other host.
     window.faceID = {
       scan:    runScan,
-      success: function (name) {
+      success: function (name, count) {
         if (name) {
           var el = document.querySelector('.profile-info .name');
           if (el) el.textContent = name;
         }
+        notifCount = (typeof count === 'number') ? Math.max(0, count | 0) : 0;
         setState('success');
       },
-      error:   function () { setState('error'); }
+      error:   function () { setState('error'); },
+      notifications: function (n) {
+        notifCount = Math.max(0, (n | 0));
+        refreshNotifications();
+      }
     };
 
     scanner.addEventListener('click', function () { runScan(); });
@@ -613,9 +726,10 @@
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener('click', function () {
         var action = this.getAttribute('data-action');
-        if (action === 'scan')         runScan();
-        else if (action === 'success') setState('success');
-        else if (action === 'error')   setState('error');
+        if (action === 'scan')               window.faceID.scan();
+        else if (action === 'success')       window.faceID.success();
+        else if (action === 'success-notif') window.faceID.success(undefined, 3);
+        else if (action === 'error')         window.faceID.error();
       });
     }
 
