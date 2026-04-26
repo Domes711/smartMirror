@@ -286,6 +286,7 @@
     stroke: var(--accent);
     stroke-dasharray: none;
     stroke-width: 2.5;
+    animation: tintGreenStroke 1.6s ease forwards;
   }
 
   @keyframes pulseRing {
@@ -294,7 +295,18 @@
     100% { transform: scale(1); }
   }
 
-  .profile.success .face { stroke: var(--accent); }
+  /* Brief green tint that settles back to white */
+  @keyframes tintGreenStroke {
+    0%   { stroke: rgba(255,255,255,0.9); }
+    15%  { stroke: #34c759; }
+    60%  { stroke: #34c759; }
+    100% { stroke: #ffffff; }
+  }
+
+  .profile.success .face {
+    stroke: var(--accent);
+    animation: tintGreenStroke 1.6s ease forwards;
+  }
   .profile.success .scan-line,
   .profile.success .dots,
   .profile.success .ring::after { opacity: 0; }
@@ -347,9 +359,22 @@
     stroke: var(--error);
     stroke-dasharray: none;
     stroke-width: 2.5;
+    animation: tintRedStroke 1.6s ease forwards;
   }
   .profile.error .ring::after { opacity: 0; }
-  .profile.error .face { stroke: var(--error); opacity: 1; }
+  .profile.error .face {
+    stroke: var(--error);
+    opacity: 1;
+    animation: tintRedStroke 1.6s ease forwards;
+  }
+
+  /* Brief red tint that settles back to dimmed white */
+  @keyframes tintRedStroke {
+    0%   { stroke: rgba(255,255,255,0.9); }
+    15%  { stroke: #ff3b30; }
+    60%  { stroke: #ff3b30; }
+    100% { stroke: rgba(255,255,255,0.55); }
+  }
   /* Stop the sweeping line; pause dot pulse but keep dots visible */
   .profile.error .scan-line {
     opacity: 0;
@@ -385,8 +410,14 @@
     opacity: 1;
     transition: opacity 0.1s ease;
   }
-  .profile.error .face .x1 { animation: drawStroke 0.3s ease 0.15s forwards; }
-  .profile.error .face .x2 { animation: drawStroke 0.3s ease 0.35s forwards; }
+  .profile.error .face .x1 {
+    animation: drawStroke 0.3s ease 0.15s forwards,
+               tintRedStroke 1.6s ease forwards;
+  }
+  .profile.error .face .x2 {
+    animation: drawStroke 0.3s ease 0.35s forwards,
+               tintRedStroke 1.6s ease forwards;
+  }
 
   @keyframes drawStroke {
     to { stroke-dashoffset: 0; }
@@ -400,6 +431,27 @@
     min-height: 24px;
     text-align: center;
     transition: color 0.4s ease;
+  }
+
+  .status.tint-green {
+    animation: tintGreenText 1.6s ease forwards;
+  }
+  .status.tint-red {
+    animation: tintRedText 1.6s ease forwards;
+  }
+
+  @keyframes tintGreenText {
+    0%   { color: rgba(255,255,255,0.85); }
+    15%  { color: #34c759; }
+    60%  { color: #34c759; }
+    100% { color: #ffffff; }
+  }
+
+  @keyframes tintRedText {
+    0%   { color: rgba(255,255,255,0.85); }
+    15%  { color: #ff3b30; }
+    60%  { color: #ff3b30; }
+    100% { color: rgba(255,255,255,0.55); }
   }
 
   /* Controls */
@@ -530,15 +582,20 @@
 
     function setState(state) {
       profile.classList.remove('success', 'error');
+      status.classList.remove('tint-green', 'tint-red');
+      status.style.color = '';
+      // Force reflow so re-applying the same state restarts the
+      // colour-flash CSS animations.
+      void profile.offsetWidth;
 
       if (state === 'success') {
         profile.classList.add('success');
         status.textContent = 'Obličej rozpoznán';
-        status.style.color = '#ffffff';
+        status.classList.add('tint-green');
       } else if (state === 'error') {
         profile.classList.add('error');
         status.textContent = 'Obličej nerozpoznán';
-        status.style.color = 'rgba(255,255,255,0.55)';
+        status.classList.add('tint-red');
       } else {
         status.textContent = 'Skenování obličeje…';
         status.style.color = 'rgba(255,255,255,0.85)';
