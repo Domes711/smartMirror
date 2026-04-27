@@ -96,8 +96,10 @@
 
   .event {
     position: absolute;
-    left: 4px;
-    right: 0;
+    /* Start to the right of the time gutter so cards never overlap
+       the hour labels. */
+    left: calc(var(--time-col-width) + 6px);
+    right: 6px;
     border-radius: 7px;
     padding: 6px 8px 7px 10px;
     background: var(--card-bg);
@@ -173,9 +175,10 @@
       rgba(255,255,255,0.10) 6px 7px) !important;
   }
 
-  /* Side-by-side overlap */
-  .event.col-l { right: 51%; }
-  .event.col-r { left: calc(var(--time-col-width) + 4px + 49% - var(--time-col-width)); }
+  /* Side-by-side overlap. Each column is half of the events area
+     (which itself starts after the time gutter). */
+  .event.col-l { right: calc(50% - var(--time-col-width)/2 + 2px); }
+  .event.col-r { left: calc(50% + var(--time-col-width)/2 + 2px); }
 
   /* Now-line */
   .now-line {
