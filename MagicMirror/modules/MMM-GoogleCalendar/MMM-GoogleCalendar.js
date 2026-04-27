@@ -59,6 +59,13 @@ Module.register("MMM-GoogleCalendar", {
     sliceMultiDayEvents: false,
     nextDaysRelative: false,
 	broadcastPastEvents: false,
+    // Timeline-view options (read by the rewritten getDom()).
+    hourHeight: 56,           // pixels per hour
+    timeColWidth: 44,         // pixels for the gutter with hour labels
+    viewportHeight: 460,      // pixels of visible timeline window
+    pastBufferHours: 2,       // hours of past kept visible above the now-line
+    timelineWidth: 280,       // total module width in pixels
+    timelineRefreshSec: 60    // re-render cadence so --now & .past stay current
   },
 
   requiresVersion: "2.1.0",
@@ -76,7 +83,8 @@ Module.register("MMM-GoogleCalendar", {
   // Define required translations.
   getTranslations: function () {
     return {
-      en: "translations/en.json"
+      en: "translations/en.json",
+      cs: "translations/cs.json"
     };
   },
 
@@ -167,350 +175,284 @@ Module.register("MMM-GoogleCalendar", {
   },
 
   // Override dom generator.
+  // Mapping for Google Calendar event colorIds (1-11).
+  // https://developers.google.com/calendar/api/v3/reference/colors
+  GOOGLE_EVENT_COLORS: {
+    "1":  "#7986cb", // Lavender
+    "2":  "#33b679", // Sage
+    "3":  "#8e24aa", // Grape
+    "4":  "#e67c73", // Flamingo
+    "5":  "#f6c026", // Banana
+    "6":  "#f5511d", // Tangerine
+    "7":  "#039be5", // Peacock
+    "8":  "#616161", // Graphite
+    "9":  "#3f51b5", // Blueberry
+    "10": "#0b8043", // Basil
+    "11": "#d60000"  // Tomato
+  },
+  DEFAULT_EVENT_COLOR: "#5484ed",
+
+  /**
+   * Resolve the colour of an event. Prefers the per-event Google
+   * colorId, then the per-calendar configured colour, then the
+   * module default.
+   * @param {object} event Google calendar event (with calendarID set)
+   * @returns {string} a hex/rgb colour
+   */
+  eventColor: function (event) {
+    if (event.colorId && this.GOOGLE_EVENT_COLORS[event.colorId]) {
+      return this.GOOGLE_EVENT_COLORS[event.colorId];
+    }
+    const cal = this.colorForCalendar(event.calendarID);
+    if (cal && cal !== "#fff") return cal;
+    return this.DEFAULT_EVENT_COLOR;
+  },
+
+  /**
+   * Naive 2-column overlap layout. Sets event.column = "left"|"right"
+   * for timed events that share a slot with another. Good enough for
+   * the typical case of two simultaneous meetings; 3+ overlaps fall
+   * through to single-column.
+   */
+  assignColumns: function (events) {
+    events.sort((a, b) => a._startMs - b._startMs);
+    for (let i = 0; i < events.length; i++) {
+      const a = events[i];
+      for (let j = i + 1; j < events.length; j++) {
+        const b = events[j];
+        if (b._startMs >= a._endMs) break;
+        if (b._endMs > a._startMs && b._startMs < a._endMs) {
+          if (!a.column) a.column = "left";
+          b.column = a.column === "left" ? "right" : "left";
+        }
+      }
+    }
+  },
+
+  pinIcon: function () {
+    return '<svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/>'
+         + '<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>';
+  },
+
+  arrowIcon: function () {
+    return '<svg viewBox="0 0 24 24"><path d="M5 12 H19 M13 6 L19 12 L13 18"/></svg>';
+  },
+
+  /**
+   * Render a timed event card positioned absolutely on the timeline.
+   */
+  renderTimedEvent: function (event, todayStart, todayEnd, nowMs) {
+    const div = document.createElement("div");
+    div.className = "event";
+
+    // Clip the event to today's window for positioning.
+    const startClipped = Math.max(event._startMs, todayStart);
+    const endClipped   = Math.min(event._endMs, todayEnd);
+    const startHours = (startClipped - todayStart) / 3600000;
+    const endHours   = (endClipped - todayStart) / 3600000;
+    const duration   = Math.max(endHours - startHours, 0.4);  // min 24min
+
+    div.style.top    = "calc(" + startHours.toFixed(4) + " * var(--hour-height))";
+    div.style.height = "calc(" + duration.toFixed(4)  + " * var(--hour-height))";
+    div.style.setProperty("--ev-color", this.eventColor(event));
+
+    if (event._endMs <= nowMs) div.classList.add("past");
+    if (event.status === "tentative") div.classList.add("tentative");
+    if (event.column === "left")  div.classList.add("col-l");
+    if (event.column === "right") div.classList.add("col-r");
+
+    const continuesNext = event._endMs > todayEnd;
+    const startedPrev   = event._startMs < todayStart;
+
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = event.title || event.summary || "";
+    div.appendChild(title);
+
+    if (event.location) {
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.innerHTML = this.pinIcon() + " "
+        + this.escapeHtml(event.location);
+      div.appendChild(meta);
+    }
+
+    if (continuesNext || startedPrev) {
+      const cont = document.createElement("div");
+      cont.className = "continues";
+      const txt = continuesNext
+        ? this.translate("CONTINUES_NEXT_DAY") || "pokračuje zítra"
+        : this.translate("CONTINUED_FROM_PREV") || "pokračuje ze včerejška";
+      cont.innerHTML = this.arrowIcon() + " "
+        + this.escapeHtml(txt);
+      div.appendChild(cont);
+    }
+
+    return div;
+  },
+
+  /**
+   * Render an all-day or multi-day event as a row in the strip
+   * above the timeline.
+   */
+  renderAllDayEvent: function (event, todayStart, todayEnd) {
+    const div = document.createElement("div");
+    div.className = "all-day-event";
+    div.style.setProperty("--ev-color", this.eventColor(event));
+
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = event.title || event.summary || "";
+    div.appendChild(title);
+
+    // Multi-day: show "1/3" style hint indicating which day of the
+    // span we're currently on.
+    const oneDay = 24 * 3600000;
+    const totalDays = Math.max(1, Math.ceil((event._endMs - event._startMs) / oneDay));
+    if (totalDays > 1) {
+      const dayNum = Math.floor((todayStart - event._startMs) / oneDay) + 1;
+      const range = document.createElement("span");
+      range.className = "day-range";
+      range.textContent = dayNum + "/" + totalDays;
+      div.appendChild(range);
+    }
+
+    return div;
+  },
+
+  escapeHtml: function (str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  },
+
+  /**
+   * Schedule a periodic re-render so --now slides forward and the
+   * past/future state of each event stays correct as the day
+   * progresses. Cancels any previously scheduled tick.
+   */
+  scheduleNowTick: function () {
+    if (this._nowTimer) clearTimeout(this._nowTimer);
+    const period = (this.config.timelineRefreshSec || 60) * 1000;
+    this._nowTimer = setTimeout(() => {
+      this._nowTimer = null;
+      this.updateDom();
+    }, period);
+  },
+
   getDom: function () {
-    // Define second, minute, hour, and day constants
-    const oneSecond = 1000; // 1,000 milliseconds
-    const oneMinute = oneSecond * 60;
-    const oneHour = oneMinute * 60;
-    const oneDay = oneHour * 24;
+    const wrapper = document.createElement("div");
+    wrapper.className = "mmm-gcal-timeline";
+    wrapper.style.setProperty("--hour-height",     this.config.hourHeight + "px");
+    wrapper.style.setProperty("--time-col-width",  this.config.timeColWidth + "px");
+    wrapper.style.setProperty("--viewport-height", this.config.viewportHeight + "px");
+    wrapper.style.setProperty("--past-buffer",     this.config.pastBufferHours);
+    wrapper.style.width = this.config.timelineWidth + "px";
 
-    const events = this.createEventList();
-
-    const wrapper = document.createElement("table");
-    wrapper.className = this.config.tableClass;
-
+    // Auth / error placeholder
     if (this.error) {
+      const ph = document.createElement("div");
+      ph.className = "placeholder";
       if (this.error === "AUTH_PROMPT_CLICK_HERE" && this.errorUrl) {
-        const authPrompt = this.translate("AUTH_PROMPT_CLICK_HERE");
-        wrapper.innerHTML = authPrompt.replace("{authUrl}", this.errorUrl);
-      } else if (this.error === "AUTH_ERROR_GENERIC") { // New generic auth error
-        wrapper.innerHTML = this.translate(this.error);
-      } else { // Existing error messages (likely already translated)
-        wrapper.innerHTML = this.error;
+        ph.innerHTML = this.translate("AUTH_PROMPT_CLICK_HERE")
+          .replace("{authUrl}", this.errorUrl);
+      } else if (this.error === "AUTH_ERROR_GENERIC") {
+        ph.textContent = this.translate(this.error);
+      } else {
+        ph.textContent = this.error;
       }
-      wrapper.className = `${this.config.tableClass} dimmed`;
+      wrapper.appendChild(ph);
       return wrapper;
     }
 
-    if (events.length === 0) {
-      wrapper.innerHTML = this.loaded
-        ? this.translate("EMPTY")
-        : this.translate("LOADING");
-      wrapper.className = `${this.config.tableClass} dimmed`;
+    if (!this.loaded) {
+      const ph = document.createElement("div");
+      ph.className = "placeholder";
+      ph.textContent = this.translate("LOADING");
+      wrapper.appendChild(ph);
+      this.scheduleNowTick();
       return wrapper;
     }
 
-    let currentFadeStep = 0;
-    let startFade = 0; // Initialize with a default value
-    let fadeSteps = 0; // Initialize with a default value
+    // ----- Filter to today -----
+    const nowDate = new Date();
+    const nowMs = nowDate.getTime();
+    const todayStart = moment().startOf("day").valueOf();
+    const todayEnd   = todayStart + 24 * 3600000;
 
-    if (this.config.fade && this.config.fadePoint < 1) {
-      if (this.config.fadePoint < 0) {
-        this.config.fadePoint = 0;
-      }
-      startFade = events.length * this.config.fadePoint;
-      fadeSteps = events.length - startFade;
+    const all = this.createEventList();
+    const today = [];
+    for (const ev of all) {
+      const startMs = +ev.startDate;
+      const endMs   = +ev.endDate;
+      // Overlap with today
+      if (endMs <= todayStart) continue;
+      if (startMs >= todayEnd) continue;
+      ev._startMs = startMs;
+      ev._endMs   = endMs;
+      today.push(ev);
     }
 
-    let lastSeenDate = "";
+    // ----- Split all-day vs timed -----
+    const allDay = [];
+    const timed = [];
+    for (const ev of today) {
+      const isAllDay = ev.fullDayEvent
+        || (ev._endMs - ev._startMs) >= 24 * 3600000;
+      if (isAllDay) allDay.push(ev); else timed.push(ev);
+    }
 
-    events.forEach((event, index) => {
-      const dateAsString = moment(event.startDate).format(
-        this.config.dateFormat
+    // ----- All-day strip -----
+    if (allDay.length > 0) {
+      const bar = document.createElement("div");
+      bar.className = "all-day-bar";
+      for (const ev of allDay) {
+        bar.appendChild(this.renderAllDayEvent(ev, todayStart, todayEnd));
+      }
+      wrapper.appendChild(bar);
+    }
+
+    // ----- Timeline -----
+    const viewport = document.createElement("div");
+    viewport.className = "timeline-viewport";
+
+    const timeline = document.createElement("div");
+    timeline.className = "timeline";
+
+    for (let h = 0; h < 24; h++) {
+      const row = document.createElement("div");
+      row.className = "hour-row";
+      const lbl = document.createElement("span");
+      lbl.className = "hour-label";
+      lbl.textContent = h + ":00";
+      row.appendChild(lbl);
+      timeline.appendChild(row);
+    }
+
+    const nowLine = document.createElement("div");
+    nowLine.className = "now-line";
+    timeline.appendChild(nowLine);
+
+    this.assignColumns(timed);
+    for (const ev of timed) {
+      timeline.appendChild(
+        this.renderTimedEvent(ev, todayStart, todayEnd, nowMs)
       );
-      if (this.config.timeFormat === "dateheaders") {
-        if (lastSeenDate !== dateAsString) {
-          const dateRow = document.createElement("tr");
-          dateRow.className = "normal";
+    }
 
-          const dateCell = document.createElement("td");
-          dateCell.colSpan = "3";
-          dateCell.innerHTML = dateAsString;
-          dateCell.style.paddingTop = "10px";
-          dateRow.appendChild(dateCell);
-          wrapper.appendChild(dateRow);
+    viewport.appendChild(timeline);
+    wrapper.appendChild(viewport);
 
-          if (this.config.fade && index >= startFade) {
-            //fading
-            currentFadeStep = index - startFade;
-            dateRow.style.opacity = 1 - (1 / fadeSteps) * currentFadeStep;
-          }
+    // Set the now anchor (hours since midnight)
+    const nowHours = (nowMs - todayStart) / 3600000;
+    wrapper.style.setProperty("--now", nowHours.toFixed(4));
 
-          lastSeenDate = dateAsString;
-        }
-      }
-
-      const eventWrapper = document.createElement("tr");
-
-      if (this.config.colored && !this.config.coloredSymbolOnly) {
-        eventWrapper.style.cssText = `color:${this.colorForCalendar(event.calendarID)}`;
-      }
-
-      eventWrapper.className = "normal event";
-
-      const symbolWrapper = document.createElement("td");
-
-      if (this.config.displaySymbol) {
-        if (this.config.colored && this.config.coloredSymbolOnly) {
-          symbolWrapper.style.cssText = `color:${this.colorForCalendar(event.calendarID)}`;
-        }
-
-        const symbolClass = this.symbolClassForCalendar(event.calendarID);
-        symbolWrapper.className = `symbol align-right ${symbolClass}`;
-
-        const symbols = this.symbolsForEvent(event);
-        // If symbols are displayed and custom symbol is set, replace event symbol
-        if (this.config.displaySymbol && this.config.customEvents.length > 0) {
-          for (const customEvent of this.config.customEvents) { // Use for...of for arrays
-            if (
-              typeof customEvent.symbol !== "undefined" &&
-              customEvent.symbol !== ""
-            ) {
-              const needle = new RegExp(
-                customEvent.keyword,
-                "gi"
-              );
-              if (needle.test(event.title)) {
-                symbols[0] = customEvent.symbol;
-                break;
-              }
-            }
-          }
-        }
-        symbols.forEach((s, idx) => { // Renamed index to idx to avoid conflict
-          const symbol = document.createElement("span");
-          symbol.className = `fa fa-fw fa-${s}`;
-          if (idx > 0) {
-            symbol.style.paddingLeft = "5px";
-          }
-          symbolWrapper.appendChild(symbol);
-        });
-        eventWrapper.appendChild(symbolWrapper);
-      } else if (this.config.timeFormat === "dateheaders") {
-        const blankCell = document.createElement("td");
-        blankCell.innerHTML = "&nbsp;&nbsp;&nbsp;";
-        eventWrapper.appendChild(blankCell);
-      }
-
-      const titleWrapper = document.createElement("td");
-      let repeatingCountTitle = "";
-
-      if (
-        this.config.displayRepeatingCountTitle &&
-        event.firstYear !== undefined
-      ) {
-        repeatingCountTitle = this.countTitleForCalendar(event.calendarID);
-
-        if (repeatingCountTitle !== "") {
-          const thisYear = new Date(parseInt(event.startDate, 10)).getFullYear(); // Add radix for parseInt
-          const yearDiff = thisYear - event.firstYear;
-
-          repeatingCountTitle = `, ${yearDiff}. ${repeatingCountTitle}`; // Template literal
-        }
-      }
-
-      // Color events if custom color is specified
-      if (this.config.customEvents.length > 0) {
-        for (const customEvent of this.config.customEvents) { // Use for...of for arrays
-          if (
-            typeof customEvent.color !== "undefined" &&
-            customEvent.color !== ""
-          ) {
-            const needle = new RegExp(customEvent.keyword, "gi");
-            if (needle.test(event.title)) {
-              // Respect parameter ColoredSymbolOnly also for custom events
-              if (!this.config.coloredSymbolOnly) {
-                eventWrapper.style.cssText = `color:${customEvent.color}`;
-                titleWrapper.style.cssText = `color:${customEvent.color}`;
-              }
-              if (this.config.displaySymbol) {
-                symbolWrapper.style.cssText = `color:${customEvent.color}`;
-              }
-              break;
-            }
-          }
-        }
-      }
-
-      titleWrapper.innerHTML =
-        this.titleTransform(
-          event.title,
-          this.config.titleReplace,
-          this.config.wrapEvents,
-          this.config.maxTitleLength,
-          this.config.maxTitleLines
-        ) + repeatingCountTitle;
-
-      const titleClass = this.titleClassForCalendar(event.calendarID);
-
-      if (!this.config.colored) {
-        titleWrapper.className = `title bright ${titleClass}`;
-      } else {
-        titleWrapper.className = `title ${titleClass}`;
-      }
-
-      if (this.config.timeFormat === "dateheaders") {
-        if (event.fullDayEvent) {
-          titleWrapper.colSpan = "2";
-          titleWrapper.classList.add("align-left");
-        } else {
-          const timeWrapper = document.createElement("td");
-          timeWrapper.className = `time light align-left ${this.timeClassForCalendar(event.calendarID)}`;
-          timeWrapper.style.paddingLeft = "2px";
-          timeWrapper.innerHTML = moment(event.startDate).format("LT");
-
-          // Add endDate to dataheaders if showEnd is enabled
-          if (this.config.showEnd) {
-            timeWrapper.innerHTML += ` - ${this.capFirst(moment(event.endDate, "x").format("LT"))}`;
-          }
-
-          eventWrapper.appendChild(timeWrapper);
-          titleWrapper.classList.add("align-right");
-        }
-
-        eventWrapper.appendChild(titleWrapper);
-      } else {
-        const timeWrapper = document.createElement("td");
-
-        eventWrapper.appendChild(titleWrapper);
-        const now = new Date();
-
-        if (this.config.timeFormat === "absolute") {
-          // Use dateFormat
-          timeWrapper.innerHTML = this.capFirst(
-            moment(event.startDate).format(this.config.dateFormat)
-          );
-          // Add end time if showEnd
-          if (this.config.showEnd) {
-            timeWrapper.innerHTML += `-${this.capFirst(moment(event.endDate).format(this.config.dateEndFormat))}`;
-          }
-          // For full day events we use the fullDayEventDateFormat
-          if (event.fullDayEvent) {
-            //subtract one second so that fullDayEvents end at 23:59:59, and not at 0:00:00 one the next day
-            event.endDate -= oneSecond;
-            timeWrapper.innerHTML = this.capFirst(
-              moment(event.startDate).format(this.config.fullDayEventDateFormat)
-            );
-          }
-          if (this.config.getRelative > 0 && event.startDate < now) {
-            // Ongoing and getRelative is set
-            timeWrapper.innerHTML = this.capFirst(
-              this.translate("RUNNING", {
-                fallback: `${this.translate("RUNNING")} {timeUntilEnd}`, // Template literal
-                timeUntilEnd: moment(event.endDate).fromNow(true)
-              })
-            );
-          } else if (
-            this.config.urgency > 0 &&
-            event.startDate - now < this.config.urgency * oneDay
-          ) {
-            // Within urgency days
-            timeWrapper.innerHTML = this.capFirst(
-              moment(event.startDate).fromNow()
-            );
-          }
-          if (event.fullDayEvent && this.config.nextDaysRelative) {
-            // Full days events within the next two days
-            if (event.today) {
-              timeWrapper.innerHTML = this.capFirst(this.translate("TODAY"));
-            } else if (
-              event.startDate - now < oneDay &&
-              event.startDate - now > 0
-            ) {
-              timeWrapper.innerHTML = this.capFirst(this.translate("TOMORROW"));
-            } else if (
-              event.startDate - now < 2 * oneDay &&
-              event.startDate - now > 0
-            ) {
-              if (this.translate("DAYAFTERTOMORROW") !== "DAYAFTERTOMORROW") {
-                timeWrapper.innerHTML = this.capFirst(
-                  this.translate("DAYAFTERTOMORROW")
-                );
-              }
-            }
-          }
-        } else {
-          // Show relative times
-          if (event.startDate >= now) {
-            // Use relative  time
-            if (!this.config.hideTime) {
-              timeWrapper.innerHTML = this.capFirst(
-                moment(event.startDate).calendar(null, {
-                  sameElse: this.config.dateFormat
-                })
-              );
-            } else {
-              timeWrapper.innerHTML = this.capFirst(
-                moment(event.startDate).calendar(null, {
-                  sameDay: `[${this.translate("TODAY")}]`, // Template literal
-                  nextDay: `[${this.translate("TOMORROW")}]`, // Template literal
-                  nextWeek: "dddd",
-                  sameElse: this.config.dateFormat
-                })
-              );
-            }
-            if (event.startDate - now < this.config.getRelative * oneHour) {
-              // If event is within getRelative  hours, display 'in xxx' time format or moment.fromNow()
-              timeWrapper.innerHTML = this.capFirst(
-                moment(event.startDate).fromNow()
-              );
-            }
-          } else {
-            // Ongoing event
-            timeWrapper.innerHTML = this.capFirst(
-              this.translate("RUNNING", {
-                fallback: `${this.translate("RUNNING")} {timeUntilEnd}`, // Template literal
-                timeUntilEnd: moment(event.endDate).fromNow(true)
-              })
-            );
-          }
-        }
-        timeWrapper.className = `time light ${this.timeClassForCalendar(event.calendarID)}`;
-        eventWrapper.appendChild(timeWrapper);
-      }
-
-      wrapper.appendChild(eventWrapper);
-
-      // Create fade effect.
-      if (index >= startFade) {
-        currentFadeStep = index - startFade;
-        eventWrapper.style.opacity = 1 - (1 / fadeSteps) * currentFadeStep;
-      }
-
-      if (this.config.showLocation) {
-        if (event.location) {
-          const locationRow = document.createElement("tr");
-          locationRow.className = "normal xsmall light";
-
-          if (this.config.displaySymbol) {
-            const symbolCell = document.createElement("td");
-            locationRow.appendChild(symbolCell);
-          }
-
-          const descCell = document.createElement("td");
-          descCell.className = "location";
-          descCell.colSpan = "2";
-          descCell.innerHTML = this.titleTransform(
-            event.location,
-            this.config.locationTitleReplace,
-            this.config.wrapLocationEvents,
-            this.config.maxLocationTitleLength,
-            this.config.maxEventTitleLines
-          );
-          locationRow.appendChild(descCell);
-
-          wrapper.appendChild(locationRow);
-
-          if (index >= startFade) {
-            currentFadeStep = index - startFade;
-            locationRow.style.opacity = 1 - (1 / fadeSteps) * currentFadeStep;
-          }
-        }
-      }
-    });
-
+    this.scheduleNowTick();
     return wrapper;
   },
+
 
   /**
 	 * Filter out events according to the calendar config.

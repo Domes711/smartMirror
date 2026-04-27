@@ -1,0 +1,13 @@
+{
+  "WRONG_CREDENTIALS_FORMAT": "Neplatný formát přihlašovacích údajů. Při čtení credentials.json došlo k chybě – zkontroluj, že používáš správný typ přihlašovacích údajů (možná chybí client_id nebo client_secret).",
+  "AUTH_ERROR_GENERIC": "Je potřeba autentizace. Zkontroluj prosím konfiguraci modulu.",
+  "AUTH_PROMPT_CLICK_HERE": "<a href=\"{authUrl}\">Klikni sem</a> pro autorizaci modulu.",
+  "INVALID_CREDENTIALS_TYPE": "Neplatný formát credentials.json. Použij přihlašovací údaje typu 'Desktop application' dle návodu (chybí klíč 'installed').",
+  "ERROR_TOKEN_EXCHANGE": "Nepodařilo se vyměnit autorizační kód za token. Zkus autorizaci znovu nebo zkontroluj logy serveru.",
+  "ERROR_LOADING_CREDENTIALS": "Chyba při načítání credentials.json. Ujisti se, že soubor existuje a má správná oprávnění.",
+  "ERROR_PARSING_CREDENTIALS": "Chyba při parsování credentials.json. Soubor musí být validní JSON.",
+  "LOADING": "Načítám…",
+  "EMPTY": "Žádné události.",
+  "CONTINUES_NEXT_DAY": "pokračuje zítra",
+  "CONTINUED_FROM_PREV": "pokračuje ze včerejška"
+}
