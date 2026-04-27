@@ -50,11 +50,38 @@ npm install
 | `pass` | IMAP password (Gmail: app password; Outlook: OAuth2 token) | — |
 | `host` | IMAP hostname (e.g. `imap.gmail.com`, `outlook.office365.com`) | — |
 | `port` | IMAP port | `993` |
-| `mailbox` | IMAP folder to watch and display | `INBOX` |
-| `slaHours` | When set, each card shows a countdown badge from `envelope.date` (green > 1 h, amber 15–60 min, red < 15 min, pulsing red after deadline). Use one module instance per response-time bucket. | `null` |
-| `numberOfEmails` | Max number of unread mails shown | `5` |
+| `mailbox` | Single IMAP folder to watch (legacy single-mailbox mode). Ignored if `mailboxes` is set. | `INBOX` |
+| `mailboxes` | Array of `{ name, slaHours }` objects, one per IMAP folder. Mails from all folders are merged into one list; entries with `slaHours` show a countdown badge and float to the top sorted by deadline (most burning first); the rest follow newest-first. | `null` |
+| `slaHours` | Legacy SLA option, paired with `mailbox`. New configs should use `mailboxes` instead. | `null` |
+| `numberOfEmails` | Max number of unread mails shown across all mailboxes | `5` |
 | `fade` | Fade older entries to black | `true` |
 | `subjectlength` | Truncate subject lines to N chars | `50` |
+
+### Combining urgent and regular mail in one instance
+
+```javascript
+{
+    module: 'MMM-Mail',
+    position: 'top_left',
+    header: 'Email',
+    classes: 'Domes',
+    config: {
+        user: 'me@gmail.com',
+        pass: 'app-pwd',
+        host: 'imap.gmail.com',
+        port: 993,
+        mailboxes: [
+            { name: 'Urgent2h', slaHours: 2 },   // server-side label "Urgent2h"
+            { name: 'Mirror' },                   // everything else worth showing
+        ],
+        numberOfEmails: 8,
+    },
+}
+```
+
+The helper opens one IMAP connection per mailbox and tags each message
+with its `slaHours`, so the frontend can sort `Urgent2h` cards above
+plain `Mirror` cards while keeping the most-burning urgent on top.
 
 ### Folder filtering tips
 

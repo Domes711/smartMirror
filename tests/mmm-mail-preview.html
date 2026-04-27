@@ -247,13 +247,9 @@
   </p>
 
   <h2>Stavy</h2>
-  <button id="btnFull" class="active">Naplněná složka (5 mailů)</button>
-  <button id="btnEmpty">Prázdná složka</button>
+  <button id="btnFull" class="active">Naplněná schránka (mix)</button>
+  <button id="btnEmpty">Prázdná schránka</button>
   <button id="btnNewMail">Simulovat nový email</button>
-
-  <h2>SLA odpočet (slaHours: 2)</h2>
-  <button id="btnSlaOn" class="active">Zapnuto — odpočet v kartičkách</button>
-  <button id="btnSlaOff">Vypnuto — bez odpočtu</button>
 
   <h2>Profile gating</h2>
   <button id="btnDomes" class="active">Domes je vidět</button>
@@ -263,18 +259,18 @@
   <pre class="config">{
   module: 'MMM-Mail',
   position: 'top_left',
-  header: 'Email · 2h SLA',
+  header: 'Email',
   classes: 'Domes',
   config: {
     user: 'me@gmail.com',
     pass: 'app-pwd',
     host: 'imap.gmail.com',
     port: 993,
-    mailbox: 'Urgent2h',
-    slaHours: 2,         // odpočet v kartičkách
-    numberOfEmails: 5,
-    fade: true,
-    subjectlength: 50,
+    mailboxes: [
+      { name: 'Urgent2h', slaHours: 2 },
+      { name: 'Mirror' },
+    ],
+    numberOfEmails: 8,
   },
 }</pre>
 </div>
@@ -284,26 +280,34 @@
   // a healthy spread of SLA states (fresh, halfway, near deadline, overdue).
   const now = Date.now();
   const minsAgo = (m) => new Date(now - m * 60000).toISOString();
-  const sampleMails = [
-    { sender: [{ name: "Klient — Šárka N.", address: "novak@klient.cz" }],
-      subject: "URGENT: změna v dnešní zakázce, čekám na potvrzení",
-      date: minsAgo(7) },
-    { sender: [{ name: "Česká spořitelna", address: "info@csas.cz" }],
-      subject: "Potvrzení o přijetí platby — 1 250,00 CZK",
-      date: minsAgo(48) },
-    { sender: [{ name: "Alza.cz", address: "info@alza.cz" }],
-      subject: "Vaše objednávka byla odeslána (#KX-2841997)",
-      date: minsAgo(95) },
-    { sender: [{ name: "GitHub", address: "noreply@github.com" }],
-      subject: "[domes711/smartmirror] PR #14 ready for review",
-      date: minsAgo(115) },
-    { sender: [{ name: "Faktury", address: "faktury@dodavatel.cz" }],
-      subject: "Připomenutí splatnosti — FA 2026/0411",
-      date: minsAgo(143) },
-  ];
 
-  // SLA in hours; null/0 = no countdown
-  let slaHours = 2;
+  // Simulates two mailboxes returned by node_helper.js. Each message carries
+  // the slaHours from its own mailbox config; the merge/sort happens below.
+  const sampleByBox = {
+    Urgent2h: [
+      { id: 1042, sender: [{ name: "Klient — Šárka N.", address: "novak@klient.cz" }],
+        subject: "URGENT: změna v dnešní zakázce, čekám na potvrzení",
+        date: minsAgo(143), mailbox: "Urgent2h", slaHours: 2 },
+      { id: 1041, sender: [{ name: "Faktury", address: "faktury@dodavatel.cz" }],
+        subject: "Připomenutí splatnosti — FA 2026/0411",
+        date: minsAgo(115), mailbox: "Urgent2h", slaHours: 2 },
+      { id: 1040, sender: [{ name: "Klient — David K.", address: "k@firma.cz" }],
+        subject: "Potřebuju potvrdit termín dnes",
+        date: minsAgo(48), mailbox: "Urgent2h", slaHours: 2 },
+    ],
+    Mirror: [
+      { id: 938, sender: [{ name: "Česká spořitelna", address: "info@csas.cz" }],
+        subject: "Potvrzení o přijetí platby — 1 250,00 CZK",
+        date: minsAgo(20), mailbox: "Mirror", slaHours: null },
+      { id: 937, sender: [{ name: "Alza.cz", address: "info@alza.cz" }],
+        subject: "Vaše objednávka byla odeslána (#KX-2841997)",
+        date: minsAgo(95), mailbox: "Mirror", slaHours: null },
+      { id: 936, sender: [{ name: "GitHub", address: "noreply@github.com" }],
+        subject: "[domes711/smartmirror] PR #14 ready for review",
+        date: minsAgo(180), mailbox: "Mirror", slaHours: null },
+    ],
+  };
+  let messagesByBox = sampleByBox;
 
   const list = document.getElementById("maillist");
   const mail = document.getElementById("mail");
@@ -330,8 +334,24 @@
     return { label, level };
   }
 
-  // Mirrors MMM-Mail.js getDom(): same fade math, same DOM shape, plus SLA badge.
-  function render(mails) {
+  // Same merge+sort logic as MMM-Mail.js collectMessages():
+  // urgent first (by deadline asc), then regular (by id desc).
+  function collectMessages(byBox) {
+    const all = [];
+    Object.keys(byBox).forEach(b => byBox[b].forEach(m => all.push(m)));
+    const urgent = all.filter(m => m.slaHours);
+    const regular = all.filter(m => !m.slaHours);
+    urgent.sort((a, b) => {
+      const aDl = new Date(a.date).getTime() + a.slaHours * 3600 * 1000;
+      const bDl = new Date(b.date).getTime() + b.slaHours * 3600 * 1000;
+      return aDl - bDl;
+    });
+    regular.sort((a, b) => b.id - a.id);
+    return urgent.concat(regular);
+  }
+
+  function render() {
+    const mails = collectMessages(messagesByBox);
     list.innerHTML = "";
     mail.classList.remove("empty");
 
@@ -362,8 +382,8 @@
       subjRow.textContent = subj;
       row.appendChild(subjRow);
 
-      if (slaHours && m.date) {
-        const sla = formatSla(m.date, slaHours);
+      if (m.slaHours && m.date) {
+        const sla = formatSla(m.date, m.slaHours);
         const slaRow = document.createElement("tr");
         slaRow.className = "sla sla-" + sla.level;
         slaRow.textContent = sla.label;
@@ -380,7 +400,7 @@
   }
 
   // Tick the countdown labels every 30s without re-creating the cards.
-  setInterval(() => { if (slaHours) render(sampleMails); }, 30000);
+  setInterval(render, 30000);
 
   function showAlert(sender) {
     alertMsg.textContent = "from " + sender;
@@ -393,31 +413,18 @@
   const btnNewMail = document.getElementById("btnNewMail");
   const btnDomes = document.getElementById("btnDomes");
   const btnAnon = document.getElementById("btnAnon");
-  const btnSlaOn = document.getElementById("btnSlaOn");
-  const btnSlaOff = document.getElementById("btnSlaOff");
-
-  btnSlaOn.addEventListener("click", () => {
-    btnSlaOn.classList.add("active");
-    btnSlaOff.classList.remove("active");
-    slaHours = 2;
-    render(sampleMails);
-  });
-  btnSlaOff.addEventListener("click", () => {
-    btnSlaOff.classList.add("active");
-    btnSlaOn.classList.remove("active");
-    slaHours = null;
-    render(sampleMails);
-  });
 
   btnFull.addEventListener("click", () => {
     btnFull.classList.add("active");
     btnEmpty.classList.remove("active");
-    render(sampleMails);
+    messagesByBox = sampleByBox;
+    render();
   });
   btnEmpty.addEventListener("click", () => {
     btnEmpty.classList.add("active");
     btnFull.classList.remove("active");
-    render([]);
+    messagesByBox = { Urgent2h: [], Mirror: [] };
+    render();
   });
   btnDomes.addEventListener("click", () => {
     btnDomes.classList.add("active");
@@ -444,7 +451,7 @@
     alertIdx++;
   });
 
-  render(sampleMails);
+  render();
 </script>
 </body>
 </html>
