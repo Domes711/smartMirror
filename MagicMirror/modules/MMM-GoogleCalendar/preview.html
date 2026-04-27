@@ -2,127 +2,273 @@
 <html lang="cs">
 <head>
 <meta charset="utf-8">
-<title>MMM-GoogleCalendar · preview (current upstream)</title>
+<title>MMM-GoogleCalendar · timeline preview</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-<link rel="stylesheet" href="./calendar.css">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;500;700&display=swap" rel="stylesheet">
 <style>
-  /* Subset of MagicMirror's base CSS so the calendar renders the
-     same way it does on the mirror. */
   :root {
-    --font-size: 20px;
-    --font-size-small: 17.5px;
-    --font-primary: "Roboto Condensed", sans-serif;
-    --color-text: #fff;
-    --color-text-dimmed: #aaa;
-    --color-text-bright: #fff;
-    --gap-body-top: 60px;
+    --hour-height: 64px;       /* px per hour on the timeline */
+    --time-col-width: 56px;    /* width of the gutter with hour labels */
+    --bg: #000;
+    --fg: #fff;
+    --grid: rgba(255,255,255,0.10);
+    --label: rgba(255,255,255,0.45);
+    --card-bg: rgba(255,255,255,0.08);
+    --card-bg-hatch: rgba(255,255,255,0.04);
+    --card-fg: #fff;
+    --card-meta: rgba(255,255,255,0.60);
+    --accent-blue:   #5b8def;
+    --accent-teal:   #2ecbb4;
+    --accent-purple: #8a5bef;
+    --accent-orange: #ff9b3c;
+    --accent-pink:   #ff5b8a;
   }
+
+  * { box-sizing: border-box; }
 
   html, body {
     margin: 0;
     padding: 0;
-    background: #000;
-    color: var(--color-text);
-    font-family: var(--font-primary);
-    font-size: var(--font-size);
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Roboto Condensed", sans-serif;
     font-weight: 400;
-    line-height: 1.4;
   }
 
   .stage {
-    padding: 40px 60px;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 40px;
-    max-width: 600px;
-  }
-
-  .module {
-    display: block;
+    padding: 32px 40px 56px;
+    max-width: 520px;
   }
 
   .module-header {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 2px;
-    border-bottom: 1px solid #666;
+    border-bottom: 1px solid rgba(255,255,255,0.25);
     padding-bottom: 6px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     line-height: 1;
-    color: #fff;
+    color: rgba(255,255,255,0.85);
   }
 
-  .small {
-    font-size: var(--font-size-small);
-    line-height: 1.25;
+  .day-label {
+    font-size: 13px;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 0.5px;
+    margin: 4px 0 10px;
+    text-transform: capitalize;
   }
 
-  .normal { color: var(--color-text); }
-  .dimmed { color: var(--color-text-dimmed); }
-  .bright { color: var(--color-text-bright); font-weight: 400; }
-  .light  { font-weight: 300; }
-  .thin   { font-weight: 100; }
-
-  .align-right { text-align: right; }
-
-  table {
-    border-collapse: collapse;
-    width: 100%;
+  /* Timeline -------------------------------------------------------- */
+  .timeline {
+    position: relative;
+    padding-left: var(--time-col-width);
   }
 
-  td {
-    padding: 1px 0;
-    vertical-align: top;
+  /* Hour rows: each is hour-height tall, with a top border that
+     forms the gridline. */
+  .hour-row {
+    position: relative;
+    height: var(--hour-height);
+    border-top: 1px solid var(--grid);
+  }
+  .hour-row:last-child { border-bottom: 1px solid var(--grid); }
+
+  .hour-row .hour-label {
+    position: absolute;
+    left: calc(-1 * var(--time-col-width));
+    top: -7px;
+    width: calc(var(--time-col-width) - 12px);
+    text-align: right;
+    font-size: 12px;
+    color: var(--label);
+    letter-spacing: 0.3px;
   }
 
-  /* Note: this is a static replica of what getDom() produces with
-     timeFormat: "dateheaders" (the default). When config differs,
-     the markup differs too. */
+  /* Event card. Positioned absolutely against the .timeline so it
+     can span multiple hours. Use top: var(--start) and
+     height: var(--span) where 1 hour == --hour-height. */
+  .event {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    border-radius: 8px;
+    padding: 8px 10px 9px 12px;
+    background: var(--card-bg);
+    color: var(--card-fg);
+    overflow: hidden;
+    line-height: 1.2;
+    border-left: 3px solid var(--accent-blue);
+    z-index: 2;
+  }
+
+  .event .title {
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .event .meta {
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--card-meta);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .event .meta svg {
+    width: 11px; height: 11px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+
+  /* Calendar color variants — set the left bar + a tinted bg. */
+  .event.cal-blue   { border-left-color: var(--accent-blue);
+                      background: rgba(91,141,239,0.18); }
+  .event.cal-teal   { border-left-color: var(--accent-teal);
+                      background: rgba(46,203,180,0.18); }
+  .event.cal-purple { border-left-color: var(--accent-purple);
+                      background: rgba(138,91,239,0.18); }
+  .event.cal-orange { border-left-color: var(--accent-orange);
+                      background: rgba(255,155,60,0.18); }
+  .event.cal-pink   { border-left-color: var(--accent-pink);
+                      background: rgba(255,91,138,0.18); }
+
+  /* Tentative / pending events use a hatched background. */
+  .event.tentative {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255,255,255,0.05) 0 6px,
+      rgba(255,255,255,0.10) 6px 7px
+    );
+  }
+  .event.tentative.cal-blue {
+    background:
+      repeating-linear-gradient(
+        135deg,
+        rgba(91,141,239,0.12) 0 6px,
+        rgba(91,141,239,0.22) 6px 7px);
+  }
+
+  /* Side-by-side overlap (two events at same time). */
+  .event.col-l { right: 51%; }
+  .event.col-r { left: 51%; }
+
+  /* Now-line: thin red line marking current time. */
+  .now-line {
+    position: absolute;
+    left: calc(-1 * var(--time-col-width));
+    right: 6px;
+    height: 0;
+    border-top: 1.5px solid #ff3b30;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .now-line::before {
+    content: "";
+    position: absolute;
+    left: calc(var(--time-col-width) - 4px);
+    top: -4px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #ff3b30;
+  }
 </style>
 </head>
 <body>
 
 <div class="stage">
+  <header class="module-header">Moro systems</header>
+  <div class="day-label">Neděle 26. 4. 2026</div>
 
-  <!-- ============ Today's events only ============ -->
-  <div class="module">
-    <header class="module-header">Moro systems</header>
-    <table class="small">
-      <tr class="normal">
-        <td colspan="3" style="padding-top: 10px;">Ne, 26.4.</td>
-      </tr>
-      <tr class="normal event">
-        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
-        <td class="title bright">Ranní káva</td>
-        <td class="time light">8:30</td>
-      </tr>
-      <tr class="normal event">
-        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
-        <td class="title bright">Daily standup</td>
-        <td class="time light">10:00</td>
-      </tr>
-      <tr class="normal event">
-        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
-        <td class="title bright">Lunch · Veverka</td>
-        <td class="time light">13:00</td>
-      </tr>
-      <tr class="normal event">
-        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
-        <td class="title bright">1:1 s Honzou</td>
-        <td class="time light">15:30</td>
-      </tr>
-      <tr class="normal event">
-        <td class="symbol align-right"><span class="fa fa-fw fa-calendar-week"></span></td>
-        <td class="title bright">Workshop · UX review</td>
-        <td class="time light">17:00 – 18:30</td>
-      </tr>
-    </table>
+  <!-- 8:00 → 21:00. Events use top: (start - 8h) * --hour-height
+       and height: duration * --hour-height -->
+  <div class="timeline">
+
+    <!-- Now-line at 11:49 -->
+    <div class="now-line" style="top: calc((3 + 49/60) * var(--hour-height));"></div>
+
+    <!-- Events -->
+    <div class="event cal-orange" style="
+         top: calc(0.5 * var(--hour-height));
+         height: calc(0.75 * var(--hour-height));">
+      <div class="title">Snídaně doma</div>
+      <div class="meta">
+        <svg viewBox="0 0 24 24"><path d="M12 21s-7-5.5-7-11a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 11-7 11z"/></svg>
+        Kuchyně
+      </div>
+    </div>
+
+    <div class="event cal-blue" style="
+         top: calc(2 * var(--hour-height));
+         height: calc(0.5 * var(--hour-height));">
+      <div class="title">Daily standup</div>
+      <div class="meta">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+        Google Meet
+      </div>
+    </div>
+
+    <div class="event cal-teal" style="
+         top: calc(5 * var(--hour-height));
+         height: calc(1 * var(--hour-height));">
+      <div class="title">Lunch · Veverka</div>
+      <div class="meta">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+        Veverka, Brno
+      </div>
+    </div>
+
+    <div class="event cal-purple" style="
+         top: calc(7.5 * var(--hour-height));
+         height: calc(0.5 * var(--hour-height));">
+      <div class="title">1:1 s Honzou</div>
+      <div class="meta">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+        Kancelář
+      </div>
+    </div>
+
+    <!-- Two parallel events 17:00 – 18:30 / 17:00 – 18:00 -->
+    <div class="event cal-blue tentative col-l" style="
+         top: calc(9 * var(--hour-height));
+         height: calc(1.5 * var(--hour-height));">
+      <div class="title">#8524932112: From Přerov</div>
+      <div class="meta">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+        Sta., Přerov
+      </div>
+    </div>
+    <div class="event cal-teal col-r" style="
+         top: calc(9 * var(--hour-height));
+         height: calc(1 * var(--hour-height));">
+      <div class="title">Train to MS</div>
+      <div class="meta">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+        Sta., Přerov
+      </div>
+    </div>
+
+    <!-- Hour grid -->
+    <div class="hour-row"><span class="hour-label">8:00</span></div>
+    <div class="hour-row"><span class="hour-label">9:00</span></div>
+    <div class="hour-row"><span class="hour-label">10:00</span></div>
+    <div class="hour-row"><span class="hour-label">11:00</span></div>
+    <div class="hour-row"><span class="hour-label">12:00</span></div>
+    <div class="hour-row"><span class="hour-label">13:00</span></div>
+    <div class="hour-row"><span class="hour-label">14:00</span></div>
+    <div class="hour-row"><span class="hour-label">15:00</span></div>
+    <div class="hour-row"><span class="hour-label">16:00</span></div>
+    <div class="hour-row"><span class="hour-label">17:00</span></div>
+    <div class="hour-row"><span class="hour-label">18:00</span></div>
+    <div class="hour-row"><span class="hour-label">19:00</span></div>
+    <div class="hour-row"><span class="hour-label">20:00</span></div>
+    <div class="hour-row"><span class="hour-label">21:00</span></div>
   </div>
-
 </div>
 
 </body>
