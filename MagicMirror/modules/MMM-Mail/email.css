@@ -2,3 +2,27 @@
     padding-left: 10px;
     text-align: right;
 }
+
+/* Card layout for the mail list. Scoped under .mmm-mail so the global
+   .normal/.bright/.light table classes used by other modules aren't
+   affected. */
+table.mmm-mail tr.normal {
+    display: block;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+table.mmm-mail tr.bright {
+    display: block;
+    font-size: 17px;
+    margin-bottom: 4px;
+}
+
+table.mmm-mail tr.light {
+    display: block;
+    font-size: 14px;
+    line-height: 1.35;
+}

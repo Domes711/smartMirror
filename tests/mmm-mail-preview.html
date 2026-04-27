@@ -64,11 +64,25 @@
 
   table.maillist { border-collapse: collapse; width: 100%; }
   table.maillist tr.normal {
-    display: block; margin-bottom: 10px; transition: opacity 0.3s ease;
+    display: block;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    transition: opacity 0.3s ease, background 0.2s ease;
   }
-  table.maillist tr.bright { display: block; font-size: 18px; }
+  table.maillist tr.normal:hover { background: rgba(255, 255, 255, 0.07); }
+  table.maillist tr.bright {
+    display: block;
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
   table.maillist tr.light {
-    display: block; font-size: 16px; color: var(--normal);
+    display: block;
+    font-size: 14px;
+    color: var(--normal);
+    line-height: 1.35;
   }
   .mail.empty .maillist { color: var(--dimmed); font-size: 16px; }
 

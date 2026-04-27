@@ -67,7 +67,7 @@ Module.register("MMM-Mail",{
 
 	getDom: function(){
         var wrapper = document.createElement("table");
-        wrapper.className = "small";
+        wrapper.className = "small mmm-mail";
         var that =this;
 		if(this.messages.length > 0)
         {
