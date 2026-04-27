@@ -51,6 +51,7 @@ npm install
 | `host` | IMAP hostname (e.g. `imap.gmail.com`, `outlook.office365.com`) | — |
 | `port` | IMAP port | `993` |
 | `mailbox` | IMAP folder to watch and display | `INBOX` |
+| `slaHours` | When set, each card shows a countdown badge from `envelope.date` (green > 1 h, amber 15–60 min, red < 15 min, pulsing red after deadline). Use one module instance per response-time bucket. | `null` |
 | `numberOfEmails` | Max number of unread mails shown | `5` |
 | `fade` | Fade older entries to black | `true` |
 | `subjectlength` | Truncate subject lines to N chars | `50` |

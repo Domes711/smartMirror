@@ -86,6 +86,31 @@
   }
   .mail.empty .maillist { color: var(--dimmed); font-size: 16px; }
 
+  /* SLA countdown badge */
+  table.maillist tr.sla {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    border: 1px solid currentColor;
+    line-height: 1.4;
+  }
+  table.maillist tr.sla-ok   { color: #6fcf97; }
+  table.maillist tr.sla-warn { color: #f2c94c; }
+  table.maillist tr.sla-crit { color: #f2994a; }
+  table.maillist tr.sla-over {
+    color: #eb5757;
+    background: rgba(235, 87, 87, 0.12);
+    animation: sla-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes sla-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+  }
+
   .gate-banner {
     width: 100%;
     max-width: 360px;
@@ -226,6 +251,10 @@
   <button id="btnEmpty">Prázdná složka</button>
   <button id="btnNewMail">Simulovat nový email</button>
 
+  <h2>SLA odpočet (slaHours: 2)</h2>
+  <button id="btnSlaOn" class="active">Zapnuto — odpočet v kartičkách</button>
+  <button id="btnSlaOff">Vypnuto — bez odpočtu</button>
+
   <h2>Profile gating</h2>
   <button id="btnDomes" class="active">Domes je vidět</button>
   <button id="btnAnon">Anonymous (skryto)</button>
@@ -234,14 +263,15 @@
   <pre class="config">{
   module: 'MMM-Mail',
   position: 'top_left',
-  header: 'Email',
+  header: 'Email · 2h SLA',
   classes: 'Domes',
   config: {
     user: 'me@gmail.com',
     pass: 'app-pwd',
     host: 'imap.gmail.com',
     port: 993,
-    mailbox: 'Mirror',
+    mailbox: 'Urgent2h',
+    slaHours: 2,         // odpočet v kartičkách
     numberOfEmails: 5,
     fade: true,
     subjectlength: 50,
@@ -250,18 +280,30 @@
 </div>
 
 <script>
+  // Timestamps anchored relative to "now" so the demo always shows
+  // a healthy spread of SLA states (fresh, halfway, near deadline, overdue).
+  const now = Date.now();
+  const minsAgo = (m) => new Date(now - m * 60000).toISOString();
   const sampleMails = [
+    { sender: [{ name: "Klient — Šárka N.", address: "novak@klient.cz" }],
+      subject: "URGENT: změna v dnešní zakázce, čekám na potvrzení",
+      date: minsAgo(7) },
     { sender: [{ name: "Česká spořitelna", address: "info@csas.cz" }],
-      subject: "Potvrzení o přijetí platby — 1 250,00 CZK" },
+      subject: "Potvrzení o přijetí platby — 1 250,00 CZK",
+      date: minsAgo(48) },
     { sender: [{ name: "Alza.cz", address: "info@alza.cz" }],
-      subject: "Vaše objednávka byla odeslána (#KX-2841997)" },
+      subject: "Vaše objednávka byla odeslána (#KX-2841997)",
+      date: minsAgo(95) },
     { sender: [{ name: "GitHub", address: "noreply@github.com" }],
-      subject: "[domes711/smartmirror] PR #14 ready for review" },
-    { sender: [{ name: "MUNI Studijní oddělení", address: "studijni@muni.cz" }],
-      subject: "Připomenutí: zápis předmětů končí 30. 4." },
-    { sender: [{ name: "", address: "newsletter@kosmas.cz" }],
-      subject: "Nové knihy tohoto týdne" },
+      subject: "[domes711/smartmirror] PR #14 ready for review",
+      date: minsAgo(115) },
+    { sender: [{ name: "Faktury", address: "faktury@dodavatel.cz" }],
+      subject: "Připomenutí splatnosti — FA 2026/0411",
+      date: minsAgo(143) },
   ];
+
+  // SLA in hours; null/0 = no countdown
+  let slaHours = 2;
 
   const list = document.getElementById("maillist");
   const mail = document.getElementById("mail");
@@ -269,7 +311,26 @@
   const alertEl = document.getElementById("alert");
   const alertMsg = document.getElementById("alertMsg");
 
-  // Mirrors MMM-Mail.js getDom(): same fade math, same DOM shape.
+  // Mirrors the MMM-Mail.js formatSla helper exactly.
+  function formatSla(receivedISO, hours) {
+    const deadline = new Date(receivedISO).getTime() + hours * 3600 * 1000;
+    const diff = deadline - Date.now();
+    const over = diff < 0;
+    const mins = Math.floor(Math.abs(diff) / 60000);
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    const label = over
+      ? "OVERDUE " + (h ? h + "h " : "") + m + "min"
+      : (h ? h + "h " + m + "m left" : m + " min left");
+    let level;
+    if (over) level = "over";
+    else if (mins < 15) level = "crit";
+    else if (mins < 60) level = "warn";
+    else level = "ok";
+    return { label, level };
+  }
+
+  // Mirrors MMM-Mail.js getDom(): same fade math, same DOM shape, plus SLA badge.
   function render(mails) {
     list.innerHTML = "";
     mail.classList.remove("empty");
@@ -301,6 +362,14 @@
       subjRow.textContent = subj;
       row.appendChild(subjRow);
 
+      if (slaHours && m.date) {
+        const sla = formatSla(m.date, slaHours);
+        const slaRow = document.createElement("tr");
+        slaRow.className = "sla sla-" + sla.level;
+        slaRow.textContent = sla.label;
+        row.appendChild(slaRow);
+      }
+
       if (i >= startingPoint) {
         const currentStep = i - startingPoint;
         row.style.opacity = 1 - (1 / steps * currentStep);
@@ -309,6 +378,9 @@
       list.appendChild(row);
     });
   }
+
+  // Tick the countdown labels every 30s without re-creating the cards.
+  setInterval(() => { if (slaHours) render(sampleMails); }, 30000);
 
   function showAlert(sender) {
     alertMsg.textContent = "from " + sender;
@@ -321,6 +393,21 @@
   const btnNewMail = document.getElementById("btnNewMail");
   const btnDomes = document.getElementById("btnDomes");
   const btnAnon = document.getElementById("btnAnon");
+  const btnSlaOn = document.getElementById("btnSlaOn");
+  const btnSlaOff = document.getElementById("btnSlaOff");
+
+  btnSlaOn.addEventListener("click", () => {
+    btnSlaOn.classList.add("active");
+    btnSlaOff.classList.remove("active");
+    slaHours = 2;
+    render(sampleMails);
+  });
+  btnSlaOff.addEventListener("click", () => {
+    btnSlaOff.classList.add("active");
+    btnSlaOn.classList.remove("active");
+    slaHours = null;
+    render(sampleMails);
+  });
 
   btnFull.addEventListener("click", () => {
     btnFull.classList.add("active");

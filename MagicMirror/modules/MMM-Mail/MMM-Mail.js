@@ -6,13 +6,39 @@ Module.register("MMM-Mail",{
 		pass: '',
 		mailbox: 'INBOX',
 		subjectlength: 50,
+		slaHours: null,	// when set, each card shows an SLA countdown from envelope.date
 	},
 	messages: [],	//The storage for the Mails
+	slaTimer: null,
 
 	start: function(){
 		console.log("Email module started!");
         this.sendSocketNotification('LISTEN_EMAIL',this.config);
         this.loaded = false;
+
+        // Re-render every minute so the countdown badge stays current.
+        if (this.config.slaHours) {
+            var self = this;
+            this.slaTimer = setInterval(function(){ self.updateDom(0); }, 60 * 1000);
+        }
+	},
+
+	// Returns { label, level } where level is 'ok' | 'warn' | 'crit' | 'over'.
+	formatSla: function(receivedISO) {
+		var deadline = new Date(receivedISO).getTime() + this.config.slaHours * 3600 * 1000;
+		var diff = deadline - Date.now();
+		var over = diff < 0;
+		var mins = Math.floor(Math.abs(diff) / 60000);
+		var h = Math.floor(mins / 60);
+		var m = mins % 60;
+		var label = over ? ('OVERDUE ' + (h ? h + 'h ' : '') + m + 'min')
+		                 : (h ? h + 'h ' + m + 'm left' : m + ' min left');
+		var level;
+		if (over) level = 'over';
+		else if (mins < 15) level = 'crit';
+		else if (mins < 60) level = 'warn';
+		else level = 'ok';
+		return { label: label, level: level };
 	},
 
 	socketNotificationReceived: function(notification, payload){
@@ -101,6 +127,14 @@ Module.register("MMM-Mail",{
 				}
                 subjectWrapper.innerHTML = subject;
                 emailWrapper.appendChild(subjectWrapper);
+
+                if (that.config.slaHours && mailObj.date) {
+                    var sla = that.formatSla(mailObj.date);
+                    var slaWrapper = document.createElement("tr");
+                    slaWrapper.className = "sla sla-" + sla.level;
+                    slaWrapper.innerHTML = sla.label;
+                    emailWrapper.appendChild(slaWrapper);
+                }
 
                 wrapper.appendChild(emailWrapper);
 
