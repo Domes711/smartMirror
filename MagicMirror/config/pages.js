@@ -31,7 +31,8 @@ module.exports = {
                 { id: "weather_forecast", position: "top_right" },
                 { id: "transit",          position: "top_right" },
                 { id: "calendar_domes",   position: "top_left"  },
-                { id: "reminders_domes",  position: "top_left"  }
+                { id: "reminders_domes",  position: "top_left"  },
+                { id: "spending_domes",   position: "bottom_right" }
             ]
         },
         work: {
@@ -40,7 +41,8 @@ module.exports = {
             layout: [
                 { id: "weather_current",  position: "top_right" },
                 { id: "calendar_domes",   position: "top_left"  },
-                { id: "reminders_domes",  position: "top_left"  }
+                { id: "reminders_domes",  position: "top_left"  },
+                { id: "spending_domes",   position: "bottom_right" }
             ]
         },
         evening: {
@@ -50,6 +52,7 @@ module.exports = {
                 { id: "weather_forecast", position: "top_right" },
                 { id: "transit",          position: "top_right" },
                 { id: "reminders_domes",  position: "top_left"  },
+                { id: "spending_domes",   position: "bottom_right" },
                 { id: "news",             position: "bottom_bar"}
             ]
         },
@@ -61,6 +64,7 @@ module.exports = {
                 { id: "weather_forecast", position: "top_right" },
                 { id: "calendar_domes",   position: "top_left"  },
                 { id: "reminders_domes",  position: "top_left"  },
+                { id: "spending_domes",   position: "bottom_right" },
                 { id: "news",             position: "bottom_bar"}
             ]
         },

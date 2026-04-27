@@ -126,6 +126,29 @@ let config = {
                 refreshSec: 60,
                 language: "cs"
             }
+        },
+
+        {
+            id: "spending_domes",
+            module: "MMM-Spending",
+            header: "Útrata dnes",
+            config: {
+                // Real BudgetBakers Wallet API token lives only on the Pi
+                // (loaded from ~/.secrets/budgetbakers_token there). See
+                // modules/MMM-Spending/README.md.
+                apiToken: "BB_TOKEN_PLACEHOLDER",
+                apiBase: "https://rest.budgetbakers.com/wallet/v1/api",
+                includeAccountIds: [
+                    "ae939246-f1d5-4f14-bce1-c04357e0e77d",  // Běžný účet
+                    "c989cb70-8e88-4fd5-a103-b3f45278dc41"   // Hotovost
+                ],
+                excludeEnvelopeIds: [20001],   // Převod (inter-account transfer)
+                currency: "CZK",
+                timezone: "Europe/Prague",
+                recentCount: 3,
+                refreshSec: 300,
+                language: "cs"
+            }
         }
     ]
 };
