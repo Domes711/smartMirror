@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>MMM-GoogleCalendar · timeline preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --hour-height: 56px;
+    --time-col-width: 44px;
+    --viewport-height: 460px;
+
+    /* "Now" anchor — set this from JS at runtime to scroll the
+       timeline. value = hours since midnight (e.g. 11:49 = 11.817). */
+    --now: 11.817;
+    /* How much past time stays visible above the now-line. */
+    --past-buffer: 2;
+
+    --bg: #000;
+    --fg: #fff;
+    --grid: rgba(255,255,255,0.10);
+    --label: rgba(255,255,255,0.45);
+    --card-bg: rgba(255,255,255,0.08);
+    --card-fg: #fff;
+    --card-meta: rgba(255,255,255,0.60);
+    --accent-blue:   #5b8def;
+    --accent-teal:   #2ecbb4;
+    --accent-purple: #8a5bef;
+    --accent-orange: #ff9b3c;
+    --accent-pink:   #ff5b8a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Roboto Condensed", sans-serif;
+    font-weight: 400;
+  }
+
+  .stage {
+    padding: 18px 16px 24px;
+    width: 280px;
+  }
+
+  /* Viewport: fixed height window that clips the scrolled timeline */
+  .timeline-viewport {
+    position: relative;
+    height: var(--viewport-height);
+    overflow: hidden;
+    /* Soft fade at the bottom so future events ease into view. The
+       top is left alone so already-running / recently-ended events
+       stay clearly readable. */
+    -webkit-mask-image: linear-gradient(180deg,
+      #000 0,
+      #000 calc(100% - 28px),
+      transparent 100%);
+            mask-image: linear-gradient(180deg,
+      #000 0,
+      #000 calc(100% - 28px),
+      transparent 100%);
+  }
+
+  /* Inner timeline holds the full 24h. We translate it up so the
+     current time sits near the top of the viewport. */
+  .timeline {
+    position: relative;
+    padding-left: var(--time-col-width);
+    transform: translateY(
+      calc(-1 * (var(--now) - var(--past-buffer)) * var(--hour-height))
+    );
+    transition: transform 0.6s ease;
+  }
+
+  .hour-row {
+    position: relative;
+    height: var(--hour-height);
+    border-top: 1px solid var(--grid);
+  }
+
+  .hour-row .hour-label {
+    position: absolute;
+    left: calc(-1 * var(--time-col-width));
+    top: -7px;
+    width: calc(var(--time-col-width) - 8px);
+    text-align: right;
+    font-size: 11px;
+    color: var(--label);
+    letter-spacing: 0.3px;
+  }
+
+  .event {
+    position: absolute;
+    /* Start to the right of the time gutter so cards never overlap
+       the hour labels. */
+    left: calc(var(--time-col-width) + 6px);
+    right: 6px;
+    border-radius: 7px;
+    padding: 6px 8px 7px 10px;
+    background: var(--card-bg);
+    color: var(--card-fg);
+    overflow: hidden;
+    line-height: 1.2;
+    border-left: 3px solid var(--accent-blue);
+    z-index: 2;
+  }
+
+  .event .title {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .event .meta {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--card-meta);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .event .meta svg {
+    width: 10px; height: 10px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    flex-shrink: 0;
+  }
+
+  .event.cal-blue   { border-left-color: var(--accent-blue);
+                      background: rgba(91,141,239,0.18); }
+  .event.cal-teal   { border-left-color: var(--accent-teal);
+                      background: rgba(46,203,180,0.18); }
+  .event.cal-purple { border-left-color: var(--accent-purple);
+                      background: rgba(138,91,239,0.18); }
+  .event.cal-orange { border-left-color: var(--accent-orange);
+                      background: rgba(255,155,60,0.18); }
+  .event.cal-pink   { border-left-color: var(--accent-pink);
+                      background: rgba(255,91,138,0.18); }
+
+  .event.tentative {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255,255,255,0.05) 0 6px,
+      rgba(255,255,255,0.10) 6px 7px
+    );
+  }
+  .event.tentative.cal-blue {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(91,141,239,0.12) 0 6px,
+      rgba(91,141,239,0.22) 6px 7px);
+  }
+
+  /* Past events are stripped of their calendar colour - neutral
+     grey so the eye is drawn to what's still ahead. */
+  .event.past {
+    border-left-color: rgba(255,255,255,0.30) !important;
+    background: rgba(255,255,255,0.06) !important;
+    opacity: 0.8;
+  }
+  .event.past.tentative {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255,255,255,0.04) 0 6px,
+      rgba(255,255,255,0.10) 6px 7px) !important;
+  }
+
+  /* Side-by-side overlap. Each column is half of the events area
+     (which itself starts after the time gutter). */
+  .event.col-l { right: calc(50% - var(--time-col-width)/2 + 2px); }
+  .event.col-r { left: calc(50% + var(--time-col-width)/2 + 2px); }
+
+  /* Now-line */
+  .now-line {
+    position: absolute;
+    left: calc(-1 * var(--time-col-width));
+    right: 0;
+    height: 0;
+    border-top: 1.5px solid #ff3b30;
+    z-index: 5;
+    pointer-events: none;
+    top: calc(var(--now) * var(--hour-height));
+  }
+  .now-line::before {
+    content: "";
+    position: absolute;
+    left: calc(var(--time-col-width) - 4px);
+    top: -4px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #ff3b30;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="timeline-viewport">
+    <div class="timeline">
+
+      <!-- Hour grid 0:00 – 23:00. The transform on .timeline scrolls
+           it so the current time appears near the top. -->
+      <div class="hour-row"><span class="hour-label">0:00</span></div>
+      <div class="hour-row"><span class="hour-label">1:00</span></div>
+      <div class="hour-row"><span class="hour-label">2:00</span></div>
+      <div class="hour-row"><span class="hour-label">3:00</span></div>
+      <div class="hour-row"><span class="hour-label">4:00</span></div>
+      <div class="hour-row"><span class="hour-label">5:00</span></div>
+      <div class="hour-row"><span class="hour-label">6:00</span></div>
+      <div class="hour-row"><span class="hour-label">7:00</span></div>
+      <div class="hour-row"><span class="hour-label">8:00</span></div>
+      <div class="hour-row"><span class="hour-label">9:00</span></div>
+      <div class="hour-row"><span class="hour-label">10:00</span></div>
+      <div class="hour-row"><span class="hour-label">11:00</span></div>
+      <div class="hour-row"><span class="hour-label">12:00</span></div>
+      <div class="hour-row"><span class="hour-label">13:00</span></div>
+      <div class="hour-row"><span class="hour-label">14:00</span></div>
+      <div class="hour-row"><span class="hour-label">15:00</span></div>
+      <div class="hour-row"><span class="hour-label">16:00</span></div>
+      <div class="hour-row"><span class="hour-label">17:00</span></div>
+      <div class="hour-row"><span class="hour-label">18:00</span></div>
+      <div class="hour-row"><span class="hour-label">19:00</span></div>
+      <div class="hour-row"><span class="hour-label">20:00</span></div>
+      <div class="hour-row"><span class="hour-label">21:00</span></div>
+      <div class="hour-row"><span class="hour-label">22:00</span></div>
+      <div class="hour-row"><span class="hour-label">23:00</span></div>
+
+      <div class="now-line"></div>
+
+      <!-- Past event (within the 2h past-buffer). -->
+      <div class="event cal-blue past" style="
+           top: calc(10 * var(--hour-height));
+           height: calc(0.5 * var(--hour-height));">
+        <div class="title">Daily standup</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Google Meet
+        </div>
+      </div>
+
+      <!-- Currently ongoing event (the now-line cuts through it). -->
+      <div class="event cal-pink" style="
+           top: calc(11 * var(--hour-height));
+           height: calc(1.5 * var(--hour-height));">
+        <div class="title">Code review s Petrem</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Kancelář · Brno
+        </div>
+      </div>
+
+      <!-- Upcoming events. top = start_hour * --hour-height -->
+      <div class="event cal-teal" style="
+           top: calc(13 * var(--hour-height));
+           height: calc(1 * var(--hour-height));">
+        <div class="title">Lunch · Veverka</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Veverka, Brno
+        </div>
+      </div>
+
+      <div class="event cal-purple" style="
+           top: calc(15.5 * var(--hour-height));
+           height: calc(0.5 * var(--hour-height));">
+        <div class="title">1:1 s Honzou</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Kancelář
+        </div>
+      </div>
+
+      <div class="event cal-blue tentative col-l" style="
+           top: calc(17 * var(--hour-height));
+           height: calc(1.5 * var(--hour-height));">
+        <div class="title">#8524 Přerov</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Sta., Přerov
+        </div>
+      </div>
+      <div class="event cal-teal col-r" style="
+           top: calc(17 * var(--hour-height));
+           height: calc(1 * var(--hour-height));">
+        <div class="title">Train to MS</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Sta., Přerov
+        </div>
+      </div>
+
+      <div class="event cal-orange" style="
+           top: calc(20 * var(--hour-height));
+           height: calc(1 * var(--hour-height));">
+        <div class="title">Večeře · Padowetz</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Bratislavská 14
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // Live preview: update --now every minute so the timeline visibly
+  // slides as time progresses. Replace with the real current time
+  // at runtime; the magic mirror version just calls this on a
+  // moment.now() every minute.
+  function syncNow() {
+    const d = new Date();
+    const now = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+    document.documentElement.style.setProperty('--now', now.toFixed(4));
+  }
+  // Comment the line below if you want the static preview at 11:49.
+  // syncNow();
+  // setInterval(syncNow, 30 * 1000);
+</script>
+
+</body>
+</html>

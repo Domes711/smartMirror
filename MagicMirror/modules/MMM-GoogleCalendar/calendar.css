@@ -1,0 +1,216 @@
+/* MMM-GoogleCalendar — timeline view
+ * Renders today's events on a vertical hourly timeline driven by
+ * getDom() in MMM-GoogleCalendar.js. Sizing is tunable via the CSS
+ * custom properties on .mmm-gcal-timeline (the module sets --now
+ * inline at runtime). */
+
+.mmm-gcal-timeline {
+  --hour-height: 56px;
+  --time-col-width: 44px;
+  --viewport-height: 460px;
+  --past-buffer: 2;
+  --now: 0;
+
+  --fg: #fff;
+  --grid: rgba(255,255,255,0.10);
+  --label: rgba(255,255,255,0.45);
+  --card-fg: #fff;
+  --card-meta: rgba(255,255,255,0.60);
+
+  position: relative;
+  width: 280px;
+  font-family: "Roboto Condensed", sans-serif;
+  font-weight: 400;
+  color: var(--fg);
+  box-sizing: border-box;
+}
+
+.mmm-gcal-timeline *,
+.mmm-gcal-timeline *::before,
+.mmm-gcal-timeline *::after { box-sizing: border-box; }
+
+/* All-day / multi-day strip above the timeline */
+.mmm-gcal-timeline .all-day-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.mmm-gcal-timeline .all-day-event {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ev-color, #5484ed) 18%, transparent);
+  border-left: 3px solid var(--ev-color, #5484ed);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--card-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mmm-gcal-timeline .all-day-event .day-range {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--card-meta);
+  font-weight: 400;
+  flex-shrink: 0;
+}
+
+/* Timeline viewport: fixed-height window that clips the scrolled timeline */
+.mmm-gcal-timeline .timeline-viewport {
+  position: relative;
+  height: var(--viewport-height);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%);
+          mask-image: linear-gradient(180deg,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%);
+}
+
+.mmm-gcal-timeline .timeline {
+  position: relative;
+  padding-left: var(--time-col-width);
+  transform: translateY(
+    calc(-1 * (var(--now) - var(--past-buffer)) * var(--hour-height))
+  );
+  transition: transform 0.6s ease;
+}
+
+/* Hour grid */
+.mmm-gcal-timeline .hour-row {
+  position: relative;
+  height: var(--hour-height);
+  border-top: 1px solid var(--grid);
+}
+
+.mmm-gcal-timeline .hour-label {
+  position: absolute;
+  left: calc(-1 * var(--time-col-width));
+  top: -7px;
+  width: calc(var(--time-col-width) - 8px);
+  text-align: right;
+  font-size: 11px;
+  color: var(--label);
+  letter-spacing: 0.3px;
+}
+
+/* Event card */
+.mmm-gcal-timeline .event {
+  position: absolute;
+  left: calc(var(--time-col-width) + 6px);
+  right: 6px;
+  border-radius: 7px;
+  padding: 6px 8px 7px 10px;
+  background: color-mix(in srgb, var(--ev-color, #5484ed) 18%, transparent);
+  color: var(--card-fg);
+  overflow: hidden;
+  line-height: 1.2;
+  border-left: 3px solid var(--ev-color, #5484ed);
+  z-index: 2;
+}
+
+.mmm-gcal-timeline .event .title {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mmm-gcal-timeline .event .meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--card-meta);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mmm-gcal-timeline .event .meta svg {
+  width: 10px; height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  flex-shrink: 0;
+}
+
+.mmm-gcal-timeline .event .continues {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--card-meta);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Tentative events use a hatched background instead of a solid tint */
+.mmm-gcal-timeline .event.tentative {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ev-color, #5484ed) 12%, transparent) 0 6px,
+    color-mix(in srgb, var(--ev-color, #5484ed) 22%, transparent) 6px 7px
+  );
+}
+
+/* Past events: stripped of colour, neutral grey */
+.mmm-gcal-timeline .event.past {
+  border-left-color: rgba(255,255,255,0.30) !important;
+  background: rgba(255,255,255,0.06) !important;
+  opacity: 0.8;
+}
+
+.mmm-gcal-timeline .event.past.tentative {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(255,255,255,0.04) 0 6px,
+    rgba(255,255,255,0.10) 6px 7px) !important;
+}
+
+/* Side-by-side overlap (two events at the same time) */
+.mmm-gcal-timeline .event.col-l {
+  right: calc(50% - var(--time-col-width)/2 + 2px);
+}
+.mmm-gcal-timeline .event.col-r {
+  left: calc(50% + var(--time-col-width)/2 + 2px);
+}
+
+/* Now-line */
+.mmm-gcal-timeline .now-line {
+  position: absolute;
+  left: calc(-1 * var(--time-col-width));
+  right: 0;
+  height: 0;
+  border-top: 1.5px solid #ff3b30;
+  z-index: 5;
+  pointer-events: none;
+  top: calc(var(--now) * var(--hour-height));
+}
+
+.mmm-gcal-timeline .now-line::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--time-col-width) - 4px);
+  top: -4px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #ff3b30;
+}
+
+.mmm-gcal-timeline .placeholder {
+  padding: 14px 0;
+  font-size: 13px;
+  color: var(--card-meta);
+  text-align: center;
+}
