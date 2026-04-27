@@ -54,18 +54,6 @@
     margin-bottom: 12px;
   }
 
-  /* top_left: clock-ish placeholder */
-  .clock { top: 60px; left: 60px; }
-  .clock .time { font-size: 64px; font-weight: 200; line-height: 1; }
-  .clock .date {
-    font-size: 22px; font-weight: 300; color: var(--normal); margin-top: 6px;
-  }
-
-  /* top_right: weather-ish placeholder */
-  .weather { top: 60px; right: 60px; text-align: right; }
-  .weather .temp { font-size: 38px; font-weight: 300; }
-  .weather .summary { font-size: 16px; color: var(--dimmed); margin-top: 4px; }
-
   /* MMM-Mail itself: bottom_left like in the example config. */
   .mail { bottom: 60px; left: 60px; width: 360px; }
 
@@ -270,12 +258,6 @@
   /* ---- Small screens ----------------------------------------------- */
   @media (max-width: 600px) {
     .mirror { padding: 24px; }
-    .clock, .weather { top: 24px; }
-    .clock { left: 24px; }
-    .weather { right: 24px; }
-    .clock .time { font-size: 44px; }
-    .clock .date { font-size: 16px; }
-    .weather .temp { font-size: 28px; }
     .mail, .gate-banner { left: 24px; bottom: 24px; width: calc(100vw - 48px); max-width: 360px; }
   }
 </style>
@@ -283,16 +265,6 @@
 <body>
 
 <div class="mirror" id="mirror">
-  <div class="module clock">
-    <div class="time">14:23</div>
-    <div class="date">pondělí, 27. dubna</div>
-  </div>
-
-  <div class="module weather">
-    <div class="temp">12°</div>
-    <div class="summary">Polojasno · Brno</div>
-  </div>
-
   <div class="module mail" id="mail">
     <div class="header">Email</div>
     <table class="small maillist" id="maillist"></table>
