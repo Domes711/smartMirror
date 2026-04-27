@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>MMM-Mail — vizuální náhled</title>
+<style>
+  /* MagicMirror² uses Roboto / Roboto Condensed; fall back to system stack
+     because we don't pull the webfonts here. The visual proportions match
+     the default theme: white-on-black, light weights, narrow line spacing. */
+  :root {
+    --bg: #000000;
+    --fg: #ffffff;
+    --dimmed: rgba(255, 255, 255, 0.5);
+    --normal: rgba(255, 255, 255, 0.9);
+    --header-color: rgba(255, 255, 255, 0.7);
+    --divider: rgba(255, 255, 255, 0.25);
+    --accent: #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Roboto Condensed", "HelveticaNeue-CondensedBold", -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    min-height: 100vh;
+  }
+
+  /* ---- Mirror canvas (left) ---------------------------------------- */
+  .mirror {
+    position: relative;
+    padding: 60px;
+    overflow: hidden;
+  }
+
+  /* Simulated other modules so the mail block has visual context. */
+  .module {
+    position: absolute;
+  }
+
+  .module .header {
+    font-size: 15px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--header-color);
+    border-bottom: 1px solid var(--divider);
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+  }
+
+  /* top_left: clock-ish placeholder */
+  .clock {
+    top: 60px;
+    left: 60px;
+  }
+  .clock .time {
+    font-size: 64px;
+    font-weight: 200;
+    line-height: 1;
+  }
+  .clock .date {
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--normal);
+    margin-top: 6px;
+  }
+
+  /* top_right: weather-ish placeholder */
+  .weather {
+    top: 60px;
+    right: 60px;
+    text-align: right;
+  }
+  .weather .temp {
+    font-size: 38px;
+    font-weight: 300;
+  }
+  .weather .summary {
+    font-size: 16px;
+    color: var(--dimmed);
+    margin-top: 4px;
+  }
+
+  /* MMM-Mail itself: bottom_left like in the example config. */
+  .mail {
+    bottom: 60px;
+    left: 60px;
+    width: 360px;
+  }
+
+  /* --- styles that match MMM-Mail.js getDom() output ----------------- */
+  /* The module uses .small for the table, .bright for sender, .light
+     for subject, .dimmed for the empty-state text. These class names
+     come straight from MagicMirror's main.css. */
+  .small { font-size: 18px; line-height: 1.25; }
+  .bright { color: var(--fg); font-weight: 400; }
+  .light { color: var(--normal); font-weight: 300; }
+  .dimmed { color: var(--dimmed); }
+  .normal { color: var(--fg); }
+
+  table.maillist {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  table.maillist tr.normal {
+    display: block;
+    margin-bottom: 10px;
+    transition: opacity 0.3s ease;
+  }
+
+  table.maillist tr.bright {
+    display: block;
+    font-size: 18px;
+  }
+  table.maillist tr.light {
+    display: block;
+    font-size: 16px;
+    color: var(--normal);
+  }
+
+  /* The empty-state branch returns a single-cell table with the text
+     baked into innerHTML — render it the same way. */
+  .mail.empty .maillist {
+    color: var(--dimmed);
+    font-size: 16px;
+  }
+
+  /* ---- New-mail SHOW_ALERT notification (top-center toast) --------- */
+  .alert {
+    position: absolute;
+    top: 24px;
+    left: 50%;
+    transform: translate(-50%, -120%);
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 14px 22px;
+    min-width: 260px;
+    color: var(--fg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    transition: transform 0.45s cubic-bezier(.2,.8,.2,1), opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .alert.visible {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  .alert .alert-title {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--dimmed);
+    margin-bottom: 4px;
+  }
+  .alert .alert-msg {
+    font-size: 16px;
+  }
+
+  /* ---- Profile gating overlay -------------------------------------- */
+  /* When `classes: 'Domes'` is set and the recognised user is not Domes,
+     MagicMirror hides the module. Simulate that by greying it out and
+     adding a label, so the visual difference is obvious. */
+  .mail.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .gate-banner {
+    position: absolute;
+    bottom: 60px;
+    left: 60px;
+    width: 360px;
+    padding: 14px;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: var(--dimmed);
+    font-size: 13px;
+    line-height: 1.4;
+    display: none;
+  }
+  .gate-banner.visible { display: block; }
+
+  /* ---- Control panel (right) --------------------------------------- */
+  .panel {
+    background: #0d0d0d;
+    border-left: 1px solid #1f1f1f;
+    padding: 24px 22px;
+    color: #d0d0d0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    overflow-y: auto;
+  }
+  .panel h1 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #888;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .panel h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #666;
+    font-weight: 600;
+    margin: 22px 0 10px;
+  }
+  .panel p {
+    color: #888;
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .panel code {
+    background: #1a1a1a;
+    color: #c9d1d9;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .panel button {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 9px 12px;
+    background: #1a1a1a;
+    color: #e6e6e6;
+    border: 1px solid #2a2a2a;
+    border-radius: 5px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .panel button:hover {
+    background: #222;
+    border-color: #3a3a3a;
+  }
+  .panel button.active {
+    background: #1f3a1f;
+    border-color: #2d5a2d;
+    color: #b8e6b8;
+  }
+</style>
+</head>
+<body>
+
+<div class="mirror" id="mirror">
+  <!-- Static modules around the mail block, just for spatial context. -->
+  <div class="module clock">
+    <div class="time">14:23</div>
+    <div class="date">pondělí, 27. dubna</div>
+  </div>
+
+  <div class="module weather">
+    <div class="temp">12°</div>
+    <div class="summary">Polojasno · Brno</div>
+  </div>
+
+  <!-- The MMM-Mail module -->
+  <div class="module mail" id="mail">
+    <div class="header">Email</div>
+    <table class="small maillist" id="maillist">
+      <!-- populated by JS -->
+    </table>
+  </div>
+
+  <!-- Shown when profile gate hides the mail block -->
+  <div class="gate-banner" id="gateBanner">
+    Modul <code>MMM-Mail</code> je skryt
+    (<code>classes: "Domes"</code>; aktuální profil: anonymous).
+  </div>
+
+  <!-- New-mail toast (SHOW_ALERT) -->
+  <div class="alert" id="alert">
+    <div class="alert-title">New Email on you@gmail.com</div>
+    <div class="alert-msg" id="alertMsg">from Česká spořitelna</div>
+  </div>
+</div>
+
+<aside class="panel">
+  <h1>MMM-Mail · náhled</h1>
+  <p>
+    Vizuální simulace toho, jak modul vykreslí seznam nepřečtených emailů
+    z IMAP složky <code>mailbox</code>. Layout, fonty a fade-out odpovídají
+    výchozímu tématu MagicMirror².
+  </p>
+
+  <h2>Stavy</h2>
+  <button id="btnFull" class="active">Naplněná složka (5 mailů)</button>
+  <button id="btnEmpty">Prázdná složka</button>
+  <button id="btnNewMail">Simulovat nový email</button>
+
+  <h2>Profile gating</h2>
+  <button id="btnDomes" class="active">Domes je vidět</button>
+  <button id="btnAnon">Anonymous (skryto)</button>
+
+  <h2>Config v config.js</h2>
+  <p style="font-family:'SF Mono',Menlo,monospace;font-size:11px;line-height:1.6;color:#9aa;background:#1a1a1a;padding:10px;border-radius:5px;white-space:pre-wrap;">{
+  module: 'MMM-Mail',
+  position: 'bottom_left',
+  header: 'Email',
+  classes: 'Domes',
+  config: {
+    user: 'me@gmail.com',
+    pass: 'app-pwd',
+    host: 'imap.gmail.com',
+    port: 993,
+    mailbox: 'Mirror',
+    numberOfEmails: 5,
+    fade: true,
+    subjectlength: 50,
+  },
+}</p>
+</aside>
+
+<script>
+  // Sample data mimics what node_helper.js sends back over the
+  // EMAIL_FETCH socket notification: each entry has { sender:[{name,address}], subject }.
+  const sampleMails = [
+    { sender: [{ name: "Česká spořitelna", address: "info@csas.cz" }],
+      subject: "Potvrzení o přijetí platby — 1 250,00 CZK" },
+    { sender: [{ name: "Alza.cz", address: "info@alza.cz" }],
+      subject: "Vaše objednávka byla odeslána (#KX-2841997)" },
+    { sender: [{ name: "GitHub", address: "noreply@github.com" }],
+      subject: "[domes711/smartmirror] PR #14 ready for review" },
+    { sender: [{ name: "MUNI Studijní oddělení", address: "studijni@muni.cz" }],
+      subject: "Připomenutí: zápis předmětů končí 30. 4." },
+    { sender: [{ name: "", address: "newsletter@kosmas.cz" }],
+      subject: "Nové knihy tohoto týdne" },
+  ];
+
+  const list = document.getElementById("maillist");
+  const mail = document.getElementById("mail");
+  const gateBanner = document.getElementById("gateBanner");
+  const alertEl = document.getElementById("alert");
+  const alertMsg = document.getElementById("alertMsg");
+
+  // Re-implements MMM-Mail.js getDom() in plain JS: same DOM shape,
+  // same fade math (last 75% of the rows fade linearly to opacity 0).
+  function render(mails) {
+    list.innerHTML = "";
+    list.classList.remove("empty");
+    mail.classList.remove("empty");
+
+    if (!mails.length) {
+      mail.classList.add("empty");
+      list.innerHTML = '<tr><td class="dimmed">No Unread mails</td></tr>';
+      return;
+    }
+
+    const startingPoint = mails.length * 0.25;
+    const steps = mails.length - startingPoint;
+
+    mails.forEach((m, i) => {
+      const row = document.createElement("tr");
+      row.className = "normal";
+
+      const nameRow = document.createElement("tr");
+      nameRow.className = "bright";
+      const senderName = m.sender[0].name && m.sender[0].name.length
+        ? m.sender[0].name : m.sender[0].address;
+      nameRow.textContent = senderName;
+      row.appendChild(nameRow);
+
+      const subjRow = document.createElement("tr");
+      subjRow.className = "light";
+      let subj = m.subject;
+      if (subj.length > 50) subj = subj.substring(0, 50);
+      subjRow.textContent = subj;
+      row.appendChild(subjRow);
+
+      if (i >= startingPoint) {
+        const currentStep = i - startingPoint;
+        row.style.opacity = 1 - (1 / steps * currentStep);
+      }
+
+      list.appendChild(row);
+    });
+  }
+
+  function showAlert(sender) {
+    alertMsg.textContent = "from " + sender;
+    alertEl.classList.add("visible");
+    setTimeout(() => alertEl.classList.remove("visible"), 3500);
+  }
+
+  // --- Wiring ---
+  const btnFull = document.getElementById("btnFull");
+  const btnEmpty = document.getElementById("btnEmpty");
+  const btnNewMail = document.getElementById("btnNewMail");
+  const btnDomes = document.getElementById("btnDomes");
+  const btnAnon = document.getElementById("btnAnon");
+
+  function setFull() {
+    btnFull.classList.add("active");
+    btnEmpty.classList.remove("active");
+    render(sampleMails);
+  }
+  function setEmpty() {
+    btnEmpty.classList.add("active");
+    btnFull.classList.remove("active");
+    render([]);
+  }
+  function setDomes() {
+    btnDomes.classList.add("active");
+    btnAnon.classList.remove("active");
+    mail.classList.remove("hidden");
+    gateBanner.classList.remove("visible");
+  }
+  function setAnon() {
+    btnAnon.classList.add("active");
+    btnDomes.classList.remove("active");
+    mail.classList.add("hidden");
+    gateBanner.classList.add("visible");
+  }
+
+  btnFull.addEventListener("click", setFull);
+  btnEmpty.addEventListener("click", setEmpty);
+  btnDomes.addEventListener("click", setDomes);
+  btnAnon.addEventListener("click", setAnon);
+
+  let alertIdx = 0;
+  const alertSenders = [
+    "Česká spořitelna",
+    "Alza.cz",
+    "GitHub",
+    "newsletter@kosmas.cz",
+  ];
+  btnNewMail.addEventListener("click", () => {
+    showAlert(alertSenders[alertIdx % alertSenders.length]);
+    alertIdx++;
+  });
+
+  // Initial state
+  render(sampleMails);
+</script>
+</body>
+</html>
