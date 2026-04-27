@@ -28,6 +28,7 @@ how to restore them.
 - `MagicMirror/modules/MMM-Profile/` — our own module (presence-driven profile + page scheduler; absorbed the former MMM-FaceRecoIndicator)
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
+- `MagicMirror/modules/MMM-Spending/` — our own module (today's spending pulled from Wallet by BudgetBakers REST API)
 - `MagicMirror/modules/MMM-GoogleCalendar/` — vendored fork of `randomBrainstormer/MMM-GoogleCalendar` v1.2.0 for visual customisation; replace upstream install on Pi
 - `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos (used by `ld2450/face_reco_once.py`)
 - `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
@@ -87,6 +88,10 @@ the radar handles *display power*.
   `superpowers:subagent-driven-development`
 - **Commits** use conventional-commit prefixes (`docs:`, `feat:`, `chore:`)
 - **Branches** for Claude-assisted work: `claude/<slug>`
+- **Visual previews:** whenever a module's `demo.html` is committed or
+  re-rendered, post the live raw.githack.com URL to the user, e.g.
+  `https://raw.githack.com/Domes711/smartMirror/<branch>/MagicMirror/modules/<MMM-Foo>/demo.html` —
+  user wants a clickable preview link by default, not just PNGs.
 
 ## Executing the plans
 
