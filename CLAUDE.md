@@ -28,6 +28,7 @@ how to restore them.
 - `MagicMirror/modules/MMM-Profile/` — our own module (presence-driven profile + page scheduler; absorbed the former MMM-FaceRecoIndicator)
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
+- `MagicMirror/modules/MMM-GoogleCalendar/` — vendored fork of `randomBrainstormer/MMM-GoogleCalendar` v1.2.0 for visual customisation; replace upstream install on Pi
 - `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos (used by `ld2450/face_reco_once.py`)
 - `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
 - `ld2450/` — mirror of `~/ld2450/` (radar daemon, single-shot face_reco_once.py, tests, `ld2450.service`)
@@ -45,7 +46,7 @@ can be rebuilt from scratch.
 |---|---|---|---|
 | MagicMirror² core | https://github.com/MagicMirrorOrg/MagicMirror | `~/MagicMirror/` | TBD |
 | MMM-Face-Reco-DNN | https://github.com/nischi/MMM-Face-Reco-DNN | `~/MagicMirror/modules/MMM-Face-Reco-DNN/` | TBD |
-| MMM-GoogleCalendar | TBD | `~/MagicMirror/modules/MMM-GoogleCalendar/` | TBD |
+| MMM-GoogleCalendar | https://github.com/randomBrainstormer/MMM-GoogleCalendar | `~/MagicMirror/modules/MMM-GoogleCalendar/` (vendored fork in this repo) | v1.2.0 |
 | IDS JMK GTFS feed | https://data.brno.cz/datasets/379d2e9a7907460c8ca7fda1f3e84328 | downloaded by `MMM-Brno-Transit/node_helper.js` into its `cache/`, refreshed weekly | n/a |
 
 **Update flow (run on Pi):**
