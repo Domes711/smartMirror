@@ -159,9 +159,18 @@
       rgba(91,141,239,0.22) 6px 7px);
   }
 
-  /* Past events stay readable but a touch dimmer than upcoming. */
+  /* Past events are stripped of their calendar colour - neutral
+     grey so the eye is drawn to what's still ahead. */
   .event.past {
-    opacity: 0.7;
+    border-left-color: rgba(255,255,255,0.30) !important;
+    background: rgba(255,255,255,0.06) !important;
+    opacity: 0.8;
+  }
+  .event.past.tentative {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255,255,255,0.04) 0 6px,
+      rgba(255,255,255,0.10) 6px 7px) !important;
   }
 
   /* Side-by-side overlap */
