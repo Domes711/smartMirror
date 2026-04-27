@@ -9,7 +9,7 @@
     column-gap: 12px;
     align-items: baseline;
     padding: 5px 0;
-    line-height: 1.15;
+    line-height: 1.2;
 }
 
 .mmpt-status {
@@ -25,12 +25,28 @@
 
 .mmpt-body {
     display: block;
+    min-width: 0;
+}
+
+.mmpt-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .mmpt-title {
     font-size: 18px;
     font-weight: 400;
     color: #fff;
+}
+
+.mmpt-badge {
+    font-size: 12px;
+    font-weight: 300;
+    color: #aaa;
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
 }
 
 .mmpt-meta {
@@ -46,3 +62,25 @@
     font-weight: 300;
     font-size: 16px;
 }
+
+.mmpt-out .mmpt-title { color: #fff; font-weight: 500; }
+.mmpt-out .mmpt-icon  { color: #cfe; }
+.mmpt-out .mmpt-badge { color: #cfe; }
+
+.mmpt-transit .mmpt-title { color: #eee; }
+.mmpt-transit .mmpt-icon  { color: #aaa; }
+
+.mmpt-pending .mmpt-title { color: #ccc; }
+.mmpt-pending .mmpt-icon  { color: #888; }
+
+.mmpt-pickup .mmpt-title { color: #fff; }
+.mmpt-pickup .mmpt-icon  { color: #fc8; }
+.mmpt-pickup .mmpt-badge { color: #fc8; }
+
+.mmpt-warn .mmpt-title { color: #fff; }
+.mmpt-warn .mmpt-icon  { color: #f96; }
+.mmpt-warn .mmpt-badge { color: #f96; }
+
+.mmpt-done .mmpt-title { color: #777; text-decoration: line-through; }
+.mmpt-done .mmpt-icon  { color: #666; }
+.mmpt-done .mmpt-badge { color: #666; }
