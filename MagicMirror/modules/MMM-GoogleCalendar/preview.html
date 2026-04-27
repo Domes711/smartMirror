@@ -16,7 +16,7 @@
        timeline. value = hours since midnight (e.g. 11:49 = 11.817). */
     --now: 11.817;
     /* How much past time stays visible above the now-line. */
-    --past-buffer: 0.4;
+    --past-buffer: 2;
 
     --bg: #000;
     --fg: #fff;
@@ -160,6 +160,11 @@
       rgba(91,141,239,0.22) 6px 7px);
   }
 
+  /* Past events fade so the eye is drawn to upcoming ones. */
+  .event.past {
+    opacity: 0.55;
+  }
+
   /* Side-by-side overlap */
   .event.col-l { right: 51%; }
   .event.col-r { left: calc(var(--time-col-width) + 4px + 49% - var(--time-col-width)); }
@@ -221,7 +226,18 @@
 
       <div class="now-line"></div>
 
-      <!-- Future events only. top = start_hour * --hour-height -->
+      <!-- Past event (within the 2h past-buffer). -->
+      <div class="event cal-blue past" style="
+           top: calc(10 * var(--hour-height));
+           height: calc(0.5 * var(--hour-height));">
+        <div class="title">Daily standup</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Google Meet
+        </div>
+      </div>
+
+      <!-- Upcoming events. top = start_hour * --hour-height -->
       <div class="event cal-teal" style="
            top: calc(13 * var(--hour-height));
            height: calc(1 * var(--hour-height));">
