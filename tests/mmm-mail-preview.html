@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>MMM-Mail — vizuální náhled</title>
+<style>
+  /* MagicMirror² uses Roboto / Roboto Condensed; fall back to system stack
+     because we don't pull the webfonts here. The visual proportions match
+     the default theme: white-on-black, light weights, narrow line spacing. */
+  :root {
+    --bg: #000000;
+    --fg: #ffffff;
+    --dimmed: rgba(255, 255, 255, 0.5);
+    --normal: rgba(255, 255, 255, 0.9);
+    --header-color: rgba(255, 255, 255, 0.7);
+    --divider: rgba(255, 255, 255, 0.25);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Roboto Condensed", "HelveticaNeue-CondensedBold", -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* ---- MMM-Mail block at the top ---------------------------------- */
+  .mail {
+    width: 100%;
+    max-width: 360px;
+    padding: 24px 24px 0;
+    transition: opacity 0.3s ease;
+  }
+  .mail.hidden { opacity: 0; pointer-events: none; }
+
+  .mail .header {
+    font-size: 15px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--header-color);
+    border-bottom: 1px solid var(--divider);
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+  }
+
+  /* --- styles that match MMM-Mail.js getDom() output ----------------- */
+  .small { font-size: 18px; line-height: 1.25; }
+  .bright { color: var(--fg); font-weight: 400; }
+  .light { color: var(--normal); font-weight: 300; }
+  .dimmed { color: var(--dimmed); }
+
+  table.maillist { border-collapse: collapse; width: 100%; }
+  table.maillist tr.normal {
+    display: block;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    transition: opacity 0.3s ease, background 0.2s ease;
+  }
+  table.maillist tr.normal:hover { background: rgba(255, 255, 255, 0.07); }
+  table.maillist tr.bright {
+    display: block;
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
+  table.maillist tr.light {
+    display: block;
+    font-size: 14px;
+    color: var(--normal);
+    line-height: 1.35;
+  }
+  .mail.empty .maillist { color: var(--dimmed); font-size: 16px; }
+
+  /* SLA countdown badge */
+  table.maillist tr.sla {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    border: 1px solid currentColor;
+    line-height: 1.4;
+  }
+  table.maillist tr.sla-ok   { color: #6fcf97; }
+  table.maillist tr.sla-warn { color: #f2c94c; }
+  table.maillist tr.sla-crit { color: #f2994a; }
+  table.maillist tr.sla-over {
+    color: #eb5757;
+    background: rgba(235, 87, 87, 0.12);
+    animation: sla-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes sla-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+  }
+
+  .gate-banner {
+    width: 100%;
+    max-width: 360px;
+    margin: 12px 24px 0;
+    padding: 14px;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: var(--dimmed);
+    font-size: 13px;
+    line-height: 1.4;
+    display: none;
+  }
+  .gate-banner.visible { display: block; }
+
+  /* ---- New-mail SHOW_ALERT toast --------------------------------- */
+  .alert {
+    position: fixed;
+    top: 24px; left: 50%;
+    transform: translate(-50%, -120%);
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 14px 22px;
+    min-width: 260px;
+    color: var(--fg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    transition: transform 0.45s cubic-bezier(.2,.8,.2,1), opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .alert.visible { transform: translate(-50%, 0); opacity: 1; }
+  .alert .alert-title {
+    font-size: 14px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--dimmed); margin-bottom: 4px;
+  }
+  .alert .alert-msg { font-size: 16px; }
+
+  /* ---- Control panel under the module ---------------------------- */
+  .panel {
+    width: 100%;
+    max-width: 400px;
+    margin: 32px 24px 24px;
+    padding: 18px 22px 22px;
+    background: #0d0d0d;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    color: #d0d0d0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+  }
+  .panel h1 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #ccc;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .panel h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #666;
+    font-weight: 600;
+    margin: 18px 0 10px;
+  }
+  .panel p {
+    color: #888;
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .panel code {
+    background: #1a1a1a;
+    color: #c9d1d9;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .panel button {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    background: #1a1a1a;
+    color: #e6e6e6;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .panel button:hover { background: #222; border-color: #3a3a3a; }
+  .panel button.active {
+    background: #1f3a1f; border-color: #2d5a2d; color: #b8e6b8;
+  }
+  .panel pre.config {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #9aa;
+    background: #1a1a1a;
+    padding: 10px;
+    border-radius: 5px;
+    white-space: pre-wrap;
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mail" id="mail">
+  <div class="header">Email</div>
+  <table class="small maillist" id="maillist"></table>
+</div>
+
+<div class="gate-banner" id="gateBanner">
+  Modul <code>MMM-Mail</code> je skryt
+  (<code>classes: "Domes"</code>; aktuální profil: anonymous).
+</div>
+
+<div class="alert" id="alert">
+  <div class="alert-title">New Email on you@gmail.com</div>
+  <div class="alert-msg" id="alertMsg">from Česká spořitelna</div>
+</div>
+
+<div class="panel">
+  <h1>MMM-Mail · náhled</h1>
+  <p>
+    Vizuální simulace toho, jak modul vykreslí seznam nepřečtených emailů
+    z IMAP složky <code>mailbox</code>.
+  </p>
+
+  <h2>Stavy</h2>
+  <button id="btnFull" class="active">Naplněná schránka (mix)</button>
+  <button id="btnEmpty">Prázdná schránka</button>
+  <button id="btnNewMail">Simulovat nový email</button>
+
+  <h2>Profile gating</h2>
+  <button id="btnDomes" class="active">Domes je vidět</button>
+  <button id="btnAnon">Anonymous (skryto)</button>
+
+  <h2>Config v config.js</h2>
+  <pre class="config">{
+  module: 'MMM-Mail',
+  position: 'top_left',
+  header: 'Email',
+  classes: 'Domes',
+  config: {
+    user: 'me@gmail.com',
+    pass: 'app-pwd',
+    host: 'imap.gmail.com',
+    port: 993,
+    mailboxes: [
+      { name: 'Urgent2h', slaHours: 2 },
+      { name: 'Mirror' },
+    ],
+    numberOfEmails: 8,
+  },
+}</pre>
+</div>
+
+<script>
+  // Timestamps anchored relative to "now" so the demo always shows
+  // a healthy spread of SLA states (fresh, halfway, near deadline, overdue).
+  const now = Date.now();
+  const minsAgo = (m) => new Date(now - m * 60000).toISOString();
+
+  // Simulates two mailboxes returned by node_helper.js. Each message carries
+  // the slaHours from its own mailbox config; the merge/sort happens below.
+  const sampleByBox = {
+    Urgent2h: [
+      { id: 1042, sender: [{ name: "Klient — Šárka N.", address: "novak@klient.cz" }],
+        subject: "URGENT: změna v dnešní zakázce, čekám na potvrzení",
+        date: minsAgo(143), mailbox: "Urgent2h", slaHours: 2 },
+      { id: 1041, sender: [{ name: "Faktury", address: "faktury@dodavatel.cz" }],
+        subject: "Připomenutí splatnosti — FA 2026/0411",
+        date: minsAgo(115), mailbox: "Urgent2h", slaHours: 2 },
+      { id: 1040, sender: [{ name: "Klient — David K.", address: "k@firma.cz" }],
+        subject: "Potřebuju potvrdit termín dnes",
+        date: minsAgo(48), mailbox: "Urgent2h", slaHours: 2 },
+    ],
+    Mirror: [
+      { id: 938, sender: [{ name: "Česká spořitelna", address: "info@csas.cz" }],
+        subject: "Potvrzení o přijetí platby — 1 250,00 CZK",
+        date: minsAgo(20), mailbox: "Mirror", slaHours: null },
+      { id: 937, sender: [{ name: "Alza.cz", address: "info@alza.cz" }],
+        subject: "Vaše objednávka byla odeslána (#KX-2841997)",
+        date: minsAgo(95), mailbox: "Mirror", slaHours: null },
+      { id: 936, sender: [{ name: "GitHub", address: "noreply@github.com" }],
+        subject: "[domes711/smartmirror] PR #14 ready for review",
+        date: minsAgo(180), mailbox: "Mirror", slaHours: null },
+    ],
+  };
+  let messagesByBox = sampleByBox;
+
+  const list = document.getElementById("maillist");
+  const mail = document.getElementById("mail");
+  const gateBanner = document.getElementById("gateBanner");
+  const alertEl = document.getElementById("alert");
+  const alertMsg = document.getElementById("alertMsg");
+
+  // Mirrors the MMM-Mail.js formatSla helper exactly.
+  function formatSla(receivedISO, hours) {
+    const deadline = new Date(receivedISO).getTime() + hours * 3600 * 1000;
+    const diff = deadline - Date.now();
+    const over = diff < 0;
+    const mins = Math.floor(Math.abs(diff) / 60000);
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    const label = over
+      ? "OVERDUE " + (h ? h + "h " : "") + m + "min"
+      : (h ? h + "h " + m + "m left" : m + " min left");
+    let level;
+    if (over) level = "over";
+    else if (mins < 15) level = "crit";
+    else if (mins < 60) level = "warn";
+    else level = "ok";
+    return { label, level };
+  }
+
+  // Same merge+sort logic as MMM-Mail.js collectMessages():
+  // urgent first (by deadline asc), then regular (by id desc).
+  function collectMessages(byBox) {
+    const all = [];
+    Object.keys(byBox).forEach(b => byBox[b].forEach(m => all.push(m)));
+    const urgent = all.filter(m => m.slaHours);
+    const regular = all.filter(m => !m.slaHours);
+    urgent.sort((a, b) => {
+      const aDl = new Date(a.date).getTime() + a.slaHours * 3600 * 1000;
+      const bDl = new Date(b.date).getTime() + b.slaHours * 3600 * 1000;
+      return aDl - bDl;
+    });
+    regular.sort((a, b) => b.id - a.id);
+    return urgent.concat(regular);
+  }
+
+  function render() {
+    const mails = collectMessages(messagesByBox);
+    list.innerHTML = "";
+    mail.classList.remove("empty");
+
+    if (!mails.length) {
+      mail.classList.add("empty");
+      list.innerHTML = '<tr><td class="dimmed">No Unread mails</td></tr>';
+      return;
+    }
+
+    const startingPoint = mails.length * 0.25;
+    const steps = mails.length - startingPoint;
+
+    mails.forEach((m, i) => {
+      const row = document.createElement("tr");
+      row.className = "normal";
+
+      const nameRow = document.createElement("tr");
+      nameRow.className = "bright";
+      const senderName = m.sender[0].name && m.sender[0].name.length
+        ? m.sender[0].name : m.sender[0].address;
+      nameRow.textContent = senderName;
+      row.appendChild(nameRow);
+
+      const subjRow = document.createElement("tr");
+      subjRow.className = "light";
+      let subj = m.subject;
+      if (subj.length > 50) subj = subj.substring(0, 50);
+      subjRow.textContent = subj;
+      row.appendChild(subjRow);
+
+      if (m.slaHours && m.date) {
+        const sla = formatSla(m.date, m.slaHours);
+        const slaRow = document.createElement("tr");
+        slaRow.className = "sla sla-" + sla.level;
+        slaRow.textContent = sla.label;
+        row.appendChild(slaRow);
+      }
+
+      if (i >= startingPoint) {
+        const currentStep = i - startingPoint;
+        row.style.opacity = 1 - (1 / steps * currentStep);
+      }
+
+      list.appendChild(row);
+    });
+  }
+
+  // Tick the countdown labels every 30s without re-creating the cards.
+  setInterval(render, 30000);
+
+  function showAlert(sender) {
+    alertMsg.textContent = "from " + sender;
+    alertEl.classList.add("visible");
+    setTimeout(() => alertEl.classList.remove("visible"), 3500);
+  }
+
+  const btnFull = document.getElementById("btnFull");
+  const btnEmpty = document.getElementById("btnEmpty");
+  const btnNewMail = document.getElementById("btnNewMail");
+  const btnDomes = document.getElementById("btnDomes");
+  const btnAnon = document.getElementById("btnAnon");
+
+  btnFull.addEventListener("click", () => {
+    btnFull.classList.add("active");
+    btnEmpty.classList.remove("active");
+    messagesByBox = sampleByBox;
+    render();
+  });
+  btnEmpty.addEventListener("click", () => {
+    btnEmpty.classList.add("active");
+    btnFull.classList.remove("active");
+    messagesByBox = { Urgent2h: [], Mirror: [] };
+    render();
+  });
+  btnDomes.addEventListener("click", () => {
+    btnDomes.classList.add("active");
+    btnAnon.classList.remove("active");
+    mail.classList.remove("hidden");
+    gateBanner.classList.remove("visible");
+  });
+  btnAnon.addEventListener("click", () => {
+    btnAnon.classList.add("active");
+    btnDomes.classList.remove("active");
+    mail.classList.add("hidden");
+    gateBanner.classList.add("visible");
+  });
+
+  let alertIdx = 0;
+  const alertSenders = [
+    "Česká spořitelna",
+    "Alza.cz",
+    "GitHub",
+    "newsletter@kosmas.cz",
+  ];
+  btnNewMail.addEventListener("click", () => {
+    showAlert(alertSenders[alertIdx % alertSenders.length]);
+    alertIdx++;
+  });
+
+  render();
+</script>
+</body>
+</html>

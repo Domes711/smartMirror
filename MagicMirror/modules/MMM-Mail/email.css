@@ -1,0 +1,54 @@
+.address {
+    padding-left: 10px;
+    text-align: right;
+}
+
+/* Card layout for the mail list. Scoped under .mmm-mail so the global
+   .normal/.bright/.light table classes used by other modules aren't
+   affected. */
+table.mmm-mail tr.normal {
+    display: block;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+table.mmm-mail tr.bright {
+    display: block;
+    font-size: 17px;
+    margin-bottom: 4px;
+}
+
+table.mmm-mail tr.light {
+    display: block;
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+/* SLA countdown badge — only present when config.slaHours is set. */
+table.mmm-mail tr.sla {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    border: 1px solid currentColor;
+    line-height: 1.4;
+}
+table.mmm-mail tr.sla-ok   { color: #6fcf97; }
+table.mmm-mail tr.sla-warn { color: #f2c94c; }
+table.mmm-mail tr.sla-crit { color: #f2994a; }
+table.mmm-mail tr.sla-over {
+    color: #eb5757;
+    background: rgba(235, 87, 87, 0.12);
+    animation: mmm-mail-sla-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes mmm-mail-sla-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+}
