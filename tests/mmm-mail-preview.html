@@ -28,22 +28,17 @@
     font-family: "Roboto Condensed", "HelveticaNeue-CondensedBold", -apple-system, "Segoe UI", Roboto, sans-serif;
     font-weight: 400;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 
-  body {
-    display: grid;
-    grid-template-columns: 1fr 320px;
-    min-height: 100vh;
-  }
-
-  /* ---- Mirror canvas (left) ---------------------------------------- */
+  /* ---- Mirror canvas (full viewport) ------------------------------- */
   .mirror {
     position: relative;
+    min-height: 100vh;
     padding: 60px;
     overflow: hidden;
   }
 
-  /* Simulated other modules so the mail block has visual context. */
   .module {
     position: absolute;
   }
@@ -60,88 +55,41 @@
   }
 
   /* top_left: clock-ish placeholder */
-  .clock {
-    top: 60px;
-    left: 60px;
-  }
-  .clock .time {
-    font-size: 64px;
-    font-weight: 200;
-    line-height: 1;
-  }
+  .clock { top: 60px; left: 60px; }
+  .clock .time { font-size: 64px; font-weight: 200; line-height: 1; }
   .clock .date {
-    font-size: 22px;
-    font-weight: 300;
-    color: var(--normal);
-    margin-top: 6px;
+    font-size: 22px; font-weight: 300; color: var(--normal); margin-top: 6px;
   }
 
   /* top_right: weather-ish placeholder */
-  .weather {
-    top: 60px;
-    right: 60px;
-    text-align: right;
-  }
-  .weather .temp {
-    font-size: 38px;
-    font-weight: 300;
-  }
-  .weather .summary {
-    font-size: 16px;
-    color: var(--dimmed);
-    margin-top: 4px;
-  }
+  .weather { top: 60px; right: 60px; text-align: right; }
+  .weather .temp { font-size: 38px; font-weight: 300; }
+  .weather .summary { font-size: 16px; color: var(--dimmed); margin-top: 4px; }
 
   /* MMM-Mail itself: bottom_left like in the example config. */
-  .mail {
-    bottom: 60px;
-    left: 60px;
-    width: 360px;
-  }
+  .mail { bottom: 60px; left: 60px; width: 360px; }
 
   /* --- styles that match MMM-Mail.js getDom() output ----------------- */
-  /* The module uses .small for the table, .bright for sender, .light
-     for subject, .dimmed for the empty-state text. These class names
-     come straight from MagicMirror's main.css. */
   .small { font-size: 18px; line-height: 1.25; }
   .bright { color: var(--fg); font-weight: 400; }
   .light { color: var(--normal); font-weight: 300; }
   .dimmed { color: var(--dimmed); }
   .normal { color: var(--fg); }
 
-  table.maillist {
-    border-collapse: collapse;
-    width: 100%;
-  }
-
+  table.maillist { border-collapse: collapse; width: 100%; }
   table.maillist tr.normal {
-    display: block;
-    margin-bottom: 10px;
-    transition: opacity 0.3s ease;
+    display: block; margin-bottom: 10px; transition: opacity 0.3s ease;
   }
-
-  table.maillist tr.bright {
-    display: block;
-    font-size: 18px;
-  }
+  table.maillist tr.bright { display: block; font-size: 18px; }
   table.maillist tr.light {
-    display: block;
-    font-size: 16px;
-    color: var(--normal);
+    display: block; font-size: 16px; color: var(--normal);
   }
+  .mail.empty .maillist { color: var(--dimmed); font-size: 16px; }
 
-  /* The empty-state branch returns a single-cell table with the text
-     baked into innerHTML — render it the same way. */
-  .mail.empty .maillist {
-    color: var(--dimmed);
-    font-size: 16px;
-  }
-
-  /* ---- New-mail SHOW_ALERT notification (top-center toast) --------- */
+  /* ---- New-mail SHOW_ALERT notification ---------------------------- */
   .alert {
-    position: absolute;
-    top: 24px;
-    left: 50%;
+    position: fixed;
+    top: 24px; left: 50%;
     transform: translate(-50%, -120%);
     background: rgba(20, 20, 20, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -153,35 +101,21 @@
     transition: transform 0.45s cubic-bezier(.2,.8,.2,1), opacity 0.3s ease;
     opacity: 0;
     pointer-events: none;
+    z-index: 50;
   }
-  .alert.visible {
-    transform: translate(-50%, 0);
-    opacity: 1;
-  }
+  .alert.visible { transform: translate(-50%, 0); opacity: 1; }
   .alert .alert-title {
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--dimmed);
-    margin-bottom: 4px;
+    font-size: 14px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--dimmed); margin-bottom: 4px;
   }
-  .alert .alert-msg {
-    font-size: 16px;
-  }
+  .alert .alert-msg { font-size: 16px; }
 
-  /* ---- Profile gating overlay -------------------------------------- */
-  /* When `classes: 'Domes'` is set and the recognised user is not Domes,
-     MagicMirror hides the module. Simulate that by greying it out and
-     adding a label, so the visual difference is obvious. */
-  .mail.hidden {
-    opacity: 0;
-    pointer-events: none;
-  }
+  /* ---- Profile gating ---------------------------------------------- */
+  .mail.hidden { opacity: 0; pointer-events: none; }
 
   .gate-banner {
     position: absolute;
-    bottom: 60px;
-    left: 60px;
+    bottom: 60px; left: 60px;
     width: 360px;
     padding: 14px;
     border: 1px dashed rgba(255, 255, 255, 0.2);
@@ -193,38 +127,104 @@
   }
   .gate-banner.visible { display: block; }
 
-  /* ---- Control panel (right) --------------------------------------- */
-  .panel {
+  /* ---- Floating "open settings" button ----------------------------- */
+  .fab {
+    position: fixed;
+    top: 16px; right: 16px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 60;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+  .fab:hover { background: rgba(255, 255, 255, 0.15); }
+  .fab:active { transform: scale(0.94); }
+
+  /* ---- Modal ------------------------------------------------------- */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+
+  .modal {
     background: #0d0d0d;
-    border-left: 1px solid #1f1f1f;
-    padding: 24px 22px;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 400px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
     color: #d0d0d0;
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
     font-size: 13px;
-    overflow-y: auto;
+    transform: translateY(12px) scale(0.98);
+    transition: transform 0.25s cubic-bezier(.2,.8,.2,1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
   }
-  .panel h1 {
+  .modal-backdrop.open .modal { transform: translateY(0) scale(1); }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid #1f1f1f;
+  }
+  .modal-header h1 {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    color: #888;
+    color: #ccc;
     font-weight: 600;
-    margin-bottom: 8px;
   }
-  .panel h2 {
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: #888;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  .modal-close:hover { color: #fff; background: #1a1a1a; }
+
+  .modal-body { padding: 18px 22px 22px; }
+
+  .modal-body h2 {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 1px;
     color: #666;
     font-weight: 600;
-    margin: 22px 0 10px;
+    margin: 18px 0 10px;
   }
-  .panel p {
+  .modal-body h2:first-child { margin-top: 0; }
+  .modal-body p {
     color: #888;
     line-height: 1.5;
     margin-bottom: 6px;
   }
-  .panel code {
+  .modal-body code {
     background: #1a1a1a;
     color: #c9d1d9;
     padding: 1px 5px;
@@ -232,35 +232,57 @@
     font-family: "SF Mono", Menlo, Consolas, monospace;
     font-size: 11px;
   }
-  .panel button {
+  .modal-body button {
     width: 100%;
     margin-bottom: 8px;
-    padding: 9px 12px;
+    padding: 10px 14px;
     background: #1a1a1a;
     color: #e6e6e6;
     border: 1px solid #2a2a2a;
-    border-radius: 5px;
+    border-radius: 6px;
     font-size: 13px;
     font-family: inherit;
     cursor: pointer;
     text-align: left;
     transition: background 0.15s ease, border-color 0.15s ease;
   }
-  .panel button:hover {
+  .modal-body button:hover {
     background: #222;
     border-color: #3a3a3a;
   }
-  .panel button.active {
+  .modal-body button.active {
     background: #1f3a1f;
     border-color: #2d5a2d;
     color: #b8e6b8;
+  }
+  .modal-body pre.config {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #9aa;
+    background: #1a1a1a;
+    padding: 10px;
+    border-radius: 5px;
+    white-space: pre-wrap;
+    margin-top: 6px;
+  }
+
+  /* ---- Small screens ----------------------------------------------- */
+  @media (max-width: 600px) {
+    .mirror { padding: 24px; }
+    .clock, .weather { top: 24px; }
+    .clock { left: 24px; }
+    .weather { right: 24px; }
+    .clock .time { font-size: 44px; }
+    .clock .date { font-size: 16px; }
+    .weather .temp { font-size: 28px; }
+    .mail, .gate-banner { left: 24px; bottom: 24px; width: calc(100vw - 48px); max-width: 360px; }
   }
 </style>
 </head>
 <body>
 
 <div class="mirror" id="mirror">
-  <!-- Static modules around the mail block, just for spatial context. -->
   <div class="module clock">
     <div class="time">14:23</div>
     <div class="date">pondělí, 27. dubna</div>
@@ -271,46 +293,47 @@
     <div class="summary">Polojasno · Brno</div>
   </div>
 
-  <!-- The MMM-Mail module -->
   <div class="module mail" id="mail">
     <div class="header">Email</div>
-    <table class="small maillist" id="maillist">
-      <!-- populated by JS -->
-    </table>
+    <table class="small maillist" id="maillist"></table>
   </div>
 
-  <!-- Shown when profile gate hides the mail block -->
   <div class="gate-banner" id="gateBanner">
     Modul <code>MMM-Mail</code> je skryt
     (<code>classes: "Domes"</code>; aktuální profil: anonymous).
   </div>
 
-  <!-- New-mail toast (SHOW_ALERT) -->
   <div class="alert" id="alert">
     <div class="alert-title">New Email on you@gmail.com</div>
     <div class="alert-msg" id="alertMsg">from Česká spořitelna</div>
   </div>
 </div>
 
-<aside class="panel">
-  <h1>MMM-Mail · náhled</h1>
-  <p>
-    Vizuální simulace toho, jak modul vykreslí seznam nepřečtených emailů
-    z IMAP složky <code>mailbox</code>. Layout, fonty a fade-out odpovídají
-    výchozímu tématu MagicMirror².
-  </p>
+<button class="fab" id="fab" title="Nastavení náhledu" aria-label="Otevřít nastavení">⚙</button>
 
-  <h2>Stavy</h2>
-  <button id="btnFull" class="active">Naplněná složka (5 mailů)</button>
-  <button id="btnEmpty">Prázdná složka</button>
-  <button id="btnNewMail">Simulovat nový email</button>
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-header">
+      <h1 id="modalTitle">MMM-Mail · náhled</h1>
+      <button class="modal-close" id="modalClose" aria-label="Zavřít">×</button>
+    </div>
+    <div class="modal-body">
+      <p>
+        Vizuální simulace toho, jak modul vykreslí seznam nepřečtených emailů
+        z IMAP složky <code>mailbox</code>.
+      </p>
 
-  <h2>Profile gating</h2>
-  <button id="btnDomes" class="active">Domes je vidět</button>
-  <button id="btnAnon">Anonymous (skryto)</button>
+      <h2>Stavy</h2>
+      <button id="btnFull" class="active">Naplněná složka (5 mailů)</button>
+      <button id="btnEmpty">Prázdná složka</button>
+      <button id="btnNewMail">Simulovat nový email</button>
 
-  <h2>Config v config.js</h2>
-  <p style="font-family:'SF Mono',Menlo,monospace;font-size:11px;line-height:1.6;color:#9aa;background:#1a1a1a;padding:10px;border-radius:5px;white-space:pre-wrap;">{
+      <h2>Profile gating</h2>
+      <button id="btnDomes" class="active">Domes je vidět</button>
+      <button id="btnAnon">Anonymous (skryto)</button>
+
+      <h2>Config v config.js</h2>
+      <pre class="config">{
   module: 'MMM-Mail',
   position: 'bottom_left',
   header: 'Email',
@@ -325,12 +348,12 @@
     fade: true,
     subjectlength: 50,
   },
-}</p>
-</aside>
+}</pre>
+    </div>
+  </div>
+</div>
 
 <script>
-  // Sample data mimics what node_helper.js sends back over the
-  // EMAIL_FETCH socket notification: each entry has { sender:[{name,address}], subject }.
   const sampleMails = [
     { sender: [{ name: "Česká spořitelna", address: "info@csas.cz" }],
       subject: "Potvrzení o přijetí platby — 1 250,00 CZK" },
@@ -350,11 +373,9 @@
   const alertEl = document.getElementById("alert");
   const alertMsg = document.getElementById("alertMsg");
 
-  // Re-implements MMM-Mail.js getDom() in plain JS: same DOM shape,
-  // same fade math (last 75% of the rows fade linearly to opacity 0).
+  // Mirrors MMM-Mail.js getDom(): same fade math, same DOM shape.
   function render(mails) {
     list.innerHTML = "";
-    list.classList.remove("empty");
     mail.classList.remove("empty");
 
     if (!mails.length) {
@@ -399,40 +420,52 @@
     setTimeout(() => alertEl.classList.remove("visible"), 3500);
   }
 
-  // --- Wiring ---
+  // --- Modal wiring ---
+  const fab = document.getElementById("fab");
+  const backdrop = document.getElementById("modalBackdrop");
+  const modalClose = document.getElementById("modalClose");
+
+  function openModal() { backdrop.classList.add("open"); }
+  function closeModal() { backdrop.classList.remove("open"); }
+
+  fab.addEventListener("click", openModal);
+  modalClose.addEventListener("click", closeModal);
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) closeModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeModal();
+  });
+
+  // --- State buttons ---
   const btnFull = document.getElementById("btnFull");
   const btnEmpty = document.getElementById("btnEmpty");
   const btnNewMail = document.getElementById("btnNewMail");
   const btnDomes = document.getElementById("btnDomes");
   const btnAnon = document.getElementById("btnAnon");
 
-  function setFull() {
+  btnFull.addEventListener("click", () => {
     btnFull.classList.add("active");
     btnEmpty.classList.remove("active");
     render(sampleMails);
-  }
-  function setEmpty() {
+  });
+  btnEmpty.addEventListener("click", () => {
     btnEmpty.classList.add("active");
     btnFull.classList.remove("active");
     render([]);
-  }
-  function setDomes() {
+  });
+  btnDomes.addEventListener("click", () => {
     btnDomes.classList.add("active");
     btnAnon.classList.remove("active");
     mail.classList.remove("hidden");
     gateBanner.classList.remove("visible");
-  }
-  function setAnon() {
+  });
+  btnAnon.addEventListener("click", () => {
     btnAnon.classList.add("active");
     btnDomes.classList.remove("active");
     mail.classList.add("hidden");
     gateBanner.classList.add("visible");
-  }
-
-  btnFull.addEventListener("click", setFull);
-  btnEmpty.addEventListener("click", setEmpty);
-  btnDomes.addEventListener("click", setDomes);
-  btnAnon.addEventListener("click", setAnon);
+  });
 
   let alertIdx = 0;
   const alertSenders = [
@@ -446,7 +479,6 @@
     alertIdx++;
   });
 
-  // Initial state
   render(sampleMails);
 </script>
 </body>
