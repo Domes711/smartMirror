@@ -28,6 +28,7 @@ how to restore them.
 - `MagicMirror/modules/MMM-Profile/` — our own module (presence-driven profile + page scheduler; absorbed the former MMM-FaceRecoIndicator)
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
+- `MagicMirror/modules/MMM-Mail/` — fork of [MMPieps/MMM-Mail](https://github.com/MMPieps/MMM-Mail) pinned at `c24f973` with an added `mailbox` option for displaying a specific IMAP folder
 - `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos (used by `ld2450/face_reco_once.py`)
 - `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
 - `ld2450/` — mirror of `~/ld2450/` (radar daemon, single-shot face_reco_once.py, tests, `ld2450.service`)
