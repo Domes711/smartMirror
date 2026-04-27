@@ -45,15 +45,59 @@ module.exports = NodeHelper.create({
             this._assertConfigured();
             const todoItems = await this._fetchTodoItems();
             const items = await this._enrich(todoItems);
+            const visibleItems = await this._completeDelivered(items);
             this._pruneCache(todoItems);
             this._saveCache();
             this.sendSocketNotification("MMPT_ITEMS", {
-                items,
+                items: visibleItems,
                 generatedAt: new Date().toISOString()
             });
         } catch (err) {
             Log.warn("[MMM-Package-Tracker] tick failed:", err.message);
             this.sendSocketNotification("MMPT_ERROR", err.userMessage || String(err.message || err));
+        }
+    },
+
+    _completeDelivered: async function (items) {
+        if (!this.config.autoCompleteOnDelivered) return items;
+        const remaining = [];
+        for (const it of items) {
+            if (it.status === "Delivered" && it.uid) {
+                try {
+                    await this._completeTodoItem(it.uid);
+                    delete this.cache[it.trackingNumber];
+                } catch (err) {
+                    Log.warn(
+                        `[MMM-Package-Tracker] auto-complete ${it.trackingNumber}:`,
+                        err.message
+                    );
+                    remaining.push(it);
+                }
+            } else {
+                remaining.push(it);
+            }
+        }
+        return remaining;
+    },
+
+    _completeTodoItem: async function (uid) {
+        const url = this.config.haUrl.replace(/\/$/, "")
+            + "/api/services/todo/update_item";
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + this.config.haToken,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                entity_id: this.config.todoEntity,
+                item: uid,
+                status: "completed"
+            })
+        });
+        if (!res.ok) {
+            const body = await res.text().catch(() => "");
+            throw new Error(`HA update_item HTTP ${res.status} ${body.slice(0, 120)}`);
         }
     },
 
