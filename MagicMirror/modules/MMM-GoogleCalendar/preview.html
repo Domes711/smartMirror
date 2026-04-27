@@ -8,14 +8,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --hour-height: 64px;       /* px per hour on the timeline */
-    --time-col-width: 56px;    /* width of the gutter with hour labels */
+    --hour-height: 56px;
+    --time-col-width: 44px;
+    --viewport-height: 460px;
+
+    /* "Now" anchor — set this from JS at runtime to scroll the
+       timeline. value = hours since midnight (e.g. 11:49 = 11.817). */
+    --now: 11.817;
+    /* How much past time stays visible above the now-line. */
+    --past-buffer: 0.4;
+
     --bg: #000;
     --fg: #fff;
     --grid: rgba(255,255,255,0.10);
     --label: rgba(255,255,255,0.45);
     --card-bg: rgba(255,255,255,0.08);
-    --card-bg-hatch: rgba(255,255,255,0.04);
     --card-fg: #fff;
     --card-meta: rgba(255,255,255,0.60);
     --accent-blue:   #5b8def;
@@ -37,65 +44,63 @@
   }
 
   .stage {
-    padding: 32px 40px 56px;
-    max-width: 520px;
+    padding: 18px 16px 24px;
+    width: 280px;
   }
 
-  .module-header {
-    font-size: 14px;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    border-bottom: 1px solid rgba(255,255,255,0.25);
-    padding-bottom: 6px;
-    margin-bottom: 14px;
-    line-height: 1;
-    color: rgba(255,255,255,0.85);
+  /* Viewport: fixed height window that clips the scrolled timeline */
+  .timeline-viewport {
+    position: relative;
+    height: var(--viewport-height);
+    overflow: hidden;
+    /* Soft fade at top + bottom so events ease in/out instead of
+       getting hard-cut by the viewport edge. */
+    -webkit-mask-image: linear-gradient(180deg,
+      transparent 0,
+      #000 18px,
+      #000 calc(100% - 24px),
+      transparent 100%);
+            mask-image: linear-gradient(180deg,
+      transparent 0,
+      #000 18px,
+      #000 calc(100% - 24px),
+      transparent 100%);
   }
 
-  .day-label {
-    font-size: 13px;
-    color: rgba(255,255,255,0.55);
-    letter-spacing: 0.5px;
-    margin: 4px 0 10px;
-    text-transform: capitalize;
-  }
-
-  /* Timeline -------------------------------------------------------- */
+  /* Inner timeline holds the full 24h. We translate it up so the
+     current time sits near the top of the viewport. */
   .timeline {
     position: relative;
     padding-left: var(--time-col-width);
+    transform: translateY(
+      calc(-1 * (var(--now) - var(--past-buffer)) * var(--hour-height))
+    );
+    transition: transform 0.6s ease;
   }
 
-  /* Hour rows: each is hour-height tall, with a top border that
-     forms the gridline. */
   .hour-row {
     position: relative;
     height: var(--hour-height);
     border-top: 1px solid var(--grid);
   }
-  .hour-row:last-child { border-bottom: 1px solid var(--grid); }
 
   .hour-row .hour-label {
     position: absolute;
     left: calc(-1 * var(--time-col-width));
     top: -7px;
-    width: calc(var(--time-col-width) - 12px);
+    width: calc(var(--time-col-width) - 8px);
     text-align: right;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--label);
     letter-spacing: 0.3px;
   }
 
-  /* Event card. Positioned absolutely against the .timeline so it
-     can span multiple hours. Use top: var(--start) and
-     height: var(--span) where 1 hour == --hour-height. */
   .event {
     position: absolute;
-    left: 6px;
-    right: 6px;
-    border-radius: 8px;
-    padding: 8px 10px 9px 12px;
+    left: 4px;
+    right: 0;
+    border-radius: 7px;
+    padding: 6px 8px 7px 10px;
     background: var(--card-bg);
     color: var(--card-fg);
     overflow: hidden;
@@ -105,28 +110,31 @@
   }
 
   .event .title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .event .meta {
-    margin-top: 3px;
-    font-size: 12px;
+    margin-top: 2px;
+    font-size: 11px;
     color: var(--card-meta);
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .event .meta svg {
-    width: 11px; height: 11px;
+    width: 10px; height: 10px;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.5;
+    stroke-width: 1.6;
+    flex-shrink: 0;
   }
 
-  /* Calendar color variants — set the left bar + a tinted bg. */
   .event.cal-blue   { border-left-color: var(--accent-blue);
                       background: rgba(91,141,239,0.18); }
   .event.cal-teal   { border-left-color: var(--accent-teal);
@@ -138,7 +146,6 @@
   .event.cal-pink   { border-left-color: var(--accent-pink);
                       background: rgba(255,91,138,0.18); }
 
-  /* Tentative / pending events use a hatched background. */
   .event.tentative {
     background: repeating-linear-gradient(
       135deg,
@@ -147,26 +154,26 @@
     );
   }
   .event.tentative.cal-blue {
-    background:
-      repeating-linear-gradient(
-        135deg,
-        rgba(91,141,239,0.12) 0 6px,
-        rgba(91,141,239,0.22) 6px 7px);
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(91,141,239,0.12) 0 6px,
+      rgba(91,141,239,0.22) 6px 7px);
   }
 
-  /* Side-by-side overlap (two events at same time). */
+  /* Side-by-side overlap */
   .event.col-l { right: 51%; }
-  .event.col-r { left: 51%; }
+  .event.col-r { left: calc(var(--time-col-width) + 4px + 49% - var(--time-col-width)); }
 
-  /* Now-line: thin red line marking current time. */
+  /* Now-line */
   .now-line {
     position: absolute;
     left: calc(-1 * var(--time-col-width));
-    right: 6px;
+    right: 0;
     height: 0;
     border-top: 1.5px solid #ff3b30;
     z-index: 5;
     pointer-events: none;
+    top: calc(var(--now) * var(--hour-height));
   }
   .now-line::before {
     content: "";
@@ -182,94 +189,106 @@
 <body>
 
 <div class="stage">
-  <header class="module-header">Moro systems</header>
-  <div class="day-label">Neděle 26. 4. 2026</div>
+  <div class="timeline-viewport">
+    <div class="timeline">
 
-  <!-- 8:00 → 21:00. Events use top: (start - 8h) * --hour-height
-       and height: duration * --hour-height -->
-  <div class="timeline">
+      <!-- Hour grid 0:00 – 23:00. The transform on .timeline scrolls
+           it so the current time appears near the top. -->
+      <div class="hour-row"><span class="hour-label">0:00</span></div>
+      <div class="hour-row"><span class="hour-label">1:00</span></div>
+      <div class="hour-row"><span class="hour-label">2:00</span></div>
+      <div class="hour-row"><span class="hour-label">3:00</span></div>
+      <div class="hour-row"><span class="hour-label">4:00</span></div>
+      <div class="hour-row"><span class="hour-label">5:00</span></div>
+      <div class="hour-row"><span class="hour-label">6:00</span></div>
+      <div class="hour-row"><span class="hour-label">7:00</span></div>
+      <div class="hour-row"><span class="hour-label">8:00</span></div>
+      <div class="hour-row"><span class="hour-label">9:00</span></div>
+      <div class="hour-row"><span class="hour-label">10:00</span></div>
+      <div class="hour-row"><span class="hour-label">11:00</span></div>
+      <div class="hour-row"><span class="hour-label">12:00</span></div>
+      <div class="hour-row"><span class="hour-label">13:00</span></div>
+      <div class="hour-row"><span class="hour-label">14:00</span></div>
+      <div class="hour-row"><span class="hour-label">15:00</span></div>
+      <div class="hour-row"><span class="hour-label">16:00</span></div>
+      <div class="hour-row"><span class="hour-label">17:00</span></div>
+      <div class="hour-row"><span class="hour-label">18:00</span></div>
+      <div class="hour-row"><span class="hour-label">19:00</span></div>
+      <div class="hour-row"><span class="hour-label">20:00</span></div>
+      <div class="hour-row"><span class="hour-label">21:00</span></div>
+      <div class="hour-row"><span class="hour-label">22:00</span></div>
+      <div class="hour-row"><span class="hour-label">23:00</span></div>
 
-    <!-- Now-line at 11:49 -->
-    <div class="now-line" style="top: calc((3 + 49/60) * var(--hour-height));"></div>
+      <div class="now-line"></div>
 
-    <!-- Events -->
-    <div class="event cal-orange" style="
-         top: calc(0.5 * var(--hour-height));
-         height: calc(0.75 * var(--hour-height));">
-      <div class="title">Snídaně doma</div>
-      <div class="meta">
-        <svg viewBox="0 0 24 24"><path d="M12 21s-7-5.5-7-11a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 11-7 11z"/></svg>
-        Kuchyně
+      <!-- Future events only. top = start_hour * --hour-height -->
+      <div class="event cal-teal" style="
+           top: calc(13 * var(--hour-height));
+           height: calc(1 * var(--hour-height));">
+        <div class="title">Lunch · Veverka</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Veverka, Brno
+        </div>
       </div>
-    </div>
 
-    <div class="event cal-blue" style="
-         top: calc(2 * var(--hour-height));
-         height: calc(0.5 * var(--hour-height));">
-      <div class="title">Daily standup</div>
-      <div class="meta">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
-        Google Meet
+      <div class="event cal-purple" style="
+           top: calc(15.5 * var(--hour-height));
+           height: calc(0.5 * var(--hour-height));">
+        <div class="title">1:1 s Honzou</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Kancelář
+        </div>
       </div>
-    </div>
 
-    <div class="event cal-teal" style="
-         top: calc(5 * var(--hour-height));
-         height: calc(1 * var(--hour-height));">
-      <div class="title">Lunch · Veverka</div>
-      <div class="meta">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
-        Veverka, Brno
+      <div class="event cal-blue tentative col-l" style="
+           top: calc(17 * var(--hour-height));
+           height: calc(1.5 * var(--hour-height));">
+        <div class="title">#8524 Přerov</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Sta., Přerov
+        </div>
       </div>
-    </div>
+      <div class="event cal-teal col-r" style="
+           top: calc(17 * var(--hour-height));
+           height: calc(1 * var(--hour-height));">
+        <div class="title">Train to MS</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Sta., Přerov
+        </div>
+      </div>
 
-    <div class="event cal-purple" style="
-         top: calc(7.5 * var(--hour-height));
-         height: calc(0.5 * var(--hour-height));">
-      <div class="title">1:1 s Honzou</div>
-      <div class="meta">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
-        Kancelář
+      <div class="event cal-orange" style="
+           top: calc(20 * var(--hour-height));
+           height: calc(1 * var(--hour-height));">
+        <div class="title">Večeře · Padowetz</div>
+        <div class="meta">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
+          Bratislavská 14
+        </div>
       </div>
-    </div>
 
-    <!-- Two parallel events 17:00 – 18:30 / 17:00 – 18:00 -->
-    <div class="event cal-blue tentative col-l" style="
-         top: calc(9 * var(--hour-height));
-         height: calc(1.5 * var(--hour-height));">
-      <div class="title">#8524932112: From Přerov</div>
-      <div class="meta">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
-        Sta., Přerov
-      </div>
     </div>
-    <div class="event cal-teal col-r" style="
-         top: calc(9 * var(--hour-height));
-         height: calc(1 * var(--hour-height));">
-      <div class="title">Train to MS</div>
-      <div class="meta">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/></svg>
-        Sta., Přerov
-      </div>
-    </div>
-
-    <!-- Hour grid -->
-    <div class="hour-row"><span class="hour-label">8:00</span></div>
-    <div class="hour-row"><span class="hour-label">9:00</span></div>
-    <div class="hour-row"><span class="hour-label">10:00</span></div>
-    <div class="hour-row"><span class="hour-label">11:00</span></div>
-    <div class="hour-row"><span class="hour-label">12:00</span></div>
-    <div class="hour-row"><span class="hour-label">13:00</span></div>
-    <div class="hour-row"><span class="hour-label">14:00</span></div>
-    <div class="hour-row"><span class="hour-label">15:00</span></div>
-    <div class="hour-row"><span class="hour-label">16:00</span></div>
-    <div class="hour-row"><span class="hour-label">17:00</span></div>
-    <div class="hour-row"><span class="hour-label">18:00</span></div>
-    <div class="hour-row"><span class="hour-label">19:00</span></div>
-    <div class="hour-row"><span class="hour-label">20:00</span></div>
-    <div class="hour-row"><span class="hour-label">21:00</span></div>
   </div>
 </div>
+
+<script>
+  // Live preview: update --now every minute so the timeline visibly
+  // slides as time progresses. Replace with the real current time
+  // at runtime; the magic mirror version just calls this on a
+  // moment.now() every minute.
+  function syncNow() {
+    const d = new Date();
+    const now = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+    document.documentElement.style.setProperty('--now', now.toFixed(4));
+  }
+  // Comment the line below if you want the static preview at 11:49.
+  // syncNow();
+  // setInterval(syncNow, 30 * 1000);
+</script>
 
 </body>
 </html>
