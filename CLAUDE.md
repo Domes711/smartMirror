@@ -28,6 +28,7 @@ how to restore them.
 - `MagicMirror/modules/MMM-Profile/` — our own module (presence-driven profile + page scheduler; absorbed the former MMM-FaceRecoIndicator)
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
+- `MagicMirror/modules/MMM-Package-Tracker/` — our own module (universal package tracking via AfterShip, sourced from a dedicated HA todo list)
 - `MagicMirror/modules/MMM-GoogleCalendar/` — vendored fork of `randomBrainstormer/MMM-GoogleCalendar` v1.2.0 for visual customisation; replace upstream install on Pi
 - `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos (used by `ld2450/face_reco_once.py`)
 - `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
@@ -78,6 +79,15 @@ implementation plan. Both plans are currently **unstarted**.
 
 The two features are independent — face recognition handles *profile content*,
 the radar handles *display power*.
+
+### 3. Package tracking
+- Spec: `docs/superpowers/specs/2026-04-27-mmm-package-tracker-design.md`
+- Plan: `docs/superpowers/plans/2026-04-27-mmm-package-tracker.md`
+- **What:** New `MMM-Package-Tracker` reads tracking numbers from a dedicated
+  HA todo list (`todo.balicky`, populated from the iPhone HA app), enriches
+  them with courier + status from AfterShip's universal API, and renders them
+  on the mirror. `Delivered` items are auto-completed in HA so they vanish
+  from the iPhone list and the mirror together.
 
 ## Conventions
 
