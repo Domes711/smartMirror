@@ -87,10 +87,9 @@ the radar handles *display power*.
   `superpowers:subagent-driven-development`
 - **Commits** use conventional-commit prefixes (`docs:`, `feat:`, `chore:`)
 - **Branches** for Claude-assisted work: `claude/<slug>`
-- **HTML previews under `tests/`**: after pushing, always paste the
-  `https://raw.githack.com/domes711/smartmirror/<branch>/tests/<file>.html`
-  link so the user can open it on mobile. Include the
-  `htmlpreview.github.io` fallback when the primary link is given.
+- **HTML previews under `tests/`**: after pushing, paste only the
+  `https://htmlpreview.github.io/?https://github.com/domes711/smartmirror/blob/<branch>/tests/<file>.html`
+  link so the user can open it on mobile.
 
 ## Executing the plans
 
