@@ -61,9 +61,11 @@ the two wires. One reads `~3.3 V` or `~5 V` (`SIG`), the other `~0 V`
 
 Three options to drive the button from GPIO17, in order of preference:
 
-### Option A — Direct GPIO (chosen, simplest)
+### Option A — Direct GPIO (chosen, simplest, deployed)
 
 Works **only if `SIG` ≤ 3.3 V** and Pi GND can be tied to `GNDmon`.
+**Confirmed working at a 100 ms pulse on the live monitor (2026-04-28).**
+Implemented in `ld2450/ld2450_daemon.py` (`setup_gpio` + `pulse_button`).
 
 ```
 GPIO17 ──[1 kΩ]── SIG     (drátek A)
