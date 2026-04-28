@@ -45,6 +45,58 @@ LD2450 (UART) → Python daemon → presence logic → GPIO17 pulse → relay �
 
 **Relay:** GPIO17 → relay module → in parallel with display power button
 
+## Display Button Interface
+
+The display power button on the monitor is a 4-pin SMD tactile switch
+(`S601 POWER` on the button PCB, with debounce cap `C601` and indicator LED
+`D600`). Pressing it shorts the `SIG` pin (pulled high by the monitor) to
+`GNDmon`. To "press" it electronically, two thin wires are soldered onto the
+two diagonally opposite pins of `S601` (the pair that is open in idle and
+closed when pressed — verified with multimeter continuity).
+
+**Polarity check (mandatory before wiring):** with the monitor in standby and
+its black probe on the monitor chassis ground, measure DC voltage on each of
+the two wires. One reads `~3.3 V` or `~5 V` (`SIG`), the other `~0 V`
+(`GNDmon`).
+
+Three options to drive the button from GPIO17, in order of preference:
+
+### Option A — Direct GPIO (chosen, simplest)
+
+Works **only if `SIG` ≤ 3.3 V** and Pi GND can be tied to `GNDmon`.
+
+```
+GPIO17 ──[1 kΩ]── SIG     (drátek A)
+GND Pi ─────────── GNDmon (drátek B, společná zem povinná)
+```
+
+GPIO17 idles as `INPUT` (high-Z); to "press", switch to `OUTPUT LOW` for
+100 ms, then back to `INPUT`. The 1 kΩ series resistor protects the GPIO if
+it ever ends up HIGH while `SIG` is high.
+
+**Risks:** no galvanic isolation (ground loop possible if Pi and monitor are
+on different circuits without shared PE); breaks if a future monitor uses a
+5 V pull-up.
+
+### Option B — PhotoMOS / SSR (e.g. G3VM-61A1, CPC1017N, TLP222)
+
+Bipolar, isolated, polarity-agnostic. Use this if `SIG` is 5 V or if galvanic
+isolation is desired.
+
+```
+GPIO17 ──[330 Ω]──┤▶├── LED+        LED− ── GND Pi
+                          ┊ izolace ┊
+   SSR output ─────────────────────── across S601 (SIG ↔ GNDmon)
+```
+
+Software identical to Option A in terms of pulse timing, except GPIO17 stays
+configured as `OUTPUT` and pulses HIGH for 100 ms.
+
+### Option C — Mechanical relay module
+
+The original spec wording. Works, but mechanical, audible, wears out. NO
+contact wired in parallel with the button.
+
 ## Data Flow
 
 **Presence detected:**
