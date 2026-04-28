@@ -6,8 +6,9 @@
 <meta name="theme-color" content="#000000">
 <title>MMM-Steps — vizuální náhled</title>
 <style>
-  /* MagicMirror² uses Roboto / Roboto Condensed; fall back to system stack
-     because we don't pull the webfonts here. White-on-black, light weights. */
+  /* Apple Activity-style ring tile for MagicMirror².
+     White-on-black, Roboto Condensed-ish system fallback, light weights.
+     Three concentric rings (Move / Exercise / Stand) + step count footer. */
   :root {
     --bg: #000000;
     --fg: #ffffff;
@@ -15,7 +16,14 @@
     --normal: rgba(255, 255, 255, 0.9);
     --header-color: rgba(255, 255, 255, 0.7);
     --divider: rgba(255, 255, 255, 0.25);
-    --bar-bg: rgba(255, 255, 255, 0.12);
+
+    /* Apple Activity ring colors (close-to-source). */
+    --move-a:    #fa114f;
+    --move-b:    #ff375f;
+    --exer-a:    #92e82a;
+    --exer-b:    #76ee00;
+    --stand-a:   #1fdec9;
+    --stand-b:   #00c7be;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -30,22 +38,18 @@
     overflow-x: hidden;
   }
 
-  body {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-  }
+  body { display: flex; flex-direction: column; align-items: stretch; }
 
-  /* ---- MMM-Steps tile -------------------------------------------- */
-  .steps {
+  /* ---- Tile ----------------------------------------------------- */
+  .tile {
     width: 100%;
-    max-width: 360px;
+    max-width: 380px;
     padding: 24px 24px 0;
     transition: opacity 0.3s ease;
   }
-  .steps.hidden { opacity: 0; pointer-events: none; }
+  .tile.hidden { opacity: 0; pointer-events: none; }
 
-  .steps .header {
+  .tile .header {
     font-size: 15px;
     font-weight: 400;
     text-transform: uppercase;
@@ -53,74 +57,142 @@
     color: var(--header-color);
     border-bottom: 1px solid var(--divider);
     padding-bottom: 6px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
 
-  .mmst-count {
-    font-size: 44px;
+  /* ---- Rings + labels row -------------------------------------- */
+  .rings-row {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+  }
+
+  .rings-svg {
+    flex: 0 0 auto;
+    width: 160px;
+    height: 160px;
+    transition: opacity 0.3s ease;
+  }
+  .rings-svg .track {
+    fill: none;
+    stroke-width: 18;
+  }
+  .rings-svg .ring {
+    fill: none;
+    stroke-width: 18;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s cubic-bezier(.2,.8,.2,1);
+  }
+
+  /* Label column */
+  .ring-labels {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .label-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .label-name {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .label-name.move    { color: var(--move-b); }
+  .label-name.exer    { color: var(--exer-a); }
+  .label-name.stand   { color: var(--stand-b); }
+
+  .label-val {
+    font-size: 17px;
     font-weight: 300;
-    line-height: 1.05;
     color: var(--fg);
+    line-height: 1.1;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.5px;
-    transition: color 0.3s ease;
+  }
+  .label-val .unit {
+    color: var(--dimmed);
+    font-size: 12px;
+    margin-left: 3px;
+  }
+  .label-val .pct {
+    color: var(--dimmed);
+    font-size: 11px;
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
   }
 
-  .mmst-goal {
-    margin-top: 10px;
-    font-size: 13px;
-    color: var(--dimmed);
+  /* ---- Steps footer ------------------------------------------- */
+  .steps-row {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--divider);
     display: flex;
     align-items: center;
     gap: 10px;
   }
-  .mmst-bar {
-    flex: 1;
-    height: 4px;
-    background: var(--bar-bg);
-    border-radius: 2px;
-    overflow: hidden;
+  .steps-row svg.walk {
+    width: 22px;
+    height: 22px;
+    fill: var(--normal);
+    flex-shrink: 0;
   }
-  .mmst-bar-fill {
-    height: 100%;
-    background: var(--fg);
-    width: 0%;
-    transition: width 0.6s cubic-bezier(.2,.8,.2,1);
-  }
-  .mmst-bar-fill.over { background: #6fcf97; }
-  .mmst-goal-label {
+  .steps-count {
+    font-size: 26px;
+    font-weight: 300;
+    color: var(--fg);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    line-height: 1;
   }
-
-  .mmst-time {
-    margin-top: 8px;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.35);
+  .steps-unit {
+    font-size: 13px;
+    color: var(--dimmed);
     text-transform: lowercase;
     letter-spacing: 0.3px;
   }
+  .steps-time {
+    margin-left: auto;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.32);
+    text-transform: lowercase;
+    letter-spacing: 0.3px;
+    font-variant-numeric: tabular-nums;
+  }
 
-  /* Stale data: mute the count, give the time-line a warning tint */
-  .steps.mmst-stale .mmst-count { color: rgba(255, 255, 255, 0.45); }
-  .steps.mmst-stale .mmst-time  { color: #b08a3a; }
+  /* Stale state: mute everything, give time-line a warning tint */
+  .tile.stale .rings-svg     { opacity: 0.5; }
+  .tile.stale .label-val,
+  .tile.stale .steps-count   { color: rgba(255, 255, 255, 0.45); }
+  .tile.stale .steps-time    { color: #b08a3a; }
 
-  .mmst-status {
+  /* Status / error states */
+  .status-row {
     font-size: 14px;
     color: var(--dimmed);
     padding: 6px 0;
+    min-height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
   }
-  .mmst-status.error { color: #eb5757; }
-  .mmst-status .last-good {
-    margin-top: 6px;
+  .status-row.error { color: #eb5757; }
+  .status-row .last-good {
+    display: block;
+    margin-top: 8px;
     color: rgba(255, 255, 255, 0.35);
     font-size: 12px;
   }
 
-  /* ---- Profile gate banner -------------------------------------- */
+  /* ---- Profile gate banner ------------------------------------ */
   .gate-banner {
     width: 100%;
-    max-width: 360px;
+    max-width: 380px;
     margin: 12px 24px 0;
     padding: 14px;
     border: 1px dashed rgba(255, 255, 255, 0.2);
@@ -132,10 +204,10 @@
   }
   .gate-banner.visible { display: block; }
 
-  /* ---- Control panel under the module --------------------------- */
+  /* ---- Control panel under the module ------------------------ */
   .panel {
     width: 100%;
-    max-width: 400px;
+    max-width: 420px;
     margin: 32px 24px 24px;
     padding: 18px 22px 22px;
     background: #0d0d0d;
@@ -161,16 +233,10 @@
     font-weight: 600;
     margin: 18px 0 10px;
   }
-  .panel p {
-    color: #888;
-    line-height: 1.5;
-    margin-bottom: 6px;
-  }
+  .panel p { color: #888; line-height: 1.5; margin-bottom: 6px; }
   .panel code {
-    background: #1a1a1a;
-    color: #c9d1d9;
-    padding: 1px 5px;
-    border-radius: 3px;
+    background: #1a1a1a; color: #c9d1d9;
+    padding: 1px 5px; border-radius: 3px;
     font-family: "SF Mono", Menlo, Consolas, monospace;
     font-size: 11px;
   }
@@ -192,23 +258,22 @@
   .panel button.active {
     background: #1f3a1f; border-color: #2d5a2d; color: #b8e6b8;
   }
-  .panel pre.config {
-    font-family: "SF Mono", Menlo, Consolas, monospace;
-    font-size: 11px;
-    line-height: 1.6;
-    color: #9aa;
-    background: #1a1a1a;
-    padding: 10px;
-    border-radius: 5px;
-    white-space: pre-wrap;
-    margin-top: 6px;
+  .note {
+    color: #888;
+    font-size: 12px;
+    line-height: 1.5;
+    background: #161616;
+    border-left: 3px solid #2d5a2d;
+    padding: 10px 12px;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 8px;
   }
 </style>
 </head>
 <body>
 
-<div class="steps" id="steps">
-  <div class="header">Kroky dnes</div>
+<div class="tile" id="tile">
+  <div class="header">Aktivita dnes</div>
   <div id="body"></div>
 </div>
 
@@ -220,15 +285,15 @@
 <div class="panel">
   <h1>MMM-Steps · náhled</h1>
   <p>
-    Vizuální simulace toho, jak modul vykreslí dnešní počet kroků
-    z HA senzoru <code>sensor.iphone_domes_steps</code>.
+    Apple Activity-style prstence (Pohyb / Cvičení / Stání) + krokoměr.
+    Data jsou mock, abychom mohli ladit vzhled bez čekání na Pi.
   </p>
 
   <h2>Stavy dat</h2>
-  <button id="btnFresh" class="active">Čerstvá data — 6 342 kroků</button>
-  <button id="btnAlmost">Skoro u cíle — 9 480</button>
-  <button id="btnOver">Přes cíl — 12 780</button>
-  <button id="btnZero">Začátek dne — 0</button>
+  <button id="btnTypicalDay" class="active">Typický den (dopoledne)</button>
+  <button id="btnNearGoal">Skoro u cílů</button>
+  <button id="btnOverGoal">Vše splněno + přes</button>
+  <button id="btnMorning">Brzké ráno (skoro nic)</button>
   <button id="btnStale">Stará data (45 min)</button>
   <button id="btnWaiting">Čekám na data</button>
   <button id="btnError">HA nedostupné</button>
@@ -237,138 +302,180 @@
   <button id="btnDomes" class="active">Domes je vidět</button>
   <button id="btnAnon">Anonymous (skryto)</button>
 
-  <h2>Config v config.js</h2>
-  <pre class="config">{
-  id: 'steps_domes',
-  module: 'MMM-Steps',
-  position: 'top_left',
-  header: 'Kroky dnes',
-  classes: 'Domes',
-  config: {
-    haUrl: 'http://homeassistant.local:8123',
-    haToken: 'HA_TOKEN_PLACEHOLDER',
-    stepsEntity: 'sensor.iphone_domes_steps',
-    goal: 10000,
-    staleAfterMin: 30,
-    refreshSec: 60,
-    timezone: 'Europe/Prague',
-    language: 'cs',
-  },
-}</pre>
+  <h2>Co je k dispozici</h2>
+  <div class="note">
+    <b>Zdarma</b> přes HA Companion app: <code>kroky</code>, <code>kcal</code>
+    (Move ring), <code>vzdálenost</code>, <code>patra</code>.
+    <br><br>
+    <b>Cvičení</b> a <b>Stání</b> Companion neexportuje — potřebuješ buď
+    <b>Health Auto Export</b> (~3 €, pushuje cokoli z Apple Health do HA),
+    nebo iOS Shortcut s denní automatizací.
+  </div>
 </div>
 
 <script>
   const fmt = new Intl.NumberFormat("cs-CZ");
-  const goal = 10000;
+  const goals = { move: 450, exer: 30, stand: 12, steps: 10000 };
   const staleAfterMin = 30;
 
-  const steps = document.getElementById("steps");
+  const tile = document.getElementById("tile");
   const body = document.getElementById("body");
   const gateBanner = document.getElementById("gateBanner");
 
-  function minsAgoISO(m) {
-    return new Date(Date.now() - m * 60000).toISOString();
+  function minsAgoISO(m) { return new Date(Date.now() - m * 60000).toISOString(); }
+
+  // SVG geometry. viewBox is 0..220, center 110,110.
+  // Outer ring r=95, middle r=70, inner r=45. Stroke 18, gaps ~7px.
+  const RINGS = [
+    { key: "move",  r: 95, gradId: "g-move",  trackId: "t-move"  },
+    { key: "exer",  r: 70, gradId: "g-exer",  trackId: "t-exer"  },
+    { key: "stand", r: 45, gradId: "g-stand", trackId: "t-stand" },
+  ];
+
+  function buildRingsSVG(values) {
+    const parts = [];
+    parts.push('<svg class="rings-svg" viewBox="0 0 220 220" aria-hidden="true">');
+
+    // Gradients (per ring)
+    parts.push('<defs>');
+    parts.push(`<linearGradient id="g-move"  x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="var(--move-a)"/>
+                  <stop offset="100%" stop-color="var(--move-b)"/>
+                </linearGradient>`);
+    parts.push(`<linearGradient id="g-exer"  x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="var(--exer-a)"/>
+                  <stop offset="100%" stop-color="var(--exer-b)"/>
+                </linearGradient>`);
+    parts.push(`<linearGradient id="g-stand" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="var(--stand-a)"/>
+                  <stop offset="100%" stop-color="var(--stand-b)"/>
+                </linearGradient>`);
+    parts.push('</defs>');
+
+    // Tracks (faint full circles, ring color at low opacity)
+    RINGS.forEach((r, i) => {
+      const trackColor = ["var(--move-b)", "var(--exer-a)", "var(--stand-b)"][i];
+      parts.push(`<circle class="track" cx="110" cy="110" r="${r.r}"
+                          stroke="${trackColor}" stroke-opacity="0.18"/>`);
+    });
+
+    // Foreground rings, rotated -90° to start from 12 o'clock.
+    parts.push('<g transform="rotate(-90 110 110)">');
+    RINGS.forEach((r, i) => {
+      const circ = 2 * Math.PI * r.r;
+      const ratio = Math.max(0, Math.min(1, values[r.key] / goals[r.key]));
+      const offset = circ * (1 - ratio);
+      parts.push(`<circle class="ring ring-${r.key}" cx="110" cy="110" r="${r.r}"
+                          stroke="url(#${r.gradId})"
+                          stroke-dasharray="${circ.toFixed(1)}"
+                          stroke-dashoffset="${circ.toFixed(1)}"
+                          data-target-offset="${offset.toFixed(1)}"/>`);
+    });
+    parts.push('</g>');
+    parts.push('</svg>');
+    return parts.join("");
   }
 
-  // Render the data state — mirrors what MMM-Steps.js getDom() will do.
-  function renderData({ count, lastUpdated }) {
-    steps.classList.remove("mmst-stale");
-    body.innerHTML = "";
+  function walkIcon() {
+    // Material "directions_walk" simplified path.
+    return `<svg class="walk" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M13.5 5.5a2 2 0 1 0-2-2 2 2 0 0 0 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3a7.3 7.3 0 0 0 5.5 2.5v-2a5.06 5.06 0 0 1-4.3-2.4l-1-1.6a1.94 1.94 0 0 0-1.7-1 1.86 1.86 0 0 0-.7.1L6 6.4V11h2V7.7l1.8-.8"/>
+    </svg>`;
+  }
+
+  function renderData(values, lastUpdated) {
+    tile.classList.remove("stale");
 
     const ageMin = lastUpdated
       ? (Date.now() - Date.parse(lastUpdated)) / 60000
       : null;
     const isStale = ageMin !== null && ageMin > staleAfterMin;
-    if (isStale) steps.classList.add("mmst-stale");
+    if (isStale) tile.classList.add("stale");
 
-    const countEl = document.createElement("div");
-    countEl.className = "mmst-count";
-    countEl.textContent = fmt.format(count);
-    body.appendChild(countEl);
+    const hhmm = lastUpdated
+      ? new Intl.DateTimeFormat("cs-CZ",
+          { hour: "2-digit", minute: "2-digit" }).format(new Date(lastUpdated))
+      : "";
+    const timeLabel = hhmm
+      ? (isStale ? "nečerstvé · " + hhmm : "akt. " + hhmm)
+      : "";
 
-    if (goal > 0) {
-      const goalEl = document.createElement("div");
-      goalEl.className = "mmst-goal";
+    body.innerHTML = `
+      <div class="rings-row">
+        ${buildRingsSVG(values)}
+        <div class="ring-labels">
+          <div class="label-row">
+            <div class="label-name move">Pohyb</div>
+            <div class="label-val">${fmt.format(values.move)}<span class="unit">/${fmt.format(goals.move)} kcal</span></div>
+          </div>
+          <div class="label-row">
+            <div class="label-name exer">Cvičení</div>
+            <div class="label-val">${values.exer}<span class="unit">/${goals.exer} min</span></div>
+          </div>
+          <div class="label-row">
+            <div class="label-name stand">Stání</div>
+            <div class="label-val">${values.stand}<span class="unit">/${goals.stand} h</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="steps-row">
+        ${walkIcon()}
+        <span class="steps-count">${fmt.format(values.steps)}</span>
+        <span class="steps-unit">kroků</span>
+        ${timeLabel ? `<span class="steps-time">${timeLabel}</span>` : ""}
+      </div>
+    `;
 
-      const bar = document.createElement("div");
-      bar.className = "mmst-bar";
-      const fill = document.createElement("div");
-      fill.className = "mmst-bar-fill";
-      const ratio = Math.max(0, Math.min(1, count / goal));
-      // Animate the fill in on next frame so the transition runs.
-      requestAnimationFrame(() => { fill.style.width = (ratio * 100) + "%"; });
-      if (count >= goal) fill.classList.add("over");
-      bar.appendChild(fill);
-      goalEl.appendChild(bar);
-
-      const pct = Math.round((count / goal) * 100);
-      const label = document.createElement("div");
-      label.className = "mmst-goal-label";
-      label.textContent = pct + " % z " + fmt.format(goal);
-      goalEl.appendChild(label);
-      body.appendChild(goalEl);
-    }
-
-    const timeEl = document.createElement("div");
-    timeEl.className = "mmst-time";
-    if (lastUpdated) {
-      const hhmm = new Intl.DateTimeFormat("cs-CZ",
-        { hour: "2-digit", minute: "2-digit" }).format(new Date(lastUpdated));
-      timeEl.textContent = isStale
-        ? "nečerstvé · " + hhmm
-        : "aktualizováno " + hhmm;
-    }
-    body.appendChild(timeEl);
+    // Trigger ring fill animation on next frame
+    requestAnimationFrame(() => {
+      body.querySelectorAll(".ring").forEach(el => {
+        el.style.strokeDashoffset = el.dataset.targetOffset;
+      });
+    });
   }
 
   function renderWaiting() {
-    steps.classList.remove("mmst-stale");
-    body.innerHTML = '<div class="mmst-status">— čekám na data</div>';
+    tile.classList.remove("stale");
+    body.innerHTML = '<div class="status-row">— čekám na data</div>';
   }
 
-  function renderError({ message, lastGood }) {
-    steps.classList.remove("mmst-stale");
-    body.innerHTML = "";
-    const status = document.createElement("div");
-    status.className = "mmst-status error";
-    status.textContent = message;
-    body.appendChild(status);
-    if (lastGood != null) {
-      const lg = document.createElement("div");
-      lg.className = "last-good";
-      lg.textContent = "naposledy " + fmt.format(lastGood) + " kroků";
-      status.appendChild(lg);
+  function renderError(message, lastGood) {
+    tile.classList.remove("stale");
+    let lg = "";
+    if (lastGood) {
+      lg = `<span class="last-good">naposledy ${fmt.format(lastGood.steps)} kroků · ${fmt.format(lastGood.move)} kcal</span>`;
     }
+    body.innerHTML = `<div class="status-row error">${message}${lg}</div>`;
   }
 
-  // ---- State buttons ------------------------------------------------
-  const stateButtons = ["btnFresh", "btnAlmost", "btnOver", "btnZero",
-                        "btnStale", "btnWaiting", "btnError"];
+  // ---- State buttons -----------------------------------------------
+  const stateButtons = ["btnTypicalDay", "btnNearGoal", "btnOverGoal",
+                        "btnMorning", "btnStale", "btnWaiting", "btnError"];
   function setActive(id) {
     stateButtons.forEach(b => {
       document.getElementById(b).classList.toggle("active", b === id);
     });
   }
 
-  document.getElementById("btnFresh").addEventListener("click", () => {
-    setActive("btnFresh");
-    renderData({ count: 6342, lastUpdated: minsAgoISO(4) });
+  document.getElementById("btnTypicalDay").addEventListener("click", () => {
+    setActive("btnTypicalDay");
+    renderData({ move: 280, exer: 18, stand: 7, steps: 6342 }, minsAgoISO(4));
   });
-  document.getElementById("btnAlmost").addEventListener("click", () => {
-    setActive("btnAlmost");
-    renderData({ count: 9480, lastUpdated: minsAgoISO(2) });
+  document.getElementById("btnNearGoal").addEventListener("click", () => {
+    setActive("btnNearGoal");
+    renderData({ move: 410, exer: 27, stand: 11, steps: 9480 }, minsAgoISO(2));
   });
-  document.getElementById("btnOver").addEventListener("click", () => {
-    setActive("btnOver");
-    renderData({ count: 12780, lastUpdated: minsAgoISO(8) });
+  document.getElementById("btnOverGoal").addEventListener("click", () => {
+    setActive("btnOverGoal");
+    renderData({ move: 612, exer: 48, stand: 14, steps: 13420 }, minsAgoISO(8));
   });
-  document.getElementById("btnZero").addEventListener("click", () => {
-    setActive("btnZero");
-    renderData({ count: 0, lastUpdated: minsAgoISO(1) });
+  document.getElementById("btnMorning").addEventListener("click", () => {
+    setActive("btnMorning");
+    renderData({ move: 35, exer: 0, stand: 1, steps: 412 }, minsAgoISO(1));
   });
   document.getElementById("btnStale").addEventListener("click", () => {
     setActive("btnStale");
-    renderData({ count: 4210, lastUpdated: minsAgoISO(45) });
+    renderData({ move: 220, exer: 14, stand: 5, steps: 4210 }, minsAgoISO(45));
   });
   document.getElementById("btnWaiting").addEventListener("click", () => {
     setActive("btnWaiting");
@@ -376,27 +483,27 @@
   });
   document.getElementById("btnError").addEventListener("click", () => {
     setActive("btnError");
-    renderError({ message: "HA nedostupné", lastGood: 6342 });
+    renderError("HA nedostupné", { steps: 6342, move: 280 });
   });
 
-  // ---- Profile gating ----------------------------------------------
+  // ---- Profile gating ---------------------------------------------
   const btnDomes = document.getElementById("btnDomes");
-  const btnAnon = document.getElementById("btnAnon");
+  const btnAnon  = document.getElementById("btnAnon");
   btnDomes.addEventListener("click", () => {
     btnDomes.classList.add("active");
     btnAnon.classList.remove("active");
-    steps.classList.remove("hidden");
+    tile.classList.remove("hidden");
     gateBanner.classList.remove("visible");
   });
   btnAnon.addEventListener("click", () => {
     btnAnon.classList.add("active");
     btnDomes.classList.remove("active");
-    steps.classList.add("hidden");
+    tile.classList.add("hidden");
     gateBanner.classList.add("visible");
   });
 
   // Default state on load
-  renderData({ count: 6342, lastUpdated: minsAgoISO(4) });
+  renderData({ move: 280, exer: 18, stand: 7, steps: 6342 }, minsAgoISO(4));
 </script>
 </body>
 </html>
