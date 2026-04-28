@@ -52,6 +52,11 @@
     text-align: left;
     display: inline-block;
     margin-right: 24px;
+    /* Lock the visual footprint so the module never shrinks between
+       scenarios (loading, error, partial all keep the 2-row size). */
+    min-width: 280px;
+    min-height: 130px;
+    box-sizing: content-box;
   }
   .mmbt-header {
     display: flex;
@@ -120,9 +125,11 @@
 
   /* ---- Control panel ---------------------------------------------- */
   .panel {
-    width: 100%;
+    /* `width: 100%` + side margins overflowed the viewport on mobile.
+       Centred with a gutter via auto margins + calc width instead. */
+    width: calc(100% - 48px);
     max-width: 420px;
-    margin: 32px 24px 24px;
+    margin: 32px auto 24px;
     padding: 18px 22px 22px;
     background: #0d0d0d;
     border: 1px solid #2a2a2a;
