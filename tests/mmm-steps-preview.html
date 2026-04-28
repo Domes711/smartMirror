@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>MMM-Steps — vizuální náhled</title>
+<style>
+  /* MagicMirror² uses Roboto / Roboto Condensed; fall back to system stack
+     because we don't pull the webfonts here. White-on-black, light weights. */
+  :root {
+    --bg: #000000;
+    --fg: #ffffff;
+    --dimmed: rgba(255, 255, 255, 0.5);
+    --normal: rgba(255, 255, 255, 0.9);
+    --header-color: rgba(255, 255, 255, 0.7);
+    --divider: rgba(255, 255, 255, 0.25);
+    --bar-bg: rgba(255, 255, 255, 0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Roboto Condensed", "HelveticaNeue-CondensedBold", -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* ---- MMM-Steps tile -------------------------------------------- */
+  .steps {
+    width: 100%;
+    max-width: 360px;
+    padding: 24px 24px 0;
+    transition: opacity 0.3s ease;
+  }
+  .steps.hidden { opacity: 0; pointer-events: none; }
+
+  .steps .header {
+    font-size: 15px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--header-color);
+    border-bottom: 1px solid var(--divider);
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+  }
+
+  .mmst-count {
+    font-size: 44px;
+    font-weight: 300;
+    line-height: 1.05;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+    transition: color 0.3s ease;
+  }
+
+  .mmst-goal {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--dimmed);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .mmst-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--bar-bg);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .mmst-bar-fill {
+    height: 100%;
+    background: var(--fg);
+    width: 0%;
+    transition: width 0.6s cubic-bezier(.2,.8,.2,1);
+  }
+  .mmst-bar-fill.over { background: #6fcf97; }
+  .mmst-goal-label {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .mmst-time {
+    margin-top: 8px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: lowercase;
+    letter-spacing: 0.3px;
+  }
+
+  /* Stale data: mute the count, give the time-line a warning tint */
+  .steps.mmst-stale .mmst-count { color: rgba(255, 255, 255, 0.45); }
+  .steps.mmst-stale .mmst-time  { color: #b08a3a; }
+
+  .mmst-status {
+    font-size: 14px;
+    color: var(--dimmed);
+    padding: 6px 0;
+  }
+  .mmst-status.error { color: #eb5757; }
+  .mmst-status .last-good {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 12px;
+  }
+
+  /* ---- Profile gate banner -------------------------------------- */
+  .gate-banner {
+    width: 100%;
+    max-width: 360px;
+    margin: 12px 24px 0;
+    padding: 14px;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: var(--dimmed);
+    font-size: 13px;
+    line-height: 1.4;
+    display: none;
+  }
+  .gate-banner.visible { display: block; }
+
+  /* ---- Control panel under the module --------------------------- */
+  .panel {
+    width: 100%;
+    max-width: 400px;
+    margin: 32px 24px 24px;
+    padding: 18px 22px 22px;
+    background: #0d0d0d;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    color: #d0d0d0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+  }
+  .panel h1 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #ccc;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .panel h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #666;
+    font-weight: 600;
+    margin: 18px 0 10px;
+  }
+  .panel p {
+    color: #888;
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .panel code {
+    background: #1a1a1a;
+    color: #c9d1d9;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .panel button {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    background: #1a1a1a;
+    color: #e6e6e6;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .panel button:hover { background: #222; border-color: #3a3a3a; }
+  .panel button.active {
+    background: #1f3a1f; border-color: #2d5a2d; color: #b8e6b8;
+  }
+  .panel pre.config {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #9aa;
+    background: #1a1a1a;
+    padding: 10px;
+    border-radius: 5px;
+    white-space: pre-wrap;
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="steps" id="steps">
+  <div class="header">Kroky dnes</div>
+  <div id="body"></div>
+</div>
+
+<div class="gate-banner" id="gateBanner">
+  Modul <code>MMM-Steps</code> je skryt
+  (<code>classes: "Domes"</code>; aktuální profil: anonymous).
+</div>
+
+<div class="panel">
+  <h1>MMM-Steps · náhled</h1>
+  <p>
+    Vizuální simulace toho, jak modul vykreslí dnešní počet kroků
+    z HA senzoru <code>sensor.iphone_domes_steps</code>.
+  </p>
+
+  <h2>Stavy dat</h2>
+  <button id="btnFresh" class="active">Čerstvá data — 6 342 kroků</button>
+  <button id="btnAlmost">Skoro u cíle — 9 480</button>
+  <button id="btnOver">Přes cíl — 12 780</button>
+  <button id="btnZero">Začátek dne — 0</button>
+  <button id="btnStale">Stará data (45 min)</button>
+  <button id="btnWaiting">Čekám na data</button>
+  <button id="btnError">HA nedostupné</button>
+
+  <h2>Profile gating</h2>
+  <button id="btnDomes" class="active">Domes je vidět</button>
+  <button id="btnAnon">Anonymous (skryto)</button>
+
+  <h2>Config v config.js</h2>
+  <pre class="config">{
+  id: 'steps_domes',
+  module: 'MMM-Steps',
+  position: 'top_left',
+  header: 'Kroky dnes',
+  classes: 'Domes',
+  config: {
+    haUrl: 'http://homeassistant.local:8123',
+    haToken: 'HA_TOKEN_PLACEHOLDER',
+    stepsEntity: 'sensor.iphone_domes_steps',
+    goal: 10000,
+    staleAfterMin: 30,
+    refreshSec: 60,
+    timezone: 'Europe/Prague',
+    language: 'cs',
+  },
+}</pre>
+</div>
+
+<script>
+  const fmt = new Intl.NumberFormat("cs-CZ");
+  const goal = 10000;
+  const staleAfterMin = 30;
+
+  const steps = document.getElementById("steps");
+  const body = document.getElementById("body");
+  const gateBanner = document.getElementById("gateBanner");
+
+  function minsAgoISO(m) {
+    return new Date(Date.now() - m * 60000).toISOString();
+  }
+
+  // Render the data state — mirrors what MMM-Steps.js getDom() will do.
+  function renderData({ count, lastUpdated }) {
+    steps.classList.remove("mmst-stale");
+    body.innerHTML = "";
+
+    const ageMin = lastUpdated
+      ? (Date.now() - Date.parse(lastUpdated)) / 60000
+      : null;
+    const isStale = ageMin !== null && ageMin > staleAfterMin;
+    if (isStale) steps.classList.add("mmst-stale");
+
+    const countEl = document.createElement("div");
+    countEl.className = "mmst-count";
+    countEl.textContent = fmt.format(count);
+    body.appendChild(countEl);
+
+    if (goal > 0) {
+      const goalEl = document.createElement("div");
+      goalEl.className = "mmst-goal";
+
+      const bar = document.createElement("div");
+      bar.className = "mmst-bar";
+      const fill = document.createElement("div");
+      fill.className = "mmst-bar-fill";
+      const ratio = Math.max(0, Math.min(1, count / goal));
+      // Animate the fill in on next frame so the transition runs.
+      requestAnimationFrame(() => { fill.style.width = (ratio * 100) + "%"; });
+      if (count >= goal) fill.classList.add("over");
+      bar.appendChild(fill);
+      goalEl.appendChild(bar);
+
+      const pct = Math.round((count / goal) * 100);
+      const label = document.createElement("div");
+      label.className = "mmst-goal-label";
+      label.textContent = pct + " % z " + fmt.format(goal);
+      goalEl.appendChild(label);
+      body.appendChild(goalEl);
+    }
+
+    const timeEl = document.createElement("div");
+    timeEl.className = "mmst-time";
+    if (lastUpdated) {
+      const hhmm = new Intl.DateTimeFormat("cs-CZ",
+        { hour: "2-digit", minute: "2-digit" }).format(new Date(lastUpdated));
+      timeEl.textContent = isStale
+        ? "nečerstvé · " + hhmm
+        : "aktualizováno " + hhmm;
+    }
+    body.appendChild(timeEl);
+  }
+
+  function renderWaiting() {
+    steps.classList.remove("mmst-stale");
+    body.innerHTML = '<div class="mmst-status">— čekám na data</div>';
+  }
+
+  function renderError({ message, lastGood }) {
+    steps.classList.remove("mmst-stale");
+    body.innerHTML = "";
+    const status = document.createElement("div");
+    status.className = "mmst-status error";
+    status.textContent = message;
+    body.appendChild(status);
+    if (lastGood != null) {
+      const lg = document.createElement("div");
+      lg.className = "last-good";
+      lg.textContent = "naposledy " + fmt.format(lastGood) + " kroků";
+      status.appendChild(lg);
+    }
+  }
+
+  // ---- State buttons ------------------------------------------------
+  const stateButtons = ["btnFresh", "btnAlmost", "btnOver", "btnZero",
+                        "btnStale", "btnWaiting", "btnError"];
+  function setActive(id) {
+    stateButtons.forEach(b => {
+      document.getElementById(b).classList.toggle("active", b === id);
+    });
+  }
+
+  document.getElementById("btnFresh").addEventListener("click", () => {
+    setActive("btnFresh");
+    renderData({ count: 6342, lastUpdated: minsAgoISO(4) });
+  });
+  document.getElementById("btnAlmost").addEventListener("click", () => {
+    setActive("btnAlmost");
+    renderData({ count: 9480, lastUpdated: minsAgoISO(2) });
+  });
+  document.getElementById("btnOver").addEventListener("click", () => {
+    setActive("btnOver");
+    renderData({ count: 12780, lastUpdated: minsAgoISO(8) });
+  });
+  document.getElementById("btnZero").addEventListener("click", () => {
+    setActive("btnZero");
+    renderData({ count: 0, lastUpdated: minsAgoISO(1) });
+  });
+  document.getElementById("btnStale").addEventListener("click", () => {
+    setActive("btnStale");
+    renderData({ count: 4210, lastUpdated: minsAgoISO(45) });
+  });
+  document.getElementById("btnWaiting").addEventListener("click", () => {
+    setActive("btnWaiting");
+    renderWaiting();
+  });
+  document.getElementById("btnError").addEventListener("click", () => {
+    setActive("btnError");
+    renderError({ message: "HA nedostupné", lastGood: 6342 });
+  });
+
+  // ---- Profile gating ----------------------------------------------
+  const btnDomes = document.getElementById("btnDomes");
+  const btnAnon = document.getElementById("btnAnon");
+  btnDomes.addEventListener("click", () => {
+    btnDomes.classList.add("active");
+    btnAnon.classList.remove("active");
+    steps.classList.remove("hidden");
+    gateBanner.classList.remove("visible");
+  });
+  btnAnon.addEventListener("click", () => {
+    btnAnon.classList.add("active");
+    btnDomes.classList.remove("active");
+    steps.classList.add("hidden");
+    gateBanner.classList.add("visible");
+  });
+
+  // Default state on load
+  renderData({ count: 6342, lastUpdated: minsAgoISO(4) });
+</script>
+</body>
+</html>
