@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>MMM-Brno-Transit — vizuální náhled</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+  :root {
+    --bg: #000;
+    --fg: #fff;
+    --dimmed: #999;
+    --faint: #555;
+    --divider: #666;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Roboto Condensed", "HelveticaNeue-CondensedBold", -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* ---- top_right region wrapper, mirroring MM behaviour ----------- */
+  .mm-region {
+    width: 100%;
+    padding: 28px 24px 0;
+    text-align: right;
+  }
+  .module {
+    display: inline-block;
+    text-align: left;
+  }
+
+  /* ---- copied from MMM-Brno-Transit.css --------------------------- */
+  .mmbt {
+    text-align: left;
+    display: inline-block;
+    margin-right: 24px;
+  }
+  .mmbt-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--divider);
+    font-size: 15px;
+    line-height: 15px;
+    font-weight: 400;
+    color: var(--dimmed);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .mmbt-header-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+    animation: mmbt-pulse 1.8s ease-in-out infinite;
+  }
+  .mmbt-row {
+    display: grid;
+    grid-template-columns: 30px 44px 1fr;
+    column-gap: 16px;
+    align-items: baseline;
+    padding: 7px 0;
+    line-height: 1;
+  }
+  .mmbt-status { grid-template-columns: 1fr; }
+  .mmbt-icon {
+    font-size: 20px;
+    color: var(--dimmed);
+    text-align: center;
+    line-height: 1;
+  }
+  .mmbt-line {
+    font-weight: 700;
+    font-size: 28px;
+    color: #fff;
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+  }
+  .mmbt-times {
+    font-size: 22px;
+    font-weight: 300;
+    white-space: nowrap;
+  }
+  .mmbt-time { color: #fff; }
+  .mmbt-time + .mmbt-time {
+    margin-left: 14px;
+    color: var(--dimmed);
+    font-size: 19px;
+  }
+  .mmbt-empty {
+    color: var(--faint);
+    font-style: italic;
+    font-weight: 300;
+  }
+  @keyframes mmbt-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+
+  /* ---- Control panel ---------------------------------------------- */
+  .panel {
+    width: 100%;
+    max-width: 420px;
+    margin: 32px 24px 24px;
+    padding: 18px 22px 22px;
+    background: #0d0d0d;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    color: #d0d0d0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+  }
+  .panel h1 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #ccc;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .panel h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #666;
+    font-weight: 600;
+    margin: 18px 0 10px;
+  }
+  .panel p {
+    color: #888;
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .panel code {
+    background: #1a1a1a;
+    color: #c9d1d9;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .panel button {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    background: #1a1a1a;
+    color: #e6e6e6;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .panel button:hover { background: #222; border-color: #3a3a3a; }
+  .panel button.active {
+    background: #1f3a1f; border-color: #2d5a2d; color: #b8e6b8;
+  }
+  .panel pre.config {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #9aa;
+    background: #1a1a1a;
+    padding: 10px;
+    border-radius: 5px;
+    white-space: pre-wrap;
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mm-region">
+  <div class="module">
+    <div class="mmbt" id="mmbt"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h1>MMM-Brno-Transit · náhled</h1>
+  <p>
+    Vizuální simulace odjezdové tabule pro zastávku
+    <code>Vlhká</code>. Časy <em>X min</em> tikají každou půlsekundu
+    podle absolutního <code>arrivalMs</code> — stejně jako v reálném
+    modulu.
+  </p>
+
+  <h2>Scénáře</h2>
+  <button data-scenario="realtime" class="active">Realtime · drobná zpoždění</button>
+  <button data-scenario="scheduled">Bez realtime · jen GTFS</button>
+  <button data-scenario="rush">Špička · velká zpoždění</button>
+  <button data-scenario="mixed">Mix · 4 linky / všechny módy</button>
+  <button data-scenario="hhmm">Daleký spoj · HH:MM</button>
+  <button data-scenario="partial">Linka mimo provoz</button>
+  <button data-scenario="empty">Vše mimo provoz</button>
+  <button data-scenario="loading">Stav: načítání…</button>
+  <button data-scenario="error">Stav: chyba</button>
+
+  <h2>Config v config.js</h2>
+  <pre class="config">{
+  module: 'MMM-Brno-Transit',
+  position: 'top_right',
+  config: {
+    stopName: 'Vlhká',
+    gtfsUrl: 'https://www.arcgis.com/.../379d2e9.../data',
+    lines: [
+      { line: '9',  directionId: 1 },
+      { line: '67', directionId: 1 },
+    ],
+  },
+}</pre>
+</div>
+
+<script>
+  // Build scenarios anchored to "now" so the live countdown ticks down
+  // and crosses the rounding boundaries on screen.
+  const NOW = () => Date.now();
+  const minMs = (m, s = 0) => m * 60 * 1000 + s * 1000;
+
+  const scenarios = {
+    realtime: () => ({
+      stopName: "Vlhká",
+      departures: [
+        { line: "9", mode: "tram", items: [
+          { arrivalMs: NOW() + minMs(3, 20), displayHm: "14:35", realtime: true,  delayMin: 2, scheduledHm: "14:33" },
+          { arrivalMs: NOW() + minMs(13),    displayHm: "14:45", realtime: true,  delayMin: 1, scheduledHm: "14:44" },
+        ]},
+        { line: "67", mode: "bus", items: [
+          { arrivalMs: NOW() + minMs(7, 10), displayHm: "14:39", realtime: true,  delayMin: 0, scheduledHm: null },
+          { arrivalMs: NOW() + minMs(37),    displayHm: "15:09", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+      ],
+    }),
+    scheduled: () => ({
+      stopName: "Vlhká",
+      departures: [
+        { line: "9", mode: "tram", items: [
+          { arrivalMs: NOW() + minMs(3),  displayHm: "14:33", realtime: false, delayMin: null, scheduledHm: null },
+          { arrivalMs: NOW() + minMs(13), displayHm: "14:43", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+        { line: "67", mode: "bus", items: [
+          { arrivalMs: NOW() + minMs(12), displayHm: "14:42", realtime: false, delayMin: null, scheduledHm: null },
+          { arrivalMs: NOW() + minMs(42), displayHm: "15:12", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+      ],
+    }),
+    rush: () => ({
+      stopName: "Vlhká",
+      departures: [
+        { line: "9", mode: "tram", items: [
+          { arrivalMs: NOW() + minMs(5),  displayHm: "17:35", realtime: true, delayMin: 4, scheduledHm: "17:31" },
+          { arrivalMs: NOW() + minMs(12), displayHm: "17:42", realtime: true, delayMin: 3, scheduledHm: "17:39" },
+        ]},
+        { line: "67", mode: "bus", items: [
+          { arrivalMs: NOW() + minMs(8),  displayHm: "17:38", realtime: true,  delayMin: 5, scheduledHm: "17:33" },
+          { arrivalMs: NOW() + minMs(25), displayHm: "17:55", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+      ],
+    }),
+    mixed: () => ({
+      stopName: "Vlhká",
+      departures: [
+        { line: "9", mode: "tram", items: [
+          { arrivalMs: NOW() + minMs(3),  displayHm: "14:33", realtime: true,  delayMin: 1, scheduledHm: "14:32" },
+          { arrivalMs: NOW() + minMs(13), displayHm: "14:43", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+        { line: "67", mode: "bus", items: [
+          { arrivalMs: NOW() + minMs(7),  displayHm: "14:37", realtime: true,  delayMin: 2, scheduledHm: "14:35" },
+          { arrivalMs: NOW() + minMs(22), displayHm: "14:52", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+        { line: "25", mode: "trolleybus", items: [
+          { arrivalMs: NOW() + minMs(4),  displayHm: "14:34", realtime: true, delayMin: 0, scheduledHm: null },
+          { arrivalMs: NOW() + minMs(19), displayHm: "14:49", realtime: true, delayMin: 0, scheduledHm: null },
+        ]},
+        { line: "S2", mode: "rail", items: [
+          { arrivalMs: NOW() + minMs(14), displayHm: "14:44", realtime: false, delayMin: null, scheduledHm: null },
+          { arrivalMs: NOW() + minMs(44), displayHm: "15:14", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+      ],
+    }),
+    hhmm: () => ({
+      stopName: "Vlhká",
+      departures: [
+        { line: "9", mode: "tram", items: [
+          { arrivalMs: NOW() + minMs(22), displayHm: "04:35", realtime: false, delayMin: null, scheduledHm: null },
+          { arrivalMs: NOW() + minMs(75), displayHm: "05:28", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+        { line: "67", mode: "bus", items: [
+          { arrivalMs: NOW() + minMs(70),  displayHm: "05:23", realtime: false, delayMin: null, scheduledHm: null },
+          { arrivalMs: NOW() + minMs(100), displayHm: "05:53", realtime: false, delayMin: null, scheduledHm: null },
+        ]},
+      ],
+    }),
+    partial: () => ({
+      stopName: "Vlhká",
+      departures: [
+        { line: "9", mode: "tram", items: [
+          { arrivalMs: NOW() + minMs(3),  displayHm: "02:33", realtime: true, delayMin: 1, scheduledHm: "02:32" },
+        ]},
+        { line: "67", mode: "bus", items: [] },
+      ],
+    }),
+    empty: () => ({
+      stopName: "Vlhká",
+      departures: [
+        { line: "9",  mode: "tram", items: [] },
+        { line: "67", mode: "bus",  items: [] },
+      ],
+    }),
+    loading: () => null,
+    error: () => "ERR_GTFS",
+  };
+
+  const ICONS = {
+    tram:       "fa-solid fa-train-tram",
+    bus:        "fa-solid fa-bus",
+    trolleybus: "fa-solid fa-bus-simple",
+    rail:       "fa-solid fa-train",
+    subway:     "fa-solid fa-train-subway",
+    ferry:      "fa-solid fa-ship",
+  };
+  function iconClass(mode) { return ICONS[mode] || ICONS.bus; }
+
+  // Mirrors MMM-Brno-Transit.js _formatTime: round seconds-to-arrival to
+  // nearest minute; if > 60 min (default minutesThreshold) show HH:MM.
+  function formatTime(it, minutesThreshold) {
+    const diffSec = Math.max(0, Math.round((it.arrivalMs - Date.now()) / 1000));
+    const min = Math.round(diffSec / 60);
+    if (min <= minutesThreshold) return min + " min";
+    return it.displayHm;
+  }
+
+  const STOP_HEADER = "Vlhká";
+  const PER_LINE = 2;
+  const MINUTES_THRESHOLD = 60;
+  const root = document.getElementById("mmbt");
+
+  let currentScenario = "realtime";
+
+  function render() {
+    const maker = scenarios[currentScenario] || scenarios.realtime;
+    const payload = maker();
+
+    root.innerHTML = "";
+
+    // header
+    const header = document.createElement("div");
+    header.className = "mmbt-header";
+    const title = document.createElement("span");
+    title.textContent = STOP_HEADER;
+    header.appendChild(title);
+
+    if (currentScenario === "loading") {
+      root.appendChild(header);
+      const row = document.createElement("div");
+      row.className = "mmbt-row mmbt-status";
+      const t = document.createElement("span");
+      t.className = "mmbt-empty";
+      t.textContent = "načítání…";
+      row.appendChild(t);
+      root.appendChild(row);
+      return;
+    }
+    if (currentScenario === "error") {
+      root.appendChild(header);
+      const row = document.createElement("div");
+      row.className = "mmbt-row mmbt-status";
+      const t = document.createElement("span");
+      t.className = "mmbt-empty";
+      t.textContent = "GTFS download HTTP 404";
+      row.appendChild(t);
+      root.appendChild(row);
+      return;
+    }
+
+    const isLive = payload.departures.some(d =>
+      d.items && d.items.some(it => it.realtime)
+    );
+    if (isLive) {
+      const dot = document.createElement("span");
+      dot.className = "mmbt-header-dot";
+      header.appendChild(dot);
+    }
+    root.appendChild(header);
+
+    for (const dep of payload.departures) {
+      const row = document.createElement("div");
+      row.className = "mmbt-row";
+
+      const icon = document.createElement("span");
+      icon.className = "mmbt-icon";
+      icon.innerHTML = '<i class="' + iconClass(dep.mode) + '"></i>';
+      row.appendChild(icon);
+
+      const num = document.createElement("span");
+      num.className = "mmbt-line";
+      num.textContent = dep.line;
+      row.appendChild(num);
+
+      const times = document.createElement("span");
+      times.className = "mmbt-times";
+
+      // Same logic as MMM-Brno-Transit.js: skip items that round to "0 min"
+      // and cap at perLine.
+      const visible = (dep.items || []).filter(it => {
+        const diffSec = Math.max(0, Math.round((it.arrivalMs - Date.now()) / 1000));
+        return Math.round(diffSec / 60) > 0;
+      }).slice(0, PER_LINE);
+
+      if (visible.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "mmbt-empty";
+        empty.textContent = "— mimo provoz";
+        times.appendChild(empty);
+      } else for (const it of visible) {
+        const t = document.createElement("span");
+        t.className = "mmbt-time";
+        t.textContent = formatTime(it, MINUTES_THRESHOLD);
+        if (it.realtime && typeof it.delayMin === "number" && it.delayMin !== 0) {
+          t.title = "scheduled " + (it.scheduledHm || "?")
+            + " · delay " + (it.delayMin > 0 ? "+" : "") + it.delayMin + " min";
+        }
+        times.appendChild(t);
+      }
+      row.appendChild(times);
+      root.appendChild(row);
+    }
+  }
+
+  // Re-render twice a second so "X min" countdown smoothly crosses
+  // rounding boundaries — same UX as the real module's per-second
+  // updateDom on the mirror.
+  setInterval(render, 500);
+
+  document.querySelectorAll(".panel button[data-scenario]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".panel button[data-scenario]")
+        .forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentScenario = btn.dataset.scenario;
+      render();
+    });
+  });
+
+  render();
+</script>
+
+</body>
+</html>
