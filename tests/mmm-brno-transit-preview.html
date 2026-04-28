@@ -54,13 +54,14 @@
     margin-right: 24px;
     /* Lock the visual footprint so the module never shrinks between
        scenarios (loading, error, partial all keep the 2-row size). */
-    min-width: 280px;
-    min-height: 130px;
+    min-width: 240px;
+    min-height: 110px;
     box-sizing: content-box;
   }
   .mmbt-header {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
     padding-bottom: 5px;
     margin-bottom: 10px;
@@ -82,36 +83,36 @@
   }
   .mmbt-row {
     display: grid;
-    grid-template-columns: 30px 44px 1fr;
-    column-gap: 16px;
+    grid-template-columns: 24px 38px 1fr;
+    column-gap: 12px;
     align-items: baseline;
-    padding: 7px 0;
+    padding: 6px 0;
     line-height: 1;
   }
   .mmbt-status { grid-template-columns: 1fr; }
   .mmbt-icon {
-    font-size: 20px;
+    font-size: 16px;
     color: var(--dimmed);
     text-align: center;
     line-height: 1;
   }
   .mmbt-line {
     font-weight: 700;
-    font-size: 28px;
+    font-size: 22px;
     color: #fff;
     font-feature-settings: "tnum";
     font-variant-numeric: tabular-nums;
   }
   .mmbt-times {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 300;
     white-space: nowrap;
   }
   .mmbt-time { color: #fff; }
   .mmbt-time + .mmbt-time {
-    margin-left: 14px;
+    margin-left: 12px;
     color: var(--dimmed);
-    font-size: 19px;
+    font-size: 16px;
   }
   .mmbt-empty {
     color: var(--faint);
@@ -373,14 +374,15 @@
 
     root.innerHTML = "";
 
-    // header
+    // Header — dot first (left), stop name pinned to right edge via
+    // .mmbt-header { justify-content: flex-end; }.
     const header = document.createElement("div");
     header.className = "mmbt-header";
-    const title = document.createElement("span");
-    title.textContent = STOP_HEADER;
-    header.appendChild(title);
 
     if (currentScenario === "loading") {
+      const title = document.createElement("span");
+      title.textContent = STOP_HEADER;
+      header.appendChild(title);
       root.appendChild(header);
       const row = document.createElement("div");
       row.className = "mmbt-row mmbt-status";
@@ -392,6 +394,9 @@
       return;
     }
     if (currentScenario === "error") {
+      const title = document.createElement("span");
+      title.textContent = STOP_HEADER;
+      header.appendChild(title);
       root.appendChild(header);
       const row = document.createElement("div");
       row.className = "mmbt-row mmbt-status";
@@ -411,6 +416,9 @@
       dot.className = "mmbt-header-dot";
       header.appendChild(dot);
     }
+    const title = document.createElement("span");
+    title.textContent = STOP_HEADER;
+    header.appendChild(title);
     root.appendChild(header);
 
     for (const dep of payload.departures) {

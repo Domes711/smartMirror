@@ -7,6 +7,7 @@
 .mmbt-header {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
     padding-bottom: 5px;
     margin-bottom: 10px;
@@ -30,10 +31,10 @@
 
 .mmbt-row {
     display: grid;
-    grid-template-columns: 30px 44px 1fr;
-    column-gap: 16px;
+    grid-template-columns: 24px 38px 1fr;
+    column-gap: 12px;
     align-items: baseline;
-    padding: 7px 0;
+    padding: 6px 0;
     line-height: 1;
 }
 
@@ -42,7 +43,7 @@
 }
 
 .mmbt-icon {
-    font-size: 20px;
+    font-size: 16px;
     color: #999;
     text-align: center;
     line-height: 1;
@@ -50,14 +51,14 @@
 
 .mmbt-line {
     font-weight: 700;
-    font-size: 28px;
+    font-size: 22px;
     color: #fff;
     font-feature-settings: "tnum";
     font-variant-numeric: tabular-nums;
 }
 
 .mmbt-times {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 300;
     white-space: nowrap;
 }
@@ -67,9 +68,9 @@
 }
 
 .mmbt-time + .mmbt-time {
-    margin-left: 14px;
+    margin-left: 12px;
     color: #999;
-    font-size: 19px;
+    font-size: 16px;
 }
 
 @keyframes mmbt-pulse {

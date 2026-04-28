@@ -95,11 +95,6 @@ Module.register("MMM-Brno-Transit", {
         const header = document.createElement("div");
         header.className = "mmbt-header";
 
-        const title = document.createElement("span");
-        title.className = "mmbt-title";
-        title.textContent = this.config.header || this.config.stopName;
-        header.appendChild(title);
-
         const isLive = !!(this.payload && this.payload.departures
             && this.payload.departures.some(d => d.items && d.items.some(it => it.realtime)));
         if (isLive) {
@@ -107,6 +102,12 @@ Module.register("MMM-Brno-Transit", {
             dot.className = "mmbt-header-dot";
             header.appendChild(dot);
         }
+
+        const title = document.createElement("span");
+        title.className = "mmbt-title";
+        title.textContent = this.config.header || this.config.stopName;
+        header.appendChild(title);
+
         return header;
     },
 
