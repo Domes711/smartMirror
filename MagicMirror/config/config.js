@@ -68,12 +68,13 @@ let config = {
             module: "MMM-Brno-Transit",
             config: {
                 stopName: "Vlhká",
-                // Get the current direct .zip URL from
+                // Stable ArcGIS item-data URL — auto-redirects to the
+                // current GTFS .zip from
                 // https://data.brno.cz/datasets/379d2e9a7907460c8ca7fda1f3e84328
-                gtfsUrl: "FILL_IN_FROM_DATA_BRNO_CZ",
+                gtfsUrl: "https://www.arcgis.com/sharing/rest/content/items/379d2e9a7907460c8ca7fda1f3e84328/data",
                 lines: [
-                    { line: "9",  directionId: 0 },
-                    { line: "67", directionId: 1 }
+                    { line: "9",  directionId: 1 },   // Čertova rokle / Vozovna Medlánky
+                    { line: "67", directionId: 1 }    // Hlavní nádraží / Jundrov
                 ]
             }
         },

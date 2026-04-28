@@ -2,13 +2,19 @@
  *
  * Combines two sources:
  *   1. GTFS static (data.brno.cz) — scheduled departures per line+direction
- *   2. WebSocket vehicle stream (gis.brno.cz ArcGIS StreamServer) — live
- *      delay in minutes per vehicle
+ *   2. IDSJMK live vehicles (mapa.idsjmk.cz/api/vehicles) — current vehicles
+ *      with explicit Delay per active trip; HTTP poll on a short interval.
+ *
+ * The vehicles API uses integer node IDs (e.g. 1746) while GTFS uses
+ * 'U<node>Z<platform>' strings (e.g. 'U1746Z1'). The indexer derives a
+ * finalNodeId and seqByNode for each trip so the matcher can compare
+ * integer-to-integer.
  *
  * For every scheduled departure we try to match a live vehicle running
- * that exact trip (same route, same final stop, hasn't passed our stop
- * yet). If matched, the vehicle's delay is added so "X min" reflects
- * what the bus/tram will actually do, not what the timetable claims.
+ * that exact route variant (same line, same final-stop node, hasn't
+ * passed our stop yet). If matched, the vehicle's delay is added so
+ * "X min" reflects what the bus/tram will actually do, not what the
+ * timetable claims.
  */
 
 const NodeHelper = require("node_helper");
@@ -22,7 +28,7 @@ const CACHE_DIR_NAME = "cache";
 const ZIP_NAME = "gtfs.zip";
 const COMPILED_NAME = "compiled.json";
 const META_NAME = "meta.json";
-const COMPILED_VERSION = 1;
+const COMPILED_VERSION = 3;
 const FILES = {
     stops: "stops.txt",
     routes: "routes.txt",
@@ -31,11 +37,9 @@ const FILES = {
     calendar: "calendar.txt",
     calendarDates: "calendar_dates.txt"
 };
-const DEFAULT_REALTIME_URL =
-    "wss://gis.brno.cz/ags4/rest/services/ODAE_public_transit_stream/StreamServer/subscribe";
-const DEFAULT_VEHICLE_TTL_SEC = 60;
-const WS_RECONNECT_BASE_MS = 2000;
-const WS_RECONNECT_MAX_MS = 60000;
+const DEFAULT_REALTIME_URL = "https://mapa.idsjmk.cz/api/vehicles";
+const DEFAULT_TOKEN_PAGE_URL = "https://mapa.idsjmk.cz/";
+const DEFAULT_REALTIME_REFRESH_SEC = 15;
 
 const ROUTE_TYPE = {
     0: "tram", 1: "subway", 2: "rail", 3: "bus", 4: "ferry", 11: "trolleybus"
@@ -50,12 +54,11 @@ module.exports = NodeHelper.create({
         this.refreshTimer = null;
         this.gtfsTimer = null;
 
-        // Real-time state
-        this.ws = null;
-        this.wsReconnectMs = WS_RECONNECT_BASE_MS;
-        this.wsReconnectTimer = null;
-        this.vehicleCache = new Map();      // vehicleId -> { attrs, seenAt }
-        this.vehicleCleanupTimer = null;
+        // Real-time state — polling IDSJMK /api/vehicles
+        this.accessToken = null;
+        this.realtimePollTimer = null;
+        this.vehicleCache = new Map();      // id -> { attrs }
+        this._realtimeFirstPoll = false;
     },
 
     socketNotificationReceived: function (notification, payload) {
@@ -84,8 +87,7 @@ module.exports = NodeHelper.create({
         await this._loadGtfsIndex();
         this._scheduleRefresh();
         this._scheduleGtfsRefresh();
-        this._startRealtime();
-        this._scheduleVehicleCleanup();
+        this._startRealtimePolling();
         this._tick();
     },
 
@@ -285,15 +287,18 @@ module.exports = NodeHelper.create({
                 serviceId: t.service_id,
                 directionId: Number(t.direction_id),
                 headsign: t.trip_headsign || "",
-                finalStopId: null,          // filled in below
+                finalStopId: null,          // filled in below (string, e.g. 'U1086Z2')
+                finalNodeId: null,          // numeric node form (e.g. 1086) for matcher
                 ourStopSeq: null,           // filled in below
-                seqByStop: {}               // stopId -> sequence, for matching vehicle.laststopid
+                seqByStop: {},              // tmp: stopId -> sequence (dropped after seqByNode build)
+                seqByNode: {}               // node -> max sequence (used by IDSJMK matcher)
             };
         }
 
         // 4. Stop times for those trips — keep every stop (not just ours) so
         //    we can map vehicle.laststopid back to a sequence number.
-        const stopTimesRaw = read(FILES.stopTimes);
+        let stopTimesRaw = read(FILES.stopTimes);
+        if (stopTimesRaw.charCodeAt(0) === 0xFEFF) stopTimesRaw = stopTimesRaw.slice(1);
         const lines = stopTimesRaw.split(/\r?\n/);
         const header = parseCsvLine(lines[0]);
         const idxTrip = header.indexOf("trip_id");
@@ -331,7 +336,18 @@ module.exports = NodeHelper.create({
             }
         }
         for (const tripId of Object.keys(tripsById)) {
-            tripsById[tripId].finalStopId = tripMaxSeqStop[tripId] || null;
+            const trip = tripsById[tripId];
+            trip.finalStopId = tripMaxSeqStop[tripId] || null;
+            trip.finalNodeId = nodeIdFromGtfsStopId(trip.finalStopId);
+            for (const sid of Object.keys(trip.seqByStop)) {
+                const nid = nodeIdFromGtfsStopId(sid);
+                if (nid == null) continue;
+                const seq = trip.seqByStop[sid];
+                if (trip.seqByNode[nid] === undefined || seq > trip.seqByNode[nid]) {
+                    trip.seqByNode[nid] = seq;
+                }
+            }
+            delete trip.seqByStop;          // saved cache size; matcher uses seqByNode
         }
 
         // 5. Service calendar
@@ -391,82 +407,72 @@ module.exports = NodeHelper.create({
         }
     },
 
-    // --- real-time WebSocket ------------------------------------------------
+    // --- real-time HTTP polling (IDSJMK) ------------------------------------
 
-    _startRealtime: function () {
-        const url = this.config.realtimeUrl || DEFAULT_REALTIME_URL;
-        if (!url) return;
-        // Lazy require so module also works if ws isn't installed.
-        let WebSocket;
-        try { WebSocket = require("ws"); }
-        catch (e) {
-            Log.warn("[MMM-Brno-Transit] 'ws' not installed — real-time disabled");
-            return;
-        }
-
-        try {
-            const ws = new WebSocket(url);
-            this.ws = ws;
-
-            ws.on("open", () => {
-                Log.info("[MMM-Brno-Transit] real-time stream connected");
-                this.wsReconnectMs = WS_RECONNECT_BASE_MS;
-            });
-
-            ws.on("message", (data) => this._onRealtimeMessage(data));
-
-            ws.on("close", () => {
-                Log.warn("[MMM-Brno-Transit] real-time stream closed, reconnecting in "
-                    + Math.round(this.wsReconnectMs / 1000) + " s");
-                this._scheduleReconnect();
-            });
-
-            ws.on("error", (err) => {
-                Log.warn("[MMM-Brno-Transit] real-time error:", err.message);
-                try { ws.close(); } catch (_) { /* ignore */ }
-            });
-        } catch (err) {
-            Log.error("[MMM-Brno-Transit] real-time connect failed:", err);
-            this._scheduleReconnect();
-        }
-    },
-
-    _scheduleReconnect: function () {
-        if (this.wsReconnectTimer) return;
-        this.wsReconnectTimer = setTimeout(() => {
-            this.wsReconnectTimer = null;
-            this.wsReconnectMs = Math.min(this.wsReconnectMs * 2, WS_RECONNECT_MAX_MS);
-            this._startRealtime();
-        }, this.wsReconnectMs);
-    },
-
-    _onRealtimeMessage: function (data) {
-        let obj;
-        try { obj = JSON.parse(data.toString()); }
-        catch (_) { return; }
-        // Esri StreamServer sends { attributes: {...}, geometry: {...} }
-        const a = obj.attributes || obj;
-        if (!a) return;
-        if (a.isinactive) return;
-
-        const id = a.id != null ? String(a.id) : null;
-        if (!id) return;
-
-        this.vehicleCache.set(id, {
-            attrs: a,
-            seenAt: Date.now()
+    _startRealtimePolling: function () {
+        const refreshSec = this.config.realtimeRefreshSec || DEFAULT_REALTIME_REFRESH_SEC;
+        const tick = () => this._pollRealtimeOnce().catch((err) => {
+            Log.warn("[MMM-Brno-Transit] realtime poll failed:", err.message);
         });
+        if (this.realtimePollTimer) clearInterval(this.realtimePollTimer);
+        tick();
+        this.realtimePollTimer = setInterval(tick, refreshSec * 1000);
     },
 
-    _scheduleVehicleCleanup: function () {
-        if (this.vehicleCleanupTimer) clearInterval(this.vehicleCleanupTimer);
-        const ttlMs = (this.config.vehicleTtlSec || DEFAULT_VEHICLE_TTL_SEC) * 1000;
-        this.vehicleCleanupTimer = setInterval(() => {
-            const cutoff = Date.now() - ttlMs;
-            for (const [id, v] of this.vehicleCache) {
-                if (v.seenAt < cutoff) this.vehicleCache.delete(id);
+    _pollRealtimeOnce: async function () {
+        const url = this.config.realtimeUrl || DEFAULT_REALTIME_URL;
+        if (!this.accessToken) this.accessToken = await this._fetchAccessToken();
+
+        const doFetch = () => fetch(url, {
+            headers: {
+                "X-Access-Token": this.accessToken,
+                "User-Agent": "MMM-Brno-Transit"
             }
-        }, Math.max(5000, ttlMs / 2));
+        });
+
+        let res = await doFetch();
+        if (res.status === 403) {
+            // Token may have rotated since last poll — refetch and retry once.
+            this.accessToken = await this._fetchAccessToken();
+            res = await doFetch();
+        }
+        if (!res.ok) throw new Error("HTTP " + res.status);
+
+        const obj = await res.json();
+        const arr = (obj && obj.Vehicles) || [];
+        const map = new Map();
+        for (const v of arr) {
+            if (v.IsInactive) continue;
+            const id = v.ID != null ? String(v.ID) : null;
+            if (!id) continue;
+            // PascalCase API → lowercase fields the matcher reads.
+            map.set(id, {
+                attrs: {
+                    id: v.ID,
+                    linename: v.LineName,
+                    finalstopid: v.FinalStopID,
+                    laststopid: v.LastStopID,
+                    delay: v.Delay,
+                    isinactive: v.IsInactive
+                }
+            });
+        }
+        this.vehicleCache = map;
+
+        if (!this._realtimeFirstPoll) {
+            this._realtimeFirstPoll = true;
+            Log.info(`[MMM-Brno-Transit] realtime polling active — ${map.size} vehicles`);
+        }
+    },
+
+    _fetchAccessToken: async function () {
+        const url = this.config.realtimeTokenUrl || DEFAULT_TOKEN_PAGE_URL;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("token-page HTTP " + res.status);
+        const html = await res.text();
+        const m = html.match(/initializeApplication\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+        if (!m) throw new Error("X-Access-Token not found in " + url);
+        return m[1];
     },
 
     // --- query --------------------------------------------------------------
@@ -531,7 +537,9 @@ module.exports = NodeHelper.create({
 
         matches.sort((a, b) => a.absSec - b.absSec);
         const nowMs = now.getTime();
-        return matches.slice(0, perLine).map((m) => {
+        // +2 buffer so the frontend can skip departures that have ticked down
+        // to "0 min" between helper refreshes and still show `perLine` items.
+        return matches.slice(0, perLine + 2).map((m) => {
             const vehicle = this._matchVehicle(m.tripId, line);
             const scheduledSecs = m.absSec;
             const delayMin = vehicle ? Number(vehicle.attrs.delay) || 0 : null;
@@ -552,14 +560,14 @@ module.exports = NodeHelper.create({
 
     _matchVehicle: function (tripId, line) {
         const trip = this.indexes.tripsById[tripId];
-        if (!trip || trip.finalStopId == null || trip.ourStopSeq == null) return null;
+        if (!trip || trip.finalNodeId == null || trip.ourStopSeq == null) return null;
 
         let best = null;
         for (const v of this.vehicleCache.values()) {
             const a = v.attrs;
             if (String(a.linename) !== String(line)) continue;
-            if (String(a.finalstopid) !== String(trip.finalStopId)) continue;
-            const lastSeq = trip.seqByStop[String(a.laststopid)];
+            if (Number(a.finalstopid) !== trip.finalNodeId) continue;
+            const lastSeq = trip.seqByNode[String(a.laststopid)];
             if (lastSeq == null) continue;              // vehicle on a different route variant
             if (lastSeq >= trip.ourStopSeq) continue;   // vehicle has passed our stop already
             // Prefer the vehicle closest to our stop (highest sequence < ours).
@@ -649,4 +657,11 @@ function dayOfWeek(yyyymmdd) {
     const m = Number(yyyymmdd.slice(4, 6)) - 1;
     const d = Number(yyyymmdd.slice(6, 8));
     return new Date(y, m, d).getDay();
+}
+
+// Extract numeric node id from GTFS stop_id like 'U1746Z1' or 'U01746Z01' -> 1746.
+function nodeIdFromGtfsStopId(s) {
+    if (!s) return null;
+    const m = String(s).match(/^U0*(\d+)/);
+    return m ? Number(m[1]) : null;
 }

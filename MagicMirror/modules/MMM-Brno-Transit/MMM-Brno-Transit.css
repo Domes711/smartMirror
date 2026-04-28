@@ -1,14 +1,39 @@
 .mmbt {
     text-align: left;
     display: inline-block;
+    margin-right: 24px;        /* nudge content leftward inside top_right region */
+}
+
+.mmbt-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #666;
+    font-size: 15px;
+    line-height: 15px;
+    font-weight: 400;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.mmbt-header-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+    animation: mmbt-pulse 1.8s ease-in-out infinite;
 }
 
 .mmbt-row {
     display: grid;
-    grid-template-columns: 24px 36px 1fr;
-    column-gap: 14px;
+    grid-template-columns: 30px 44px 1fr;
+    column-gap: 16px;
     align-items: baseline;
-    padding: 6px 0;
+    padding: 7px 0;
     line-height: 1;
 }
 
@@ -17,7 +42,7 @@
 }
 
 .mmbt-icon {
-    font-size: 16px;
+    font-size: 20px;
     color: #999;
     text-align: center;
     line-height: 1;
@@ -25,14 +50,14 @@
 
 .mmbt-line {
     font-weight: 700;
-    font-size: 22px;
+    font-size: 28px;
     color: #fff;
     font-feature-settings: "tnum";
     font-variant-numeric: tabular-nums;
 }
 
 .mmbt-times {
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 300;
     white-space: nowrap;
 }
@@ -42,25 +67,9 @@
 }
 
 .mmbt-time + .mmbt-time {
-    margin-left: 12px;
+    margin-left: 14px;
     color: #999;
-    font-size: 16px;
-}
-
-.mmbt-dot {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    margin-right: 7px;
-    border-radius: 50%;
-    background: #fff;
-    vertical-align: middle;
-    transform: translateY(-2px);
-    animation: mmbt-pulse 1.8s ease-in-out infinite;
-}
-
-.mmbt-time + .mmbt-time .mmbt-dot {
-    background: #999;
+    font-size: 19px;
 }
 
 @keyframes mmbt-pulse {
