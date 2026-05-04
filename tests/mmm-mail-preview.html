@@ -41,9 +41,8 @@
     width: 100%;
     max-width: 360px;
     padding: 24px 24px 0;
-    transition: opacity 0.3s ease;
   }
-  .mail.hidden { opacity: 0; pointer-events: none; }
+  .mail.hidden { display: none; }
 
   .mail .header {
     font-size: 15px;
@@ -62,51 +61,87 @@
   .light { color: var(--normal); font-weight: 300; }
   .dimmed { color: var(--dimmed); }
 
-  table.maillist { border-collapse: collapse; width: 100%; }
-  table.maillist tr.normal {
-    display: block;
-    margin-bottom: 10px;
-    padding: 12px 14px;
+  /* Force the table out of CSS table layout — otherwise the implicit tbody
+     stays display:table-row-group, the grid container inside doesn't get a
+     definite width, and the 1fr track expands to its content's max-content
+     (so text-overflow: ellipsis never triggers). */
+  table.mmm-mail,
+  table.mmm-mail > tbody { display: block; width: 100%; }
+  table.mmm-mail { border-collapse: collapse; }
+  /* Card layout: SLA badge takes column 1 as a tall narrow strip; sender +
+     subject stack in column 2. When the message has no SLA the first column
+     collapses to 0 (max-content of nothing), so cards without SLA still look
+     compact and edge-aligned. */
+  table.mmm-mail tr.normal {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 0;
+    align-items: stretch;
+    margin-bottom: 4px;
+    padding: 4px 8px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    transition: opacity 0.3s ease, background 0.2s ease;
+    border-radius: 5px;
   }
-  table.maillist tr.normal:hover { background: rgba(255, 255, 255, 0.07); }
-  table.maillist tr.bright {
+  /* Bright (sender) and light (subject) are forced to single-line ellipsis
+     so a long sender or subject doesn't push the card to multiple rows.
+     min-width: 0 lets the grid item shrink below its intrinsic content
+     width, which is what makes text-overflow: ellipsis actually trigger. */
+  table.mmm-mail tr.bright {
     display: block;
-    font-size: 17px;
-    margin-bottom: 4px;
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    font-size: 13px;
+    margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  table.maillist tr.light {
+  table.mmm-mail tr.light {
     display: block;
-    font-size: 14px;
-    color: var(--normal);
-    line-height: 1.35;
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    font-size: 10px;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .mail.empty .maillist { color: var(--dimmed); font-size: 16px; }
+  .mail.empty .mmm-mail { color: var(--dimmed); font-size: 16px; }
 
-  /* SLA countdown badge */
-  table.maillist tr.sla {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 12px;
+  /* SLA countdown badge — vertical strip on the left side of the card.
+     Label is just "Hh Mm" (or "-Hh Mm" when overdue); colour + pulse already
+     communicate severity, so the "OVERDUE" / "left" words are dropped. */
+  table.mmm-mail tr.sla {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    padding: 2px 1px;
+    border-radius: 3px;
+    font-size: 9px;
     font-weight: 500;
     letter-spacing: 0.3px;
     border: 1px solid currentColor;
-    line-height: 1.4;
+    line-height: 1;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
   }
-  table.maillist tr.sla-ok   { color: #6fcf97; }
-  table.maillist tr.sla-warn { color: #f2c94c; }
-  table.maillist tr.sla-crit { color: #f2994a; }
-  table.maillist tr.sla-over {
+  table.mmm-mail tr.sla-ok   { color: #6fcf97; }
+  table.mmm-mail tr.sla-warn { color: #f2c94c; }
+  table.mmm-mail tr.sla-crit { color: #f2994a; }
+  table.mmm-mail tr.sla-over {
     color: #eb5757;
     background: rgba(235, 87, 87, 0.12);
-    animation: sla-pulse 1.6s ease-in-out infinite;
+    animation: mmm-mail-sla-pulse 1.6s ease-in-out infinite;
   }
-  @keyframes sla-pulse {
+  @keyframes mmm-mail-sla-pulse {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.55; }
   }
@@ -226,7 +261,7 @@
 
 <div class="mail" id="mail">
   <div class="header">Email</div>
-  <table class="small maillist" id="maillist"></table>
+  <table class="small mmm-mail" id="maillist"></table>
 </div>
 
 <div class="gate-banner" id="gateBanner">
@@ -235,7 +270,7 @@
 </div>
 
 <div class="alert" id="alert">
-  <div class="alert-title">New Email on you@gmail.com</div>
+  <div class="alert-title">New Email on me@gmail.com</div>
   <div class="alert-msg" id="alertMsg">from Česká spořitelna</div>
 </div>
 
@@ -271,11 +306,21 @@
       { name: 'Mirror' },
     ],
     numberOfEmails: 8,
+    subjectlength: 50,
+    fade: true,
   },
 }</pre>
 </div>
 
 <script>
+  // Mirrors the runtime config consumed by MMM-Mail.js. Keep in sync with
+  // the <pre class="config"> block above so the visual matches production.
+  const config = {
+    numberOfEmails: 8,
+    subjectlength: 50,
+    fade: true,
+  };
+
   // Timestamps anchored relative to "now" so the demo always shows
   // a healthy spread of SLA states (fresh, halfway, near deadline, overdue).
   const now = Date.now();
@@ -285,17 +330,25 @@
   // the slaHours from its own mailbox config; the merge/sort happens below.
   const sampleByBox = {
     Urgent2h: [
+      { id: 1043, sender: [{ name: "Mezinárodní advokátní kancelář Novotný & Partneři s.r.o.",
+                             address: "podatelna@novotny-partneri.cz" }],
+        subject: "Velmi důležité: prosíme o akceptaci nové smluvní dokumentace do konce dnešního pracovního dne",
+        date: minsAgo(140), mailbox: "Urgent2h", slaHours: 2 },
       { id: 1042, sender: [{ name: "Klient — Šárka N.", address: "novak@klient.cz" }],
         subject: "URGENT: změna v dnešní zakázce, čekám na potvrzení",
-        date: minsAgo(143), mailbox: "Urgent2h", slaHours: 2 },
+        date: minsAgo(115), mailbox: "Urgent2h", slaHours: 2 },
       { id: 1041, sender: [{ name: "Faktury", address: "faktury@dodavatel.cz" }],
         subject: "Připomenutí splatnosti — FA 2026/0411",
-        date: minsAgo(115), mailbox: "Urgent2h", slaHours: 2 },
+        date: minsAgo(80), mailbox: "Urgent2h", slaHours: 2 },
       { id: 1040, sender: [{ name: "Klient — David K.", address: "k@firma.cz" }],
         subject: "Potřebuju potvrdit termín dnes",
         date: minsAgo(48), mailbox: "Urgent2h", slaHours: 2 },
     ],
     Mirror: [
+      { id: 939, sender: [{ name: "newsletter-no-reply@super-dlouhy-odesilatel-domena-priklad.com",
+                            address: "newsletter-no-reply@super-dlouhy-odesilatel-domena-priklad.com" }],
+        subject: "Tento týden jsme pro Vás připravili obrovský výběr novinek, slev a doporučení – nepropásněte je!",
+        date: minsAgo(8), mailbox: "Mirror", slaHours: null },
       { id: 938, sender: [{ name: "Česká spořitelna", address: "info@csas.cz" }],
         subject: "Potvrzení o přijetí platby — 1 250,00 CZK",
         date: minsAgo(20), mailbox: "Mirror", slaHours: null },
@@ -315,7 +368,9 @@
   const alertEl = document.getElementById("alert");
   const alertMsg = document.getElementById("alertMsg");
 
-  // Mirrors the MMM-Mail.js formatSla helper exactly.
+  // Compact format: just "Hh Mm" remaining, prefixed with "-" when overdue.
+  // Severity is shown by colour/pulse, so the "OVERDUE" and "left" words
+  // are intentionally dropped to save horizontal space.
   function formatSla(receivedISO, hours) {
     const deadline = new Date(receivedISO).getTime() + hours * 3600 * 1000;
     const diff = deadline - Date.now();
@@ -323,9 +378,8 @@
     const mins = Math.floor(Math.abs(diff) / 60000);
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    const label = over
-      ? "OVERDUE " + (h ? h + "h " : "") + m + "min"
-      : (h ? h + "h " + m + "m left" : m + " min left");
+    const body = h ? h + "h " + m + "m" : m + "m";
+    const label = over ? "-" + body : body;
     let level;
     if (over) level = "over";
     else if (mins < 15) level = "crit";
@@ -351,7 +405,8 @@
   }
 
   function render() {
-    const mails = collectMessages(messagesByBox);
+    let mails = collectMessages(messagesByBox);
+    if (config.numberOfEmails) mails = mails.slice(0, config.numberOfEmails);
     list.innerHTML = "";
     mail.classList.remove("empty");
 
@@ -368,17 +423,18 @@
       const row = document.createElement("tr");
       row.className = "normal";
 
+      // Same sanitization MMM-Mail.js applies before innerHTML.
+      const rawName = (m.sender[0].name || "").replace(/['"]+/g, "");
+      let subj = (m.subject || "").replace(/[\['"\]]+/g, "");
+
       const nameRow = document.createElement("tr");
       nameRow.className = "bright";
-      const senderName = m.sender[0].name && m.sender[0].name.length
-        ? m.sender[0].name : m.sender[0].address;
-      nameRow.textContent = senderName;
+      nameRow.textContent = rawName.length ? rawName : m.sender[0].address;
       row.appendChild(nameRow);
 
       const subjRow = document.createElement("tr");
       subjRow.className = "light";
-      let subj = m.subject;
-      if (subj.length > 50) subj = subj.substring(0, 50);
+      if (subj.length > config.subjectlength) subj = subj.substring(0, config.subjectlength);
       subjRow.textContent = subj;
       row.appendChild(subjRow);
 
@@ -390,7 +446,7 @@
         row.appendChild(slaRow);
       }
 
-      if (i >= startingPoint) {
+      if (config.fade && i >= startingPoint) {
         const currentStep = i - startingPoint;
         row.style.opacity = 1 - (1 / steps * currentStep);
       }
@@ -399,8 +455,8 @@
     });
   }
 
-  // Tick the countdown labels every 30s without re-creating the cards.
-  setInterval(render, 30000);
+  // Production re-renders every 60s via slaTimer in MMM-Mail.js start().
+  setInterval(render, 60000);
 
   function showAlert(sender) {
     alertMsg.textContent = "from " + sender;
