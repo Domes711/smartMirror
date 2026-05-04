@@ -61,7 +61,13 @@
   .light { color: var(--normal); font-weight: 300; }
   .dimmed { color: var(--dimmed); }
 
-  table.mmm-mail { border-collapse: collapse; width: 100%; }
+  /* Force the table out of CSS table layout — otherwise the implicit tbody
+     stays display:table-row-group, the grid container inside doesn't get a
+     definite width, and the 1fr track expands to its content's max-content
+     (so text-overflow: ellipsis never triggers). */
+  table.mmm-mail,
+  table.mmm-mail > tbody { display: block; width: 100%; }
+  table.mmm-mail { border-collapse: collapse; }
   /* Card layout: SLA badge takes column 1 as a tall narrow strip; sender +
      subject stack in column 2. When the message has no SLA the first column
      collapses to 0 (max-content of nothing), so cards without SLA still look
