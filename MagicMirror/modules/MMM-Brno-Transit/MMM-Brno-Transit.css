@@ -2,6 +2,10 @@
     text-align: left;
     display: inline-block;
     margin-right: 24px;        /* nudge content leftward inside top_right region */
+    /* Lock the footprint so switching between realtime / scheduled / empty
+       (different times string lengths, "— mimo provoz" filler, pulse dot
+       appearing or not) doesn't slide the module sideways. */
+    min-width: 240px;
 }
 
 .mmbt-header {
