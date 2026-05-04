@@ -59,6 +59,9 @@ Module.register("MMM-Mail",{
     },
 
 	// Returns { label, level } where level is 'ok' | 'warn' | 'crit' | 'over'.
+	// Compact "Hh Mm" remaining, prefixed with "-" when overdue. Severity is
+	// shown by colour/pulse so the "OVERDUE" / "left" words are intentionally
+	// dropped to save horizontal space inside the vertical SLA strip.
 	formatSla: function(receivedISO, hours) {
 		var deadline = new Date(receivedISO).getTime() + hours * 3600 * 1000;
 		var diff = deadline - Date.now();
@@ -66,8 +69,8 @@ Module.register("MMM-Mail",{
 		var mins = Math.floor(Math.abs(diff) / 60000);
 		var h = Math.floor(mins / 60);
 		var m = mins % 60;
-		var label = over ? ('OVERDUE ' + (h ? h + 'h ' : '') + m + 'min')
-		                 : (h ? h + 'h ' + m + 'm left' : m + ' min left');
+		var body = h ? (h + 'h ' + m + 'm') : (m + 'm');
+		var label = over ? ('-' + body) : body;
 		var level;
 		if (over) level = 'over';
 		else if (mins < 15) level = 'crit';
