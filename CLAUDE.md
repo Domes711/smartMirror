@@ -89,12 +89,12 @@ the radar handles *display power*.
   `superpowers:subagent-driven-development`
 - **Commits** use conventional-commit prefixes (`docs:`, `feat:`, `chore:`)
 - **Branches** for Claude-assisted work: `claude/<slug>`
-- **Visual previews of module `demo.html`:** post the live raw.githack.com
-  URL, e.g. `https://raw.githack.com/Domes711/smartMirror/<branch>/MagicMirror/modules/<MMM-Foo>/demo.html` —
-  user wants a clickable preview link by default, not just PNGs.
-- **HTML previews under `tests/`:** after pushing, paste only the
-  `https://htmlpreview.github.io/?https://github.com/domes711/smartmirror/blob/<branch>/tests/<file>.html`
-  link so the user can open it on mobile.
+- **Module visual previews live in `demo.html` next to the module's source**
+  (`MagicMirror/modules/<MMM-Foo>/demo.html`). After pushing, post the live
+  raw.githack.com URL — user wants a clickable preview link by default, not
+  just PNGs:
+  `https://raw.githack.com/Domes711/smartMirror/<branch>/MagicMirror/modules/<MMM-Foo>/demo.html`
+  Append `?v=<sha>` if cache holds an old version.
 
 ## Executing the plans
 
