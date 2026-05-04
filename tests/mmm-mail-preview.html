@@ -41,9 +41,8 @@
     width: 100%;
     max-width: 360px;
     padding: 24px 24px 0;
-    transition: opacity 0.3s ease;
   }
-  .mail.hidden { opacity: 0; pointer-events: none; }
+  .mail.hidden { display: none; }
 
   .mail .header {
     font-size: 15px;
@@ -62,32 +61,29 @@
   .light { color: var(--normal); font-weight: 300; }
   .dimmed { color: var(--dimmed); }
 
-  table.maillist { border-collapse: collapse; width: 100%; }
-  table.maillist tr.normal {
+  table.mmm-mail { border-collapse: collapse; width: 100%; }
+  table.mmm-mail tr.normal {
     display: block;
     margin-bottom: 10px;
     padding: 12px 14px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    transition: opacity 0.3s ease, background 0.2s ease;
   }
-  table.maillist tr.normal:hover { background: rgba(255, 255, 255, 0.07); }
-  table.maillist tr.bright {
+  table.mmm-mail tr.bright {
     display: block;
     font-size: 17px;
     margin-bottom: 4px;
   }
-  table.maillist tr.light {
+  table.mmm-mail tr.light {
     display: block;
     font-size: 14px;
-    color: var(--normal);
     line-height: 1.35;
   }
-  .mail.empty .maillist { color: var(--dimmed); font-size: 16px; }
+  .mail.empty .mmm-mail { color: var(--dimmed); font-size: 16px; }
 
   /* SLA countdown badge */
-  table.maillist tr.sla {
+  table.mmm-mail tr.sla {
     display: inline-block;
     margin-top: 8px;
     padding: 2px 8px;
@@ -98,15 +94,15 @@
     border: 1px solid currentColor;
     line-height: 1.4;
   }
-  table.maillist tr.sla-ok   { color: #6fcf97; }
-  table.maillist tr.sla-warn { color: #f2c94c; }
-  table.maillist tr.sla-crit { color: #f2994a; }
-  table.maillist tr.sla-over {
+  table.mmm-mail tr.sla-ok   { color: #6fcf97; }
+  table.mmm-mail tr.sla-warn { color: #f2c94c; }
+  table.mmm-mail tr.sla-crit { color: #f2994a; }
+  table.mmm-mail tr.sla-over {
     color: #eb5757;
     background: rgba(235, 87, 87, 0.12);
-    animation: sla-pulse 1.6s ease-in-out infinite;
+    animation: mmm-mail-sla-pulse 1.6s ease-in-out infinite;
   }
-  @keyframes sla-pulse {
+  @keyframes mmm-mail-sla-pulse {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.55; }
   }
@@ -226,7 +222,7 @@
 
 <div class="mail" id="mail">
   <div class="header">Email</div>
-  <table class="small maillist" id="maillist"></table>
+  <table class="small mmm-mail" id="maillist"></table>
 </div>
 
 <div class="gate-banner" id="gateBanner">
@@ -235,7 +231,7 @@
 </div>
 
 <div class="alert" id="alert">
-  <div class="alert-title">New Email on you@gmail.com</div>
+  <div class="alert-title">New Email on me@gmail.com</div>
   <div class="alert-msg" id="alertMsg">from Česká spořitelna</div>
 </div>
 
@@ -271,11 +267,21 @@
       { name: 'Mirror' },
     ],
     numberOfEmails: 8,
+    subjectlength: 50,
+    fade: true,
   },
 }</pre>
 </div>
 
 <script>
+  // Mirrors the runtime config consumed by MMM-Mail.js. Keep in sync with
+  // the <pre class="config"> block above so the visual matches production.
+  const config = {
+    numberOfEmails: 8,
+    subjectlength: 50,
+    fade: true,
+  };
+
   // Timestamps anchored relative to "now" so the demo always shows
   // a healthy spread of SLA states (fresh, halfway, near deadline, overdue).
   const now = Date.now();
@@ -351,7 +357,8 @@
   }
 
   function render() {
-    const mails = collectMessages(messagesByBox);
+    let mails = collectMessages(messagesByBox);
+    if (config.numberOfEmails) mails = mails.slice(0, config.numberOfEmails);
     list.innerHTML = "";
     mail.classList.remove("empty");
 
@@ -368,17 +375,18 @@
       const row = document.createElement("tr");
       row.className = "normal";
 
+      // Same sanitization MMM-Mail.js applies before innerHTML.
+      const rawName = (m.sender[0].name || "").replace(/['"]+/g, "");
+      let subj = (m.subject || "").replace(/[\['"\]]+/g, "");
+
       const nameRow = document.createElement("tr");
       nameRow.className = "bright";
-      const senderName = m.sender[0].name && m.sender[0].name.length
-        ? m.sender[0].name : m.sender[0].address;
-      nameRow.textContent = senderName;
+      nameRow.textContent = rawName.length ? rawName : m.sender[0].address;
       row.appendChild(nameRow);
 
       const subjRow = document.createElement("tr");
       subjRow.className = "light";
-      let subj = m.subject;
-      if (subj.length > 50) subj = subj.substring(0, 50);
+      if (subj.length > config.subjectlength) subj = subj.substring(0, config.subjectlength);
       subjRow.textContent = subj;
       row.appendChild(subjRow);
 
@@ -390,7 +398,7 @@
         row.appendChild(slaRow);
       }
 
-      if (i >= startingPoint) {
+      if (config.fade && i >= startingPoint) {
         const currentStep = i - startingPoint;
         row.style.opacity = 1 - (1 / steps * currentStep);
       }
@@ -399,8 +407,8 @@
     });
   }
 
-  // Tick the countdown labels every 30s without re-creating the cards.
-  setInterval(render, 30000);
+  // Production re-renders every 60s via slaTimer in MMM-Mail.js start().
+  setInterval(render, 60000);
 
   function showAlert(sender) {
     alertMsg.textContent = "from " + sender;
