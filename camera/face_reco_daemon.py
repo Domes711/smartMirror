@@ -34,9 +34,9 @@ DEFAULT_MQTT_PORT = 1883
 MQTT_TOPIC_PRESENCE = "smartmirror/radar/presence"
 MQTT_TOPIC_RECOGNITION = "smartmirror/camera/recognition"
 MQTT_TOPIC_CONTROL = "smartmirror/control/reset"
-DEFAULT_MAX_DURATION = 10.0  # seconds to scan for faces
+DEFAULT_MAX_DURATION = 5.0  # seconds to scan for faces (reduced from 10s)
 DEFAULT_TOLERANCE = 0.6
-FRAME_INTERVAL = 0.3  # seconds between face detection attempts
+FRAME_INTERVAL = 0.5  # seconds between face detection attempts (increased for speed)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,8 +65,11 @@ def load_known(pickle_path: str):
     return data["encodings"], data["names"]
 
 
-def recognize_stream(max_duration, known_encodings, known_names, tolerance):
+def recognize_stream(picam, max_duration, known_encodings, known_names, tolerance):
     """Scan camera stream for up to max_duration seconds, return first match.
+
+    Args:
+        picam: Already-running Picamera2 instance (reused for speed)
 
     Returns (name, kind):
         ("Domes", "match") on a hit,
@@ -74,79 +77,64 @@ def recognize_stream(max_duration, known_encodings, known_names, tolerance):
         (None, "no_face") if no face detected within timeout.
     """
     try:
-        from picamera2 import Picamera2
         import face_recognition
     except ImportError as exc:
         log.error("Import failed: %s", exc)
         return None, "error"
 
-    picam = Picamera2()
-    config = picam.create_preview_configuration(
-        main={"size": (640, 480), "format": "RGB888"}
-    )
-    picam.configure(config)
-    picam.start()
+    start_time = time.time()
+    last_attempt = 0
+    frames_checked = 0
+    detected_unknown = False
 
-    try:
-        # Warmup
-        time.sleep(0.5)
+    log.info("Scanning for faces (max %.1fs)...", max_duration)
 
-        start_time = time.time()
-        last_attempt = 0
-        frames_checked = 0
-        detected_unknown = False
+    while True:
+        elapsed = time.time() - start_time
 
-        log.info("Scanning for faces (max %.1fs)...", max_duration)
+        # Timeout check
+        if elapsed >= max_duration:
+            kind = "unknown_face" if detected_unknown else "no_face"
+            log.info("Timeout after %.1fs, result: %s", elapsed, kind)
+            return None, kind
 
-        while True:
-            elapsed = time.time() - start_time
+        # Rate limiting
+        if elapsed - last_attempt < FRAME_INTERVAL:
+            time.sleep(0.05)
+            continue
 
-            # Timeout check
-            if elapsed >= max_duration:
-                kind = "unknown_face" if detected_unknown else "no_face"
-                log.info("Timeout after %.1fs, result: %s", elapsed, kind)
-                return None, kind
+        last_attempt = elapsed
+        frames_checked += 1
 
-            # Rate limiting
-            if elapsed - last_attempt < FRAME_INTERVAL:
-                time.sleep(0.05)
-                continue
+        # Grab frame
+        frame = picam.capture_array()
 
-            last_attempt = elapsed
-            frames_checked += 1
+        # Detect faces - use smaller resolution for speed
+        locations = face_recognition.face_locations(frame, model="hog")
+        if not locations:
+            continue
 
-            # Grab frame
-            frame = picam.capture_array()
+        detected_unknown = True
 
-            # Detect faces
-            locations = face_recognition.face_locations(frame, model="hog")
-            if not locations:
-                continue
+        # Encode faces
+        encodings = face_recognition.face_encodings(frame, locations)
+        if not encodings:
+            continue
 
-            detected_unknown = True
-
-            # Encode faces
-            encodings = face_recognition.face_encodings(frame, locations)
-            if not encodings:
-                continue
-
-            # Check for match
-            for enc in encodings:
-                matches = face_recognition.compare_faces(
-                    known_encodings, enc, tolerance=tolerance
-                )
-                for name, hit in zip(known_names, matches):
-                    if hit:
-                        log.info("Recognized %s after %.1fs (%d frames)",
-                                name, elapsed, frames_checked)
-                        return name, "match"
-
-    finally:
-        picam.stop()
+        # Check for match
+        for enc in encodings:
+            matches = face_recognition.compare_faces(
+                known_encodings, enc, tolerance=tolerance
+            )
+            for name, hit in zip(known_names, matches):
+                if hit:
+                    log.info("Recognized %s after %.1fs (%d frames)",
+                            name, elapsed, frames_checked)
+                    return name, "match"
 
 
 class FaceRecoDaemon:
-    """Event-driven face recognition daemon."""
+    """Event-driven face recognition daemon with persistent camera."""
 
     def __init__(self, mqtt_client, known_encodings, known_names,
                  max_duration, tolerance):
@@ -157,6 +145,35 @@ class FaceRecoDaemon:
         self.tolerance = tolerance
         self.scanning_lock = threading.Lock()
         self.is_scanning = False
+        self.picam = None
+        self._init_camera()
+
+    def _init_camera(self):
+        """Initialize camera once and keep it running."""
+        try:
+            from picamera2 import Picamera2
+            self.picam = Picamera2()
+            # Lower resolution for faster processing on Pi
+            config = self.picam.create_preview_configuration(
+                main={"size": (320, 240), "format": "RGB888"}
+            )
+            self.picam.configure(config)
+            self.picam.start()
+            # Small warmup
+            time.sleep(0.5)
+            log.info("Camera initialized and ready (320x240)")
+        except Exception as exc:
+            log.error("Failed to initialize camera: %s", exc)
+            self.picam = None
+
+    def cleanup(self):
+        """Stop camera on daemon shutdown."""
+        if self.picam:
+            try:
+                self.picam.stop()
+                log.info("Camera stopped")
+            except Exception as exc:
+                log.error("Error stopping camera: %s", exc)
 
     def on_presence_event(self, payload: str):
         """Handle presence MQTT event."""
@@ -185,7 +202,14 @@ class FaceRecoDaemon:
             self.is_scanning = True
 
         try:
+            if not self.picam:
+                log.error("Camera not initialized, cannot scan")
+                mqtt_publish(self.mqtt_client, MQTT_TOPIC_RECOGNITION,
+                           {"user": None})
+                return
+
             name, kind = recognize_stream(
+                self.picam,
                 self.max_duration,
                 self.known_encodings,
                 self.known_names,
@@ -281,6 +305,7 @@ def main() -> int:
         log.error("MQTT error: %s", exc)
         return 1
     finally:
+        daemon.cleanup()
         mqtt_client.disconnect()
 
 
