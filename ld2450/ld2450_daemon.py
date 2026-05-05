@@ -68,10 +68,11 @@ def parse_frame(data: bytes) -> list:
     targets = []
 
     for i in range(0, 24, 8):  # 3 targets, 8 bytes each
-        x = struct.unpack_from('<h', payload, i)[0]      # signed 16-bit X
-        y = struct.unpack_from('<h', payload, i+2)[0]    # signed 16-bit Y
+        x = struct.unpack_from('<H', payload, i)[0]      # unsigned 16-bit X (mm)
+        y_cm = payload[i+2]                               # Y in centimeters!
+        y = y_cm * 10                                     # convert cm to mm
         speed = struct.unpack_from('<H', payload, i+4)[0] # unsigned 16-bit speed
-        # Reserved at i+6 (2 bytes) - ignored
+        # Bytes i+3, i+6, i+7 - unknown/reserved
 
         # Filter out empty targets (0,0)
         if x != 0 or y != 0:
