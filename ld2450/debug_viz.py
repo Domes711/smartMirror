@@ -15,7 +15,13 @@ Press Ctrl+C to stop.
 import argparse
 import serial
 import sys
-from ld2450_daemon import parse_frame, PRESENCE_X_MM, PRESENCE_Y_MM
+from ld2450_daemon import (
+    parse_frame,
+    PRESENCE_X_MM,
+    PRESENCE_Y_MM,
+    FRAME_HEADER,
+    FRAME_LEN,
+)
 
 SERIAL_DEVICE = "/dev/ttyAMA0"
 SERIAL_BAUD = 256000
@@ -56,17 +62,18 @@ def main():
             if data:
                 buffer += data
 
-                # Look for frame header
-                header_idx = buffer.find(b'\xfd\xfc\xfb\xfa')
+                # Look for Engineering mode frame header
+                header_idx = buffer.find(FRAME_HEADER)
                 if header_idx >= 0:
                     buffer = buffer[header_idx:]
 
-                    if len(buffer) >= 30:
-                        frame = buffer[:30]
+                    if len(buffer) >= FRAME_LEN:
+                        frame = buffer[:FRAME_LEN]
                         targets = parse_frame(frame)
 
+                        frame_count += 1
+
                         if targets:
-                            frame_count += 1
                             targets_seen += len(targets)
 
                             print(f"Frame {frame_count:3d} - {len(targets)} target(s):")
@@ -75,16 +82,14 @@ def main():
                                 in_zone = abs(x) <= PRESENCE_X_MM and 0 < y <= PRESENCE_Y_MM
                                 status = "✓ IN ZONE" if in_zone else "  outside"
 
-                                # Skip (0,0) targets (no detection)
-                                if x == 0 and y == 0:
-                                    status = "  (empty)"
-
                                 print(f"  Target {i+1}: "
                                       f"X={x:5d}mm  Y={y:5d}mm  "
-                                      f"Speed={speed:3d}cm/s  {status}")
+                                      f"Speed={speed:3d}  {status}")
                             print()
+                        else:
+                            print(f"Frame {frame_count:3d} - no targets")
 
-                        buffer = buffer[30:]
+                        buffer = buffer[FRAME_LEN:]
 
     except KeyboardInterrupt:
         print("\n" + "=" * 70)

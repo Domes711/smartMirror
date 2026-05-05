@@ -18,7 +18,13 @@ Requirements:
 import sys
 import time
 import pygame
-from ld2450_daemon import parse_frame, PRESENCE_X_MM, PRESENCE_Y_MM
+from ld2450_daemon import (
+    parse_frame,
+    PRESENCE_X_MM,
+    PRESENCE_Y_MM,
+    FRAME_HEADER,
+    FRAME_LEN,
+)
 
 try:
     import serial
@@ -183,26 +189,26 @@ def main():
             if data:
                 buffer += data
 
-                # Try to parse frames from buffer
-                while len(buffer) >= 30:  # Minimum frame size
-                    # Look for frame header
-                    header_idx = buffer.find(b'\xfd\xfc\xfb\xfa')
+                # Try to parse Engineering mode frames from buffer
+                while len(buffer) >= FRAME_LEN:
+                    # Look for Engineering mode frame header
+                    header_idx = buffer.find(FRAME_HEADER)
                     if header_idx == -1:
-                        buffer = buffer[-30:]  # Keep last 30 bytes for sync
+                        buffer = buffer[-FRAME_LEN:]  # Keep last bytes for sync
                         break
 
                     if header_idx > 0:
                         buffer = buffer[header_idx:]  # Discard junk before header
 
                     # Check if we have full frame
-                    if len(buffer) < 30:
+                    if len(buffer) < FRAME_LEN:
                         break
 
                     # Parse frame
-                    frame = buffer[:30]
+                    frame = buffer[:FRAME_LEN]
                     targets = parse_frame(frame)
                     frame_count += 1
-                    buffer = buffer[30:]
+                    buffer = buffer[FRAME_LEN:]
 
             # Calculate FPS
             fps_counter.append(time.time())
