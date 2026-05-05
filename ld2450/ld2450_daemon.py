@@ -42,7 +42,7 @@ MM_ENDPOINT = os.environ.get(
 )
 FACE_RECO_SCRIPT = os.environ.get(
     "FACE_RECO_SCRIPT",
-    "/home/admin/camera/face_reco_once.py",
+    "/home/admin/smartMirror/camera/face_reco_once.py",
 )
 
 

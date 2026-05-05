@@ -31,7 +31,7 @@ how to restore them.
 - `MagicMirror/modules/MMM-Mail/` — fork of [MMPieps/MMM-Mail](https://github.com/MMPieps/MMM-Mail) pinned at `c24f973` with added `mailboxes` (multi-folder + per-folder `slaHours` countdown) on top of upstream
 - `MagicMirror/modules/MMM-Spending/` — our own module (today's spending pulled from Wallet by BudgetBakers REST API)
 - `MagicMirror/modules/MMM-GoogleCalendar/` — vendored fork of `randomBrainstormer/MMM-GoogleCalendar` v1.2.0 for visual customisation; replace upstream install on Pi
-- `camera/` — mirror of `~/camera/` (single-shot face recognition: `face_reco_once.py`, training photos in `dataset/Domes/`, `encoded_faces.pickle`)
+- `camera/` — mirror of `~/smartMirror/camera/` (single-shot face recognition: `face_reco_once.py`, training photos in `dataset/Domes/`, `encoded_faces.pickle`)
 - `ld2450/` — mirror of `~/ld2450/` (radar daemon, tests, `ld2450.service`)
 
 As each plan task is completed on the Pi, the matching files above are copied

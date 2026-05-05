@@ -23,7 +23,7 @@ import sys
 import time
 import urllib.request
 
-DEFAULT_ENCODINGS = "/home/admin/camera/encoded_faces.pickle"
+DEFAULT_ENCODINGS = "/home/admin/smartMirror/camera/encoded_faces.pickle"
 DEFAULT_ENDPOINT = "http://127.0.0.1:8080/mmm-profile/event"
 DEFAULT_WARMUP_SEC = 0.5
 DEFAULT_TOLERANCE = 0.6
