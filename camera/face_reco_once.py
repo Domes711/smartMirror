@@ -2,8 +2,8 @@
 
 Triggered by ld2450_daemon when presence is detected. Opens the RPi
 camera, grabs one frame, runs face_recognition against the trained
-pickle (the same one used by the legacy MMM-Face-Reco-DNN module), and
-POSTs the result to MMM-Profile's HTTP endpoint.
+pickle (~/camera/encoded_faces.pickle), and POSTs the result to
+MMM-Profile's HTTP endpoint.
 
 Exits 0 always: any failure mode posts `user_unknown` rather than
 crashing, so the daemon's subprocess slot stays clean.
@@ -23,9 +23,7 @@ import sys
 import time
 import urllib.request
 
-DEFAULT_ENCODINGS = (
-    "/home/admin/MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle"
-)
+DEFAULT_ENCODINGS = "/home/admin/camera/encoded_faces.pickle"
 DEFAULT_ENDPOINT = "http://127.0.0.1:8080/mmm-profile/event"
 DEFAULT_WARMUP_SEC = 0.5
 DEFAULT_TOLERANCE = 0.6
@@ -53,7 +51,7 @@ def post_event(endpoint: str, payload: dict) -> None:
 
 
 def load_known(pickle_path: str):
-    """Load (encodings, names) from MMM-Face-Reco-DNN's pickle format."""
+    """Load (encodings, names) from the trained faces pickle."""
     with open(pickle_path, "rb") as f:
         data = pickle.load(f)
     return data["encodings"], data["names"]
@@ -106,7 +104,7 @@ def main() -> int:
         description="Single-shot face recognition for MMM-Profile."
     )
     parser.add_argument("--encodings", default=DEFAULT_ENCODINGS,
-                        help="path to MMM-Face-Reco-DNN's encoded_faces.pickle")
+                        help="path to encoded_faces.pickle")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT,
                         help="MMM-Profile HTTP endpoint")
     parser.add_argument("--warmup-sec", type=float, default=DEFAULT_WARMUP_SEC,
