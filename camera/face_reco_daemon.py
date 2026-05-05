@@ -10,6 +10,9 @@ Flow:
 3. Result published to → smartmirror/camera/recognition = {"user": "Domes"|null}
 4. MMM-Profile receives both events and updates UI
 
+Reset command:
+- smartmirror/control/reset → publishes {"user": null} to reset state
+
 Usage:
     python3 face_reco_daemon.py
     python3 face_reco_daemon.py --max-duration 5  # Scan for 5s max
@@ -30,6 +33,7 @@ DEFAULT_MQTT_BROKER = "127.0.0.1"
 DEFAULT_MQTT_PORT = 1883
 MQTT_TOPIC_PRESENCE = "smartmirror/radar/presence"
 MQTT_TOPIC_RECOGNITION = "smartmirror/camera/recognition"
+MQTT_TOPIC_CONTROL = "smartmirror/control/reset"
 DEFAULT_MAX_DURATION = 10.0  # seconds to scan for faces
 DEFAULT_TOLERANCE = 0.6
 FRAME_INTERVAL = 0.3  # seconds between face detection attempts
@@ -165,6 +169,13 @@ class FaceRecoDaemon:
             log.info("Presence lost")
             # We don't need to do anything - just wait for next presence
 
+    def on_reset(self):
+        """Handle reset/init command - reset to default state."""
+        log.info("RESET command received, resetting to default state")
+        # Publish unknown user to reset MMM-Profile
+        mqtt_publish(self.mqtt_client, MQTT_TOPIC_RECOGNITION, {"user": None})
+        # Note: we don't stop scanning if in progress, just publish reset state
+
     def _perform_scan(self):
         """Perform face recognition scan (runs in background thread)."""
         with self.scanning_lock:
@@ -240,7 +251,8 @@ def main() -> int:
         if rc == 0:
             log.info("MQTT connected to %s:%d", args.mqtt_broker, args.mqtt_port)
             client.subscribe(MQTT_TOPIC_PRESENCE)
-            log.info("Subscribed to %s", MQTT_TOPIC_PRESENCE)
+            client.subscribe(MQTT_TOPIC_CONTROL)
+            log.info("Subscribed to %s, %s", MQTT_TOPIC_PRESENCE, MQTT_TOPIC_CONTROL)
         else:
             log.error("MQTT connection failed: rc=%d", rc)
 
@@ -250,6 +262,8 @@ def main() -> int:
             log.info("MQTT message: %s = %s", msg.topic, payload)
             if msg.topic == MQTT_TOPIC_PRESENCE:
                 daemon.on_presence_event(payload)
+            elif msg.topic == MQTT_TOPIC_CONTROL:
+                daemon.on_reset()
         except Exception as exc:
             log.error("Error handling MQTT message: %s", exc)
 

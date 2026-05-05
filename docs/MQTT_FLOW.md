@@ -65,6 +65,7 @@ Two independent daemons communicate via MQTT with MMM-Profile module:
 | `smartmirror/radar/presence` | LD2450 → MMM-Profile | `"present"` \| `"absent"` | Presence detection state |
 | `smartmirror/radar/presence` | LD2450 → Face Daemon | `"present"` | Triggers face scan |
 | `smartmirror/camera/recognition` | Face Daemon → MMM-Profile | `{"user": "Domes"}` \| `{"user": null}` | Recognition result |
+| `smartmirror/control/reset` | Manual/Script → All | any | Reset to initial state (asleep, no user) |
 
 ## Daemons
 
@@ -155,6 +156,9 @@ mosquitto_pub -h 127.0.0.1 -t "smartmirror/radar/presence" -m "present"
 # 1. Face daemon starts scanning
 # 2. Recognition result published
 # 3. MMM-Profile receives both events
+
+# Reset to initial state (useful for testing)
+mosquitto_pub -h 127.0.0.1 -t "smartmirror/control/reset" -m "init"
 ```
 
 ## Dependencies
@@ -230,6 +234,54 @@ Environment="MQTT_BROKER=192.168.1.100"
 Environment="MQTT_PORT=1883"
 ```
 
+## Reset Command
+
+The `smartmirror/control/reset` topic provides a way to reset the entire system to its initial state. This is useful for:
+- Testing and development
+- Recovering from stuck states
+- Manual override
+
+### Usage
+
+```bash
+# Reset everything to initial state
+mosquitto_pub -h 127.0.0.1 -t "smartmirror/control/reset" -m "init"
+```
+
+### What it does
+
+1. **Face recognition daemon:**
+   - Publishes `{"user": null}` to clear current user
+   - Stops waiting for presence (returns to idle)
+
+2. **MMM-Profile:**
+   - Cancels any dim timers
+   - Sets state to `"asleep"`
+   - Clears current user
+   - Hides all modules (empty layout)
+   - Updates frontend immediately
+
+3. **Radar daemon:**
+   - Not affected (continues monitoring independently)
+   - Next presence event will trigger normal flow
+
+### Example Testing Workflow
+
+```bash
+# Terminal 1: Watch all events
+mosquitto_sub -h 127.0.0.1 -t "smartmirror/#" -v
+
+# Terminal 2: Simulate full cycle
+mosquitto_pub -h 127.0.0.1 -t "smartmirror/control/reset" -m "init"
+sleep 2
+mosquitto_pub -h 127.0.0.1 -t "smartmirror/radar/presence" -m "present"
+# Wait for face recognition...
+sleep 15
+mosquitto_pub -h 127.0.0.1 -t "smartmirror/radar/presence" -m "absent"
+sleep 5
+mosquitto_pub -h 127.0.0.1 -t "smartmirror/control/reset" -m "init"
+```
+
 ## Benefits of This Architecture
 
 ✅ **Independent daemons** - Radar and face recognition run separately
@@ -238,3 +290,4 @@ Environment="MQTT_PORT=1883"
 ✅ **Debuggable** - Each component logs independently
 ✅ **Testable** - Can mock MQTT events for development
 ✅ **Resilient** - If one daemon crashes, others continue
+✅ **Resettable** - Manual reset command for testing and recovery
