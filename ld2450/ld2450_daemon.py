@@ -23,9 +23,9 @@ import paho.mqtt.client as mqtt
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger('ld2450')
 
-FRAME_HEADER = bytes([0xFD, 0xFC, 0xFB, 0xFA])
-FRAME_FOOTER = bytes([0x04, 0x03, 0x02, 0x01])
-FRAME_MIN_LEN = 10  # header(4) + length(2) + data(0+) + footer(4)
+FRAME_HEADER = bytes([0xAA, 0xFF, 0x03, 0x00])  # Engineering mode
+FRAME_FOOTER = bytes([0x55, 0xCC])  # Engineering mode
+FRAME_LEN = 30  # header(4) + data(24) + footer(2)
 
 GPIO_RELAY = 17
 PRESENCE_X_MM = 400      # half-width of detection zone (+-40cm)
@@ -47,21 +47,36 @@ FACE_RECO_SCRIPT = os.environ.get(
 
 
 def parse_frame(data: bytes) -> list:
-    """Parse a LD2450 binary frame. Returns list of (x, y, speed) tuples or []."""
-    if len(data) < FRAME_MIN_LEN:
+    """Parse LD2450 Engineering mode frame. Returns list of (x, y, speed) tuples.
+
+    Frame structure (30 bytes):
+    - Header: AA FF 03 00 (4 bytes)
+    - Target 1: X(2) Y(2) Speed(2) Reserved(2) = 8 bytes
+    - Target 2: X(2) Y(2) Speed(2) Reserved(2) = 8 bytes
+    - Target 3: X(2) Y(2) Speed(2) Reserved(2) = 8 bytes
+    - Footer: 55 CC (2 bytes)
+    """
+    if len(data) != FRAME_LEN:
         return []
     if data[:4] != FRAME_HEADER:
         return []
-    if data[-4:] != FRAME_FOOTER:
+    if data[28:30] != FRAME_FOOTER:
         return []
-    payload_len = struct.unpack_from('<H', data, 4)[0]
-    payload = data[6:6 + payload_len]
+
+    # Extract payload (24 bytes = 3 targets × 8 bytes each)
+    payload = data[4:28]
     targets = []
-    for i in range(0, min(len(payload), 18), 6):
-        if i + 6 > len(payload):
-            break
-        x, y, speed = struct.unpack_from('<hhH', payload, i)
-        targets.append((x, y, speed))
+
+    for i in range(0, 24, 8):  # 3 targets, 8 bytes each
+        x = struct.unpack_from('<h', payload, i)[0]      # signed 16-bit X
+        y = struct.unpack_from('<h', payload, i+2)[0]    # signed 16-bit Y
+        speed = struct.unpack_from('<H', payload, i+4)[0] # unsigned 16-bit speed
+        # Reserved at i+6 (2 bytes) - ignored
+
+        # Filter out empty targets (0,0)
+        if x != 0 or y != 0:
+            targets.append((x, y, speed))
+
     return targets
 
 
@@ -168,17 +183,25 @@ def pulse_relay(GPIO):
 
 
 def read_frame(ser) -> bytes:
-    """Read one complete LD2450 frame from the serial port."""
+    """Read one complete LD2450 Engineering mode frame (30 bytes)."""
     buf = b""
     while True:
         byte = ser.read(1)
         if not byte:
             continue
         buf += byte
-        if len(buf) >= 4 and buf[-4:] == FRAME_FOOTER:
-            if buf[:4] == FRAME_HEADER:
-                return buf
-            buf = b""  # bad frame, drop and resync
+
+        # Engineering mode frames are exactly 30 bytes
+        if len(buf) >= FRAME_LEN:
+            # Check if we have a valid frame
+            if buf[-FRAME_LEN:][:4] == FRAME_HEADER and buf[-2:] == FRAME_FOOTER:
+                return buf[-FRAME_LEN:]  # Return exactly 30 bytes
+            # Look for header in buffer to resync
+            header_idx = buf.find(FRAME_HEADER)
+            if header_idx >= 0:
+                buf = buf[header_idx:]  # Keep from header onward
+            else:
+                buf = buf[-4:]  # Keep last 4 bytes for potential header match
 
 
 def main() -> int:
