@@ -2,8 +2,9 @@
 
 Reads radar frames from UART, filters targets to a rectangular zone,
 tracks PRESENT/ABSENT state, drives the display via a GPIO-toggled relay
-and notifies the mirror over MQTT. On the PRESENT transition it also
-spawns face_reco_once.py so the mirror knows who walked up.
+and notifies the mirror over MQTT.
+
+Face recognition runs independently as a separate daemon (face_reco_daemon.py).
 
 The parser and PresenceTracker are deliberately platform-independent
 (no `serial` or `RPi.GPIO` import at module level) so the test suite
@@ -15,7 +16,6 @@ import json
 import math
 import os
 import struct
-import subprocess
 import time
 import logging
 import paho.mqtt.client as mqtt
@@ -39,11 +39,6 @@ SERIAL_BAUD = 256000
 MQTT_BROKER = os.environ.get("MQTT_BROKER", "127.0.0.1")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_TOPIC_PRESENCE = "smartmirror/radar/presence"
-
-FACE_RECO_SCRIPT = os.environ.get(
-    "FACE_RECO_SCRIPT",
-    "/home/admin/smartMirror/camera/face_reco_once.py",
-)
 
 
 def parse_frame(data: bytes) -> list:
@@ -130,7 +125,7 @@ class PresenceTracker:
         return None
 
 
-# --- HTTP + subprocess helpers (no Pi-specific deps) ---------------------
+# --- MQTT helpers (no Pi-specific deps) ---------------------
 
 def mqtt_publish(client: mqtt.Client, topic: str, payload: str) -> None:
     """Publish MQTT message. Failures are logged, never raised."""
@@ -142,27 +137,6 @@ def mqtt_publish(client: mqtt.Client, topic: str, payload: str) -> None:
             log.warning("MQTT publish failed: rc=%d", result.rc)
     except Exception as exc:  # noqa: BLE001
         log.warning("MQTT publish error: %s", exc)
-
-
-def trigger_face_reco(running: subprocess.Popen | None,
-                      script: str = FACE_RECO_SCRIPT) -> subprocess.Popen | None:
-    """Spawn face_reco_once.py if it isn't already running. Returns the handle."""
-    if running is not None and running.poll() is None:
-        log.info("face_reco still running, skipping trigger")
-        return running
-    if not os.path.exists(script):
-        log.warning("face_reco script not found: %s", script)
-        return None
-    try:
-        proc = subprocess.Popen(
-            ["python3", script],
-            stdout=subprocess.DEVNULL,  # logs go to stderr -> journald
-        )
-        log.info("face_reco_once spawned (pid=%s)", proc.pid)
-        return proc
-    except Exception as exc:  # noqa: BLE001
-        log.error("failed to spawn face_reco: %s", exc)
-        return None
 
 
 # --- hardware-bound (lazy-imported) -------------------------------------
@@ -213,7 +187,6 @@ def main() -> int:
         y_mm=PRESENCE_Y_MM,
         timeout_sec=ABSENCE_TIMEOUT_SEC,
     )
-    face_reco_proc: subprocess.Popen | None = None
 
     # Setup MQTT client
     mqtt_client = mqtt.Client(client_id="ld2450_daemon")
@@ -237,7 +210,6 @@ def main() -> int:
                     log.info("PRESENT — display ON, publishing to MQTT")
                     pulse_relay(GPIO)
                     mqtt_publish(mqtt_client, MQTT_TOPIC_PRESENCE, "present")
-                    face_reco_proc = trigger_face_reco(face_reco_proc)
                 elif event == "ABSENT":
                     log.info("ABSENT — display OFF, publishing to MQTT")
                     pulse_relay(GPIO)

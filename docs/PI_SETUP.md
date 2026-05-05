@@ -16,14 +16,16 @@ pm2 --version
 
 ### Spuštění MagicMirror s PM2
 
+**IMPORTANT:** MagicMirror potřebuje DISPLAY environment variable pro zobrazení na obrazovce.
+Použij ecosystem config file který zajistí správné nastavení.
+
 ```bash
+# Zkopíruj PM2 config z repozitáře
+cp ~/smartMirror/MagicMirror/pm2_magicmirror.config.js ~/MagicMirror/
+
+# Spusť MagicMirror s PM2 ecosystem config
 cd ~/MagicMirror
-
-# Varianta 1: Spuštění pomocí npm start
-pm2 start npm --name "MagicMirror" -- start
-
-# NEBO Varianta 2: Přímo s node (rychlejší restart)
-pm2 start "DISPLAY=:0 npm start" --name MagicMirror
+pm2 start pm2_magicmirror.config.js
 
 # Ověření že běží
 pm2 list
@@ -41,6 +43,24 @@ pm2 stop MagicMirror
 pm2 save
 pm2 startup
 # Spustí příkaz který PM2 vypíše (začíná "sudo env PATH=...")
+# ZKOPÍRUJ A SPUSŤ TEN PŘÍKAZ!
+```
+
+**Pokud PM2 startup nefunguje (MagicMirror se nezobrazí po restartu):**
+
+Problém: PM2 systemd service se spouští před X11/Wayland display serverem.
+
+Alternativa - použij autostart.desktop:
+```bash
+mkdir -p ~/.config/autostart
+cat > ~/.config/autostart/magicmirror.desktop <<EOF
+[Desktop Entry]
+Type=Application
+Name=MagicMirror
+Exec=/home/admin/.nvm/versions/node/v25.9.0/bin/pm2 resurrect
+StartupNotify=false
+Terminal=false
+EOF
 ```
 
 ### PM2 Užitečné příkazy

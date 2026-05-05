@@ -1,5 +1,5 @@
 [Unit]
-Description=LD2450 Radar Presence Detection Daemon
+Description=Face Recognition Daemon for MMM-Profile
 Documentation=https://github.com/Domes711/smartMirror
 After=network.target mosquitto.service
 Wants=mosquitto.service
@@ -8,8 +8,8 @@ Wants=mosquitto.service
 Type=simple
 User=admin
 Group=admin
-WorkingDirectory=/home/admin/smartMirror/ld2450
-ExecStart=/usr/bin/python3 /home/admin/smartMirror/ld2450/ld2450_daemon.py
+WorkingDirectory=/home/admin/smartMirror/camera
+ExecStart=/usr/bin/python3 /home/admin/smartMirror/camera/face_reco_daemon.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
