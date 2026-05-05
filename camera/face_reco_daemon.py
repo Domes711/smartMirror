@@ -34,9 +34,9 @@ DEFAULT_MQTT_PORT = 1883
 MQTT_TOPIC_PRESENCE = "smartmirror/radar/presence"
 MQTT_TOPIC_RECOGNITION = "smartmirror/camera/recognition"
 MQTT_TOPIC_CONTROL = "smartmirror/control/reset"
-DEFAULT_MAX_DURATION = 5.0  # seconds to scan for faces (reduced from 10s)
+DEFAULT_MAX_DURATION = 3.0  # seconds to scan for faces (aggressive optimization)
 DEFAULT_TOLERANCE = 0.6
-FRAME_INTERVAL = 0.5  # seconds between face detection attempts (increased for speed)
+FRAME_INTERVAL = 0.3  # seconds between face detection attempts
 
 logging.basicConfig(
     level=logging.INFO,
@@ -98,9 +98,9 @@ def recognize_stream(picam, max_duration, known_encodings, known_names, toleranc
             log.info("Timeout after %.1fs, result: %s", elapsed, kind)
             return None, kind
 
-        # Rate limiting
+        # Rate limiting - but process as fast as possible
         if elapsed - last_attempt < FRAME_INTERVAL:
-            time.sleep(0.05)
+            time.sleep(0.01)  # Minimal sleep for CPU breathing room
             continue
 
         last_attempt = elapsed
@@ -109,8 +109,14 @@ def recognize_stream(picam, max_duration, known_encodings, known_names, toleranc
         # Grab frame
         frame = picam.capture_array()
 
-        # Detect faces - use smaller resolution for speed
-        locations = face_recognition.face_locations(frame, model="hog")
+        # Detect faces - aggressive optimization:
+        # - model="hog" (faster than cnn on CPU)
+        # - number_of_times_to_upsample=0 (skip upsampling for speed)
+        locations = face_recognition.face_locations(
+            frame,
+            model="hog",
+            number_of_times_to_upsample=0
+        )
         if not locations:
             continue
 
@@ -153,15 +159,17 @@ class FaceRecoDaemon:
         try:
             from picamera2 import Picamera2
             self.picam = Picamera2()
-            # Lower resolution for faster processing on Pi
+            # Very low resolution for maximum speed on Pi
             config = self.picam.create_preview_configuration(
-                main={"size": (320, 240), "format": "RGB888"}
+                main={"size": (160, 120), "format": "RGB888"}
             )
             self.picam.configure(config)
             self.picam.start()
-            # Small warmup
-            time.sleep(0.5)
-            log.info("Camera initialized and ready (320x240)")
+            # Short warmup and discard first few frames (they can be blurry)
+            time.sleep(0.3)
+            for _ in range(3):
+                self.picam.capture_array()
+            log.info("Camera initialized and ready (160x120, optimized)")
         except Exception as exc:
             log.error("Failed to initialize camera: %s", exc)
             self.picam = None
