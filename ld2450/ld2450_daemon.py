@@ -2,7 +2,7 @@
 
 Reads radar frames from UART, filters targets to a rectangular zone,
 tracks PRESENT/ABSENT state, drives the display via a GPIO-toggled relay
-and notifies the mirror over HTTP. On the PRESENT transition it also
+and notifies the mirror over MQTT. On the PRESENT transition it also
 spawns face_reco_once.py so the mirror knows who walked up.
 
 The parser and PresenceTracker are deliberately platform-independent
@@ -17,8 +17,8 @@ import os
 import struct
 import subprocess
 import time
-import urllib.request
 import logging
+import paho.mqtt.client as mqtt
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger('ld2450')
@@ -36,10 +36,10 @@ RELAY_PULSE_MS = 100
 SERIAL_DEVICE = "/dev/ttyAMA0"
 SERIAL_BAUD = 256000
 
-MM_ENDPOINT = os.environ.get(
-    "MMP_ENDPOINT",
-    "http://127.0.0.1:8080/mmm-profile/event",
-)
+MQTT_BROKER = os.environ.get("MQTT_BROKER", "127.0.0.1")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
+MQTT_TOPIC_PRESENCE = "smartmirror/radar/presence"
+
 FACE_RECO_SCRIPT = os.environ.get(
     "FACE_RECO_SCRIPT",
     "/home/admin/smartMirror/camera/face_reco_once.py",
@@ -116,18 +116,16 @@ class PresenceTracker:
 
 # --- HTTP + subprocess helpers (no Pi-specific deps) ---------------------
 
-def post_event(payload: dict, endpoint: str = MM_ENDPOINT) -> None:
-    """POST a JSON event to MMM-Profile. Failures are logged, never raised."""
+def mqtt_publish(client: mqtt.Client, topic: str, payload: str) -> None:
+    """Publish MQTT message. Failures are logged, never raised."""
     try:
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            endpoint, data=data, method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            log.info("posted %s -> HTTP %s", payload.get("event"), resp.status)
+        result = client.publish(topic, payload, qos=1)
+        if result.rc == mqtt.MQTT_ERR_SUCCESS:
+            log.info("MQTT published: %s -> %s", topic, payload)
+        else:
+            log.warning("MQTT publish failed: rc=%d", result.rc)
     except Exception as exc:  # noqa: BLE001
-        log.warning("post failed: %s", exc)
+        log.warning("MQTT publish error: %s", exc)
 
 
 def trigger_face_reco(running: subprocess.Popen | None,
@@ -192,6 +190,17 @@ def main() -> int:
         timeout_sec=ABSENCE_TIMEOUT_SEC,
     )
     face_reco_proc: subprocess.Popen | None = None
+
+    # Setup MQTT client
+    mqtt_client = mqtt.Client(client_id="ld2450_daemon")
+    try:
+        mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        mqtt_client.loop_start()  # Run in background thread
+        log.info("MQTT connected to %s:%d", MQTT_BROKER, MQTT_PORT)
+    except Exception as exc:
+        log.error("MQTT connection failed: %s", exc)
+        return 1
+
     try:
         with serial.Serial(SERIAL_DEVICE, SERIAL_BAUD, timeout=1) as ser:
             log.info("daemon started, listening on %s @ %d baud",
@@ -201,18 +210,20 @@ def main() -> int:
                 targets = parse_frame(frame)
                 event = tracker.update(targets)
                 if event == "PRESENT":
-                    log.info("PRESENT — display ON, posting presence_on")
+                    log.info("PRESENT — display ON, publishing to MQTT")
                     pulse_relay(GPIO)
-                    post_event({"event": "presence_on"})
+                    mqtt_publish(mqtt_client, MQTT_TOPIC_PRESENCE, "present")
                     face_reco_proc = trigger_face_reco(face_reco_proc)
                 elif event == "ABSENT":
-                    log.info("ABSENT — display OFF, posting presence_off")
+                    log.info("ABSENT — display OFF, publishing to MQTT")
                     pulse_relay(GPIO)
-                    post_event({"event": "presence_off"})
+                    mqtt_publish(mqtt_client, MQTT_TOPIC_PRESENCE, "absent")
     except KeyboardInterrupt:
         log.info("daemon stopped")
         return 0
     finally:
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
         try:
             GPIO.cleanup()
         except Exception:  # noqa: BLE001

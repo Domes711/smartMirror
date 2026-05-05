@@ -22,10 +22,12 @@ import os
 import pickle
 import sys
 import time
-import urllib.request
+import paho.mqtt.client as mqtt
 
 DEFAULT_ENCODINGS = "/home/admin/smartMirror/camera/encoded_faces.pickle"
-DEFAULT_ENDPOINT = "http://127.0.0.1:8080/mmm-profile/event"
+DEFAULT_MQTT_BROKER = "127.0.0.1"
+DEFAULT_MQTT_PORT = 1883
+MQTT_TOPIC_RECOGNITION = "smartmirror/camera/recognition"
 DEFAULT_MAX_DURATION = 10.0  # seconds to scan for faces
 DEFAULT_WARMUP_SEC = 0.5
 DEFAULT_TOLERANCE = 0.6
@@ -38,19 +40,17 @@ logging.basicConfig(
 log = logging.getLogger("face_reco")
 
 
-def post_event(endpoint: str, payload: dict) -> None:
+def mqtt_publish(client: mqtt.Client, topic: str, payload: dict) -> None:
+    """Publish recognition result to MQTT. Failures are logged, never raised."""
     try:
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            endpoint,
-            data=data,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            log.info("POSTed %s -> HTTP %s", payload.get("event"), resp.status)
-    except Exception as exc:  # noqa: BLE001 -- never crash on POST
-        log.warning("POST failed: %s", exc)
+        data = json.dumps(payload)
+        result = client.publish(topic, data, qos=1)
+        if result.rc == mqtt.MQTT_ERR_SUCCESS:
+            log.info("MQTT published: %s -> %s", topic, data)
+        else:
+            log.warning("MQTT publish failed: rc=%d", result.rc)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("MQTT publish error: %s", exc)
 
 
 def load_known(pickle_path: str):
@@ -206,8 +206,10 @@ def main() -> int:
     )
     parser.add_argument("--encodings", default=DEFAULT_ENCODINGS,
                         help="path to encoded_faces.pickle")
-    parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT,
-                        help="MMM-Profile HTTP endpoint")
+    parser.add_argument("--mqtt-broker", default=DEFAULT_MQTT_BROKER,
+                        help=f"MQTT broker address (default: {DEFAULT_MQTT_BROKER})")
+    parser.add_argument("--mqtt-port", type=int, default=DEFAULT_MQTT_PORT,
+                        help=f"MQTT broker port (default: {DEFAULT_MQTT_PORT})")
     parser.add_argument("--max-duration", type=float, default=DEFAULT_MAX_DURATION,
                         help=f"max seconds to scan for faces (default: {DEFAULT_MAX_DURATION})")
     parser.add_argument("--warmup-sec", type=float, default=DEFAULT_WARMUP_SEC,
@@ -218,16 +220,26 @@ def main() -> int:
                         help="show live camera preview (for testing)")
     args = parser.parse_args()
 
+    # Setup MQTT client
+    mqtt_client = mqtt.Client(client_id="face_reco")
+    try:
+        mqtt_client.connect(args.mqtt_broker, args.mqtt_port, 60)
+        mqtt_client.loop_start()
+        log.info("MQTT connected to %s:%d", args.mqtt_broker, args.mqtt_port)
+    except Exception as exc:
+        log.error("MQTT connection failed: %s", exc)
+        return 1
+
     try:
         if not os.path.exists(args.encodings):
             log.error("encodings file not found: %s", args.encodings)
-            post_event(args.endpoint, {"event": "user_unknown"})
+            mqtt_publish(mqtt_client, MQTT_TOPIC_RECOGNITION, {"user": None})
             return 0
 
         known_encodings, known_names = load_known(args.encodings)
         if not known_encodings:
             log.warning("encodings file is empty")
-            post_event(args.endpoint, {"event": "user_unknown"})
+            mqtt_publish(mqtt_client, MQTT_TOPIC_RECOGNITION, {"user": None})
             return 0
 
         log.info("Loaded %d face encodings: %s", len(known_encodings),
@@ -243,20 +255,23 @@ def main() -> int:
         )
 
         if name:
-            post_event(args.endpoint, {"event": "user_recognized", "user": name})
+            mqtt_publish(mqtt_client, MQTT_TOPIC_RECOGNITION, {"user": name})
         else:
             log.info("No recognized face (%s after %.1fs)", kind, elapsed)
-            post_event(args.endpoint, {"event": "user_unknown"})
+            mqtt_publish(mqtt_client, MQTT_TOPIC_RECOGNITION, {"user": None})
 
         return 0
 
     except Exception as exc:  # noqa: BLE001 -- always exit clean
         log.exception("face recognition failed: %s", exc)
         try:
-            post_event(args.endpoint, {"event": "user_unknown"})
+            mqtt_publish(mqtt_client, MQTT_TOPIC_RECOGNITION, {"user": None})
         except Exception:  # noqa: BLE001
             pass
         return 0
+    finally:
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
 
 
 if __name__ == "__main__":
