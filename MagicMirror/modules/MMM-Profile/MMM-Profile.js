@@ -62,11 +62,11 @@ Module.register("MMM-Profile", {
 
         this.updateDom(0);
 
-        const key = this._layoutKey(this.activeLayout);
-        if (key !== this.activeLayoutKey) {
-            this.activeLayoutKey = key;
-            if (this.domReady) this._project(this.activeLayout);
+        // Always project layout, even if key didn't change (modules need to show/hide)
+        if (this.domReady) {
+            this._project(this.activeLayout);
         }
+        this.activeLayoutKey = this._layoutKey(this.activeLayout);
     },
 
     _layoutKey: function (layout) {
