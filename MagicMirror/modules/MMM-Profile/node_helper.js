@@ -8,6 +8,7 @@
  * MQTT subscriptions:
  *   smartmirror/radar/presence       payload: "present" | "absent"
  *   smartmirror/camera/recognition   payload: {"user": "Domes"} | {"user": null}
+ *   smartmirror/control/reset        payload: any (resets to initial state)
  *
  * Frontend protocol:
  *   FE → BE   MMP_INIT { pages, defaultUser, dimTimeoutMs, mqttBroker, mqttPort }
@@ -27,6 +28,7 @@ const DEFAULT_MQTT_BROKER = "mqtt://127.0.0.1:1883";
 
 const TOPIC_PRESENCE = "smartmirror/radar/presence";
 const TOPIC_RECOGNITION = "smartmirror/camera/recognition";
+const TOPIC_CONTROL = "smartmirror/control/reset";
 
 module.exports = NodeHelper.create({
 
@@ -68,7 +70,7 @@ module.exports = NodeHelper.create({
 
         this.mqttClient.on("connect", () => {
             Log.info("[MMM-Profile] MQTT connected to " + brokerUrl);
-            this.mqttClient.subscribe([TOPIC_PRESENCE, TOPIC_RECOGNITION], (err) => {
+            this.mqttClient.subscribe([TOPIC_PRESENCE, TOPIC_RECOGNITION, TOPIC_CONTROL], (err) => {
                 if (err) {
                     Log.error("[MMM-Profile] MQTT subscribe failed:", err);
                 } else {
@@ -107,6 +109,8 @@ module.exports = NodeHelper.create({
                 } else {
                     this._onUserUnknown();
                 }
+            } else if (topic === TOPIC_CONTROL) {
+                this._onReset();
             }
         } catch (err) {
             Log.error("[MMM-Profile] failed to handle MQTT message:", err);
@@ -152,6 +156,14 @@ module.exports = NodeHelper.create({
         }, ms);
         // Push so the frontend tracks the dimming state, but layout/UI
         // intentionally don't change here per the spec.
+        this._push();
+    },
+
+    _onReset: function () {
+        Log.info("[MMM-Profile] RESET command received, resetting to initial state");
+        this._cancelDimTimer();
+        this.state = "asleep";
+        this.currentUser = null;
         this._push();
     },
 
