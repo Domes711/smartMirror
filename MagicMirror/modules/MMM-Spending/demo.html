@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>MMM-Spending · live demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;200;300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./MMM-Spending.css">
+    <style>
+        html, body {
+            background: #000; color: #fff;
+            font-family: "Roboto Condensed", sans-serif;
+            margin: 0; padding: 40px 50px;
+        }
+        .mm-region { text-align: right; }
+        .module { display: inline-block; text-align: left; }
+        .module-header {
+            font-size: 15px; font-weight: 400;
+            text-transform: uppercase; letter-spacing: 2px;
+            border-bottom: 1px solid #666;
+            padding-bottom: 6px; margin-bottom: 12px;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="mm-region">
+        <div class="module">
+            <div class="module-header" id="hdr">Útrata dnes</div>
+            <div id="mount"></div>
+        </div>
+    </div>
+
+    <script>
+        // Stub MagicMirror framework so the module file can register itself.
+        window.Log = console;
+        window.Module = { _def: null, register: function (n, d) { this._def = d; } };
+    </script>
+    <script src="./MMM-Spending.js"></script>
+    <script>
+        const def = window.Module._def;
+        const mountEl = document.getElementById("mount");
+
+        const mod = Object.assign({}, def);
+        mod.config = Object.assign({}, def.defaults, { language: "cs", currency: "CZK" });
+        mod.data = null;
+        mod.errorMsg = null;
+        mod._currentDay = "demo";
+        mod.updateDom = function () {
+            const el = this.getDom();
+            mountEl.innerHTML = "";
+            mountEl.appendChild(el);
+        };
+        mod.sendSocketNotification = function () {};
+
+        const scenarios = {
+            // 2 transakce — odpovídá reálným datům z 2026-04-27
+            real: () => ({
+                state: "data",
+                data: {
+                    total: 432.99,
+                    currency: "CZK",
+                    count: 2,
+                    recent: [
+                        { payee: "TOP TABAK",  amount: 173,    currency: "CZK" },
+                        { payee: "ONTHATASS",  amount: 259.99, currency: "CZK" }
+                    ],
+                    generatedAt: new Date().toISOString()
+                }
+            }),
+            // 0 položek — prázdný den
+            empty: () => ({
+                state: "data",
+                data: {
+                    total: 0,
+                    currency: "CZK",
+                    count: 0,
+                    recent: [],
+                    generatedAt: new Date().toISOString()
+                }
+            }),
+            // hodně transakcí — investice + běžné výdaje
+            heavy: () => ({
+                state: "data",
+                data: {
+                    total: 2841.50,
+                    currency: "CZK",
+                    count: 7,
+                    recent: [
+                        { payee: "Wolt",                 amount: 376,    currency: "CZK" },
+                        { payee: "Restaurant & Pub Pivni", amount: 260,  currency: "CZK" },
+                        { payee: "2111495412/2700",      amount: 615,    currency: "CZK" }
+                    ],
+                    generatedAt: new Date().toISOString()
+                }
+            }),
+            // velká částka — test layoutu pro 5+ ciferné sumy
+            big: () => ({
+                state: "data",
+                data: {
+                    total: 18450,
+                    currency: "CZK",
+                    count: 4,
+                    recent: [
+                        { payee: "Alza.cz",     amount: 12990, currency: "CZK" },
+                        { payee: "Lidl Brno",   amount: 1240,  currency: "CZK" },
+                        { payee: "Zabka Brno",  amount: 89,    currency: "CZK" }
+                    ],
+                    generatedAt: new Date().toISOString()
+                }
+            }),
+            loading: () => ({ state: "loading" }),
+            error:   () => ({ state: "error", errorMsg: "API token expired (HTTP 401)" })
+        };
+
+        function apply() {
+            const name = (location.hash || "#real").slice(1);
+            const maker = scenarios[name] || scenarios.real;
+            const s = maker();
+            if (s.state === "loading") {
+                mod.data = null;
+                mod.errorMsg = null;
+            } else if (s.state === "error") {
+                mod.data = null;
+                mod.errorMsg = s.errorMsg;
+            } else {
+                mod.data = s.data;
+                mod.errorMsg = null;
+            }
+            mod.updateDom();
+        }
+        window.addEventListener("hashchange", apply);
+        apply();
+    </script>
+</body>
+</html>

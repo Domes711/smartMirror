@@ -1,0 +1,23 @@
+[Unit]
+Description=LD2450 Radar Presence Detection Daemon
+Documentation=https://github.com/Domes711/smartMirror
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/smartMirror/ld2450
+ExecStart=/usr/bin/python3 /home/admin/smartMirror/ld2450/ld2450_daemon.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (optional overrides)
+Environment="MQTT_BROKER=127.0.0.1"
+Environment="MQTT_PORT=1883"
+
+[Install]
+WantedBy=multi-user.target

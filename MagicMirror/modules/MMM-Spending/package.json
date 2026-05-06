@@ -1,0 +1,8 @@
+{
+    "name": "mmm-spending",
+    "version": "0.1.0",
+    "description": "MagicMirror module showing today's spending from Wallet by BudgetBakers.",
+    "main": "MMM-Spending.js",
+    "private": true,
+    "dependencies": {}
+}

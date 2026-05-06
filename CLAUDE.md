@@ -28,11 +28,11 @@ how to restore them.
 - `MagicMirror/modules/MMM-Profile/` — our own module (presence-driven profile + page scheduler; absorbed the former MMM-FaceRecoIndicator)
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
-- `MagicMirror/modules/MMM-Package-Tracker/` — our own module (universal package tracking via AfterShip, sourced from a dedicated HA todo list)
+- `MagicMirror/modules/MMM-Mail/` — fork of [MMPieps/MMM-Mail](https://github.com/MMPieps/MMM-Mail) pinned at `c24f973` with added `mailboxes` (multi-folder + per-folder `slaHours` countdown) on top of upstream
+- `MagicMirror/modules/MMM-Spending/` — our own module (today's spending pulled from Wallet by BudgetBakers REST API)
 - `MagicMirror/modules/MMM-GoogleCalendar/` — vendored fork of `randomBrainstormer/MMM-GoogleCalendar` v1.2.0 for visual customisation; replace upstream install on Pi
-- `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos (used by `ld2450/face_reco_once.py`)
-- `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
-- `ld2450/` — mirror of `~/ld2450/` (radar daemon, single-shot face_reco_once.py, tests, `ld2450.service`)
+- `camera/` — mirror of `~/smartMirror/camera/` (single-shot face recognition: `face_reco_once.py`, training photos in `dataset/Domes/`, `encoded_faces.pickle`)
+- `ld2450/` — mirror of `~/ld2450/` (radar daemon, tests, `ld2450.service`)
 
 As each plan task is completed on the Pi, the matching files above are copied
 back into this repo and committed. Nothing here is deployed automatically —
@@ -97,6 +97,12 @@ the radar handles *display power*.
   `superpowers:subagent-driven-development`
 - **Commits** use conventional-commit prefixes (`docs:`, `feat:`, `chore:`)
 - **Branches** for Claude-assisted work: `claude/<slug>`
+- **Module visual previews live in `demo.html` next to the module's source**
+  (`MagicMirror/modules/<MMM-Foo>/demo.html`). After pushing, post the live
+  raw.githack.com URL — user wants a clickable preview link by default, not
+  just PNGs:
+  `https://raw.githack.com/Domes711/smartMirror/<branch>/MagicMirror/modules/<MMM-Foo>/demo.html`
+  Append `?v=<sha>` if cache holds an old version.
 
 ## Executing the plans
 

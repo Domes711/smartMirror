@@ -1,0 +1,15 @@
+{
+  "name": "MMM-Mail",
+  "description": "MagicMirror module that displays unread emails from a configurable IMAP mailbox/folder.",
+  "keywords": [
+    "email",
+    "mirror",
+    "smart mirror",
+    "mirror email"
+  ],
+  "version": "0.1.0",
+  "dependencies": {
+    "util": "^0.10.0",
+    "emailjs-imap-client": "^2.0.0"
+  }
+}

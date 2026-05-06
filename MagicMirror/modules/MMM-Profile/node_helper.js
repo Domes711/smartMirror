@@ -5,16 +5,13 @@
  * cleanly in MagicMirror's browser context. The frontend is reduced to
  * "render the indicator + project the layout we tell it about".
  *
- * HTTP route:
- *   POST /mmm-profile/event   Content-Type: application/json
- *
- *   { "event": "presence_on" }
- *   { "event": "presence_off" }
- *   { "event": "user_recognized", "user": "Domes" }
- *   { "event": "user_unknown" }
+ * MQTT subscriptions:
+ *   smartmirror/radar/presence       payload: "present" | "absent"
+ *   smartmirror/camera/recognition   payload: {"user": "Domes"} | {"user": null}
+ *   smartmirror/control/reset        payload: any (resets to initial state)
  *
  * Frontend protocol:
- *   FE → BE   MMP_INIT { pages, defaultUser, dimTimeoutMs }
+ *   FE → BE   MMP_INIT { pages, defaultUser, dimTimeoutMs, mqttBroker, mqttPort }
  *   BE → FE   MMP_STATE { state, currentUser, layout }
  *               state: "asleep" | "scanning" | "user" | "dimming"
  *               layout: [{ id, position }, …]    (globalLayout already merged)
@@ -22,12 +19,16 @@
 
 const NodeHelper = require("node_helper");
 const Log = require("logger");
-const express = require("express");
 const cronParser = require("cron-parser");
+const mqtt = require("mqtt");
 
-const ROUTE = "/mmm-profile/event";
 const DEFAULT_USER = "default";
 const DEFAULT_DIM_MS = 60 * 1000;
+const DEFAULT_MQTT_BROKER = "mqtt://127.0.0.1:1883";
+
+const TOPIC_PRESENCE = "smartmirror/radar/presence";
+const TOPIC_RECOGNITION = "smartmirror/camera/recognition";
+const TOPIC_CONTROL = "smartmirror/control/reset";
 
 module.exports = NodeHelper.create({
 
@@ -36,41 +37,87 @@ module.exports = NodeHelper.create({
         this.state = "asleep";
         this.currentUser = null;
         this.dimTimer = null;
-
-        this.expressApp.post(ROUTE, express.json({ limit: "8kb" }), (req, res) => {
-            const body = req.body;
-            if (!body || typeof body !== "object" || !body.event) {
-                Log.warn("[MMM-Profile] bad event body:", body);
-                return res.status(400).end();
-            }
-            Log.info("[MMM-Profile] event:", body);
-            this._handleEvent(body);
-            res.status(204).end();
-        });
-        Log.info("[MMM-Profile] HTTP route mounted: POST " + ROUTE);
+        this.mqttClient = null;
+        Log.info("[MMM-Profile] node_helper started");
     },
 
     socketNotificationReceived: function (notification, payload) {
         if (notification === "MMP_INIT") {
             this.config = payload || {};
+            this._connectMQTT();
             // Send the initial state so the frontend can paint immediately.
             this._push();
         }
     },
 
-    // --- state machine -----------------------------------------------------
-
-    _handleEvent: function (body) {
-        switch (body.event) {
-            case "presence_on":     this._onPresenceOn();              break;
-            case "presence_off":    this._onPresenceOff();             break;
-            case "user_recognized": this._onUserRecognized(body.user); break;
-            case "user_unknown":    this._onUserUnknown();             break;
-            default:
-                Log.warn("[MMM-Profile] unknown event:", body.event);
-                break;
+    stop: function () {
+        if (this.mqttClient) {
+            this.mqttClient.end();
+            this.mqttClient = null;
         }
     },
+
+    // --- MQTT connection ---------------------------------------------------
+
+    _connectMQTT: function () {
+        const brokerUrl = (this.config && this.config.mqttBroker) || DEFAULT_MQTT_BROKER;
+
+        this.mqttClient = mqtt.connect(brokerUrl, {
+            clientId: "mmm-profile",
+            reconnectPeriod: 5000,
+            clean: true
+        });
+
+        this.mqttClient.on("connect", () => {
+            Log.info("[MMM-Profile] MQTT connected to " + brokerUrl);
+            this.mqttClient.subscribe([TOPIC_PRESENCE, TOPIC_RECOGNITION, TOPIC_CONTROL], (err) => {
+                if (err) {
+                    Log.error("[MMM-Profile] MQTT subscribe failed:", err);
+                } else {
+                    Log.info("[MMM-Profile] MQTT subscribed to topics");
+                }
+            });
+        });
+
+        this.mqttClient.on("message", (topic, message) => {
+            this._handleMQTTMessage(topic, message.toString());
+        });
+
+        this.mqttClient.on("error", (err) => {
+            Log.error("[MMM-Profile] MQTT error:", err);
+        });
+
+        this.mqttClient.on("offline", () => {
+            Log.warn("[MMM-Profile] MQTT offline, will reconnect...");
+        });
+    },
+
+    _handleMQTTMessage: function (topic, payload) {
+        Log.info("[MMM-Profile] MQTT message:", topic, payload);
+
+        try {
+            if (topic === TOPIC_PRESENCE) {
+                if (payload === "present") {
+                    this._onPresenceOn();
+                } else if (payload === "absent") {
+                    this._onPresenceOff();
+                }
+            } else if (topic === TOPIC_RECOGNITION) {
+                const data = JSON.parse(payload);
+                if (data.user) {
+                    this._onUserRecognized(data.user);
+                } else {
+                    this._onUserUnknown();
+                }
+            } else if (topic === TOPIC_CONTROL) {
+                this._onReset();
+            }
+        } catch (err) {
+            Log.error("[MMM-Profile] failed to handle MQTT message:", err);
+        }
+    },
+
+    // --- state machine -----------------------------------------------------
 
     _onPresenceOn: function () {
         if (this._cancelDimTimer()) {
@@ -109,6 +156,14 @@ module.exports = NodeHelper.create({
         }, ms);
         // Push so the frontend tracks the dimming state, but layout/UI
         // intentionally don't change here per the spec.
+        this._push();
+    },
+
+    _onReset: function () {
+        Log.info("[MMM-Profile] RESET command received, resetting to initial state");
+        this._cancelDimTimer();
+        this.state = "asleep";
+        this.currentUser = null;
         this._push();
     },
 
