@@ -34,6 +34,9 @@ let config = {
                 scanningStatus: "Skenování obličeje…",
                 recognizedStatus: "Obličej rozpoznán",
                 unknownStatus: "Obličej nerozpoznán",
+                userDisplayNames: {
+                    "Domes": "Domes"
+                },
                 dimTimeoutMs: 60000,
                 mqttBroker: "mqtt://127.0.0.1:1883"
             }
@@ -45,6 +48,18 @@ let config = {
             module: "clock",
             config: {
                 displaySeconds: false
+            }
+        },
+        {
+            id: "google-calendar",
+            module: "MMM-GoogleCalendar",
+            config: {
+                calendars: [
+                    {
+                        symbol: "calendar-week",
+                        calendarID: "TVOJE_CALENDAR_ID@group.calendar.google.com"  // Nahraď svým Calendar ID
+                    }
+                ]
             }
         }
     ]
