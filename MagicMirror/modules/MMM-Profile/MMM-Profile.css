@@ -15,9 +15,9 @@
  */
 
 :root {
-    --mmp-ring-size: 280px;
-    --mmp-avatar-size: 96px;
-    --mmp-error-size: 144px;
+    --mmp-ring-size: 180px;
+    --mmp-avatar-size: 70px;
+    --mmp-error-size: 100px;
     --mmp-face-color: #ffffff;
     --mmp-accent: #ffffff;
     --mmp-error-color: rgba(255,255,255,0.55);
@@ -28,10 +28,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 36px;
+    gap: 24px;
     color: var(--mmp-face-color);
     font-family: "Roboto", "Helvetica Neue", sans-serif;
-    min-height: 320px;
+    min-height: 220px;
 }
 
 .mmp[data-state="asleep"] { visibility: hidden; }
@@ -58,21 +58,18 @@
 }
 
 .scanner.intro {
-    animation: mmp-scannerIntro 1.15s cubic-bezier(.2,.7,.2,1.1) both;
+    animation: mmp-scannerIntro 0.4s ease both;
 }
 
 @keyframes mmp-scannerIntro {
-    0%   { opacity: 0; transform: translateY(-220px) scale(0.55); filter: blur(14px); }
-    35%  { opacity: 1; filter: blur(0); }
-    70%  { transform: translateY(14px) scale(1.04); }
-    85%  { transform: translateY(-4px) scale(0.99); }
-    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    0%   { opacity: 0; }
+    100% { opacity: 1; }
 }
 
 .scanner.intro .scan-line {
     top: 18%;
-    animation: mmp-lineFadeIn 0.35s ease 1.45s both,
-               mmp-sweep 2.2s ease-in-out infinite 1.8s;
+    animation: mmp-lineFadeIn 0.2s ease 0.4s both,
+               mmp-sweep 2.2s ease-in-out infinite 0.6s;
 }
 
 @keyframes mmp-lineFadeIn {
