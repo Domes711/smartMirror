@@ -4,7 +4,8 @@
  * Only clock and MMM-Profile modules, single default page.
  */
 
-const pages = require("./pages.js");
+const path = require("path");
+const pages = require(path.join(__dirname, "pages.js"));
 
 let config = {
     address: "localhost",
