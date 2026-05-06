@@ -4,8 +4,6 @@
  * Only clock and MMM-Profile modules, single default page.
  */
 
-const pages = require("/home/admin/MagicMirror/config/pages.js");
-
 let config = {
     address: "localhost",
     port: 8080,
@@ -30,7 +28,7 @@ let config = {
             position: "top_center",
             config: {
                 defaultUser: "default",
-                pages: pages,
+                // pages se načte automaticky z modulu MMM-Profile/pages.js
                 scanningStatus: "Skenování obličeje…",
                 recognizedStatus: "Obličej rozpoznán",
                 unknownStatus: "Obličej nerozpoznán",
