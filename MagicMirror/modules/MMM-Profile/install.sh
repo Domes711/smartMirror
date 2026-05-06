@@ -30,14 +30,10 @@ mkdir -p "$TARGET_DIR"
 echo "📦 Copying module files..."
 cp -r "$SOURCE_DIR"/* "$TARGET_DIR"/
 
-# Install npm dependencies if package.json exists
-if [ -f "$TARGET_DIR/package.json" ]; then
-    echo "📥 Installing npm dependencies..."
-    cd "$TARGET_DIR"
-    npm install
-else
-    echo "ℹ️  No package.json found, skipping npm install"
-fi
+# Install npm dependencies
+echo "📥 Installing npm dependencies..."
+cd "$TARGET_DIR"
+npm install
 
 echo
 echo "✅ $MODULE_NAME installed successfully!"
