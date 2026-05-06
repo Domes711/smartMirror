@@ -42,10 +42,11 @@ let config = {
             }
         },
 
-        // ── managed: position controlled by pages.js ──
+        // ── managed: initially rendered here, then moved by MMM-Profile according to pages.js ──
         {
             id: "clock",
             module: "clock",
+            position: "top_left",  // Initial position (will be moved by MMM-Profile)
             config: {
                 displaySeconds: false
             }
@@ -53,6 +54,7 @@ let config = {
         {
             id: "google-calendar",
             module: "MMM-GoogleCalendar",
+            position: "top_left",  // Initial position (will be moved by MMM-Profile)
             config: {
                 calendars: [
                     {
