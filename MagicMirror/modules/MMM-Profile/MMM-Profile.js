@@ -1,8 +1,8 @@
 /* MMM-Profile
  *
  * Frontend half of the presence-driven profile + page scheduler. The DOM
- * shape and animation are mirrored from tests/face-id-animation.html so
- * the mirror produces the same Face ID look the demo shows. State logic
+ * shape and animation are mirrored from demo.html (this folder) so the
+ * mirror produces the same Face ID look the demo shows. State logic
  * + cron-driven page resolution live in node_helper.js.
  *
  * Helper protocol:

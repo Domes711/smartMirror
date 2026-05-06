@@ -3,41 +3,78 @@
     text-align: right;
 }
 
-/* Card layout for the mail list. Scoped under .mmm-mail so the global
-   .normal/.bright/.light table classes used by other modules aren't
-   affected. */
+/* Force the table out of CSS table layout so the grid container inside
+   tr.normal gets a definite width. Without this the 1fr column expands to
+   content's max-content and text-overflow: ellipsis never triggers. */
+table.mmm-mail,
+table.mmm-mail > tbody { display: block; width: 100%; }
+table.mmm-mail { border-collapse: collapse; }
+
+/* Card layout. SLA badge sits in column 1 as a tall narrow vertical strip;
+   sender + subject stack in column 2. When the message has no SLA the first
+   column collapses to 0 (max-content of nothing) so SLA-less cards stay
+   edge-aligned. Scoped under .mmm-mail so the global .normal/.bright/.light
+   table classes used by other modules aren't affected. */
 table.mmm-mail tr.normal {
-    display: block;
-    margin-bottom: 10px;
-    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 0;
+    align-items: stretch;
+    margin-bottom: 4px;
+    padding: 4px 8px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
+    border-radius: 5px;
 }
 
+/* Single-line ellipsis on sender + subject so a long value doesn't push
+   the card to multiple rows. min-width: 0 lets the grid item shrink below
+   its intrinsic content width, which is what makes ellipsis actually fire. */
 table.mmm-mail tr.bright {
     display: block;
-    font-size: 17px;
-    margin-bottom: 4px;
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    font-size: 13px;
+    margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 table.mmm-mail tr.light {
     display: block;
-    font-size: 14px;
-    line-height: 1.35;
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    font-size: 10px;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* SLA countdown badge — only present when config.slaHours is set. */
+/* SLA countdown badge — vertical strip on the left side of the card.
+   Label is just "Hh Mm" (or "-Hh Mm" when overdue); colour + pulse already
+   communicate severity, so the "OVERDUE" / "left" words are dropped. */
 table.mmm-mail tr.sla {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 12px;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    padding: 2px 1px;
+    border-radius: 3px;
+    font-size: 9px;
     font-weight: 500;
     letter-spacing: 0.3px;
     border: 1px solid currentColor;
-    line-height: 1.4;
+    line-height: 1;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
 }
 table.mmm-mail tr.sla-ok   { color: #6fcf97; }
 table.mmm-mail tr.sla-warn { color: #f2c94c; }

@@ -1,143 +1,256 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="cs">
 <head>
     <meta charset="utf-8">
-    <title>MMM-Brno-Transit · live demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <title>MMM-Brno-Transit · náhled</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="./MMM-Brno-Transit.css">
     <style>
+        * { box-sizing: border-box; }
         html, body {
             background: #000; color: #fff;
             font-family: "Roboto Condensed", sans-serif;
-            margin: 0; padding: 40px 50px;
+            margin: 0; padding: 0;
+            -webkit-font-smoothing: antialiased;
         }
-        .mm-region { text-align: right; }
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        /* Mimic the top_right region the module lives in on the real mirror. */
+        .mm-region {
+            text-align: right;
+            padding: 24px 24px 0;
+        }
         .module { display: inline-block; text-align: left; }
-        .module-header {
-            font-size: 15px; font-weight: 400;
-            text-transform: uppercase; letter-spacing: 2px;
-            border-bottom: 1px solid #666;
-            padding-bottom: 6px; margin-bottom: 12px;
-            line-height: 1;
+
+        /* ---- Control panel under the module ---------------------------- */
+        .panel {
+            width: 100%;
+            max-width: 400px;
+            margin: 32px 24px 24px;
+            padding: 18px 22px 22px;
+            background: #0d0d0d;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            color: #d0d0d0;
+            font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+            font-size: 13px;
+        }
+        .panel h1 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #ccc;
+            font-weight: 600;
+            margin: 0 0 6px;
+        }
+        .panel h2 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #666;
+            font-weight: 600;
+            margin: 18px 0 10px;
+        }
+        .panel p {
+            color: #888;
+            line-height: 1.5;
+            margin: 0 0 6px;
+        }
+        .panel code {
+            background: #1a1a1a;
+            color: #c9d1d9;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-family: "SF Mono", Menlo, Consolas, monospace;
+            font-size: 11px;
+        }
+        .panel button {
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 10px 14px;
+            background: #1a1a1a;
+            color: #e6e6e6;
+            border: 1px solid #2a2a2a;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .panel button:hover { background: #222; border-color: #3a3a3a; }
+        .panel button.active {
+            background: #1f3a1f; border-color: #2d5a2d; color: #b8e6b8;
+        }
+        .panel pre.config {
+            font-family: "SF Mono", Menlo, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.6;
+            color: #9aa;
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            margin-top: 6px;
         }
     </style>
 </head>
 <body>
-    <div class="mm-region">
-        <div class="module">
-            <div class="module-header" id="stop-name">Vlhká</div>
-            <div id="mount"></div>
-        </div>
+
+<div class="mm-region">
+    <div class="module">
+        <div id="mount"></div>
     </div>
+</div>
 
-    <script>
-        // Stub just enough MagicMirror framework for the module to boot.
-        window.Log = console;
-        window.Module = {
-            _def: null,
-            register: function (name, def) { this._def = def; }
-        };
-    </script>
-    <script src="./MMM-Brno-Transit.js"></script>
-    <script>
-        const def = window.Module._def;
-        const mountEl = document.getElementById("mount");
+<div class="panel">
+    <h1>MMM-Brno-Transit · náhled</h1>
+    <p>
+        Live náhled modulu zobrazujícího odjezdy IDS JMK na zastávce.
+        Renderuje se přes reálný <code>MMM-Brno-Transit.js</code> +
+        <code>MMM-Brno-Transit.css</code> — co vidíš tady, vidíš i na zrcadle.
+    </p>
 
-        const mod = Object.assign({}, def);
-        mod.config = Object.assign({}, def.defaults, { stopName: "Vlhká" });
-        mod.payload = null;
+    <h2>Scénáře</h2>
+    <button id="btnRealtime" class="active" data-scenario="realtime">Realtime data (●pulse)</button>
+    <button id="btnScheduled" data-scenario="scheduled">Scheduled (bez delay)</button>
+    <button id="btnRush" data-scenario="rush">Rush hour (zpoždění)</button>
+    <button id="btnEmpty" data-scenario="empty">Mimo provoz</button>
+
+    <h2>Config v config.js</h2>
+    <pre class="config">{
+  module: 'MMM-Brno-Transit',
+  position: 'top_right',
+  config: {
+    stopName: 'Vlhká',
+    gtfsUrl: 'https://data.brno.cz/.../gtfs.zip',
+    perLine: 2,
+    minutesThreshold: 60,
+    refreshSec: 60,
+    lines: [
+      { line: '9' },
+      { line: '67' },
+    ],
+  },
+}</pre>
+</div>
+
+<script>
+    // Stub just enough MagicMirror framework for the module to boot.
+    window.Log = console;
+    window.Module = {
+        _def: null,
+        register: function (name, def) { this._def = def; }
+    };
+</script>
+<script src="./MMM-Brno-Transit.js"></script>
+<script>
+    const def = window.Module._def;
+    const mountEl = document.getElementById("mount");
+
+    const mod = Object.assign({}, def);
+    mod.config = Object.assign({}, def.defaults, { stopName: "Vlhká" });
+    mod.payload = null;
+    mod.errorMsg = null;
+    mod.updateDom = function () {
+        const el = this.getDom();
+        mountEl.innerHTML = "";
+        mountEl.appendChild(el);
+    };
+    mod.sendSocketNotification = function () { /* no helper here */ };
+
+    // Live countdown — re-render every 500 ms so "X min" ticks down smoothly.
+    setInterval(() => mod.updateDom(), 500);
+
+    const NOW = () => Date.now();
+    const scenarios = {
+        realtime: () => ({
+            stopName: "Vlhká",
+            departures: [
+                { line: "9", mode: "tram", items: [
+                    { arrivalMs: NOW() + 3 * 60 * 1000 + 20 * 1000,
+                      displayHm: "14:35", realtime: true, delayMin: 2, scheduledHm: "14:33" },
+                    { arrivalMs: NOW() + 13 * 60 * 1000,
+                      displayHm: "14:45", realtime: true, delayMin: 1, scheduledHm: "14:44" }
+                ]},
+                { line: "67", mode: "bus", items: [
+                    { arrivalMs: NOW() + 7 * 60 * 1000 + 10 * 1000,
+                      displayHm: "14:39", realtime: true, delayMin: 0, scheduledHm: null },
+                    { arrivalMs: NOW() + 37 * 60 * 1000,
+                      displayHm: "15:09", realtime: false, delayMin: null, scheduledHm: null }
+                ]}
+            ],
+            generatedAt: new Date().toISOString()
+        }),
+        scheduled: () => ({
+            stopName: "Vlhká",
+            departures: [
+                { line: "9", mode: "tram", items: [
+                    { arrivalMs: NOW() + 3 * 60 * 1000,
+                      displayHm: "14:33", realtime: false, delayMin: null, scheduledHm: null },
+                    { arrivalMs: NOW() + 13 * 60 * 1000,
+                      displayHm: "14:43", realtime: false, delayMin: null, scheduledHm: null }
+                ]},
+                { line: "67", mode: "bus", items: [
+                    { arrivalMs: NOW() + 12 * 60 * 1000,
+                      displayHm: "14:42", realtime: false, delayMin: null, scheduledHm: null },
+                    { arrivalMs: NOW() + 42 * 60 * 1000,
+                      displayHm: "15:12", realtime: false, delayMin: null, scheduledHm: null }
+                ]}
+            ],
+            generatedAt: new Date().toISOString()
+        }),
+        rush: () => ({
+            stopName: "Vlhká",
+            departures: [
+                { line: "9", mode: "tram", items: [
+                    { arrivalMs: NOW() + 5 * 60 * 1000,
+                      displayHm: "17:35", realtime: true, delayMin: 4, scheduledHm: "17:31" },
+                    { arrivalMs: NOW() + 12 * 60 * 1000,
+                      displayHm: "17:42", realtime: true, delayMin: 3, scheduledHm: "17:39" }
+                ]},
+                { line: "67", mode: "bus", items: [
+                    { arrivalMs: NOW() + 8 * 60 * 1000,
+                      displayHm: "17:38", realtime: true, delayMin: 5, scheduledHm: "17:33" },
+                    { arrivalMs: NOW() + 25 * 60 * 1000,
+                      displayHm: "17:55", realtime: false, delayMin: null, scheduledHm: null }
+                ]}
+            ],
+            generatedAt: new Date().toISOString()
+        }),
+        empty: () => ({
+            stopName: "Vlhká",
+            departures: [
+                { line: "9", mode: "tram", items: [
+                    { arrivalMs: NOW() + 3 * 60 * 1000,
+                      displayHm: "02:33", realtime: true, delayMin: 1, scheduledHm: "02:32" }
+                ]},
+                { line: "67", mode: "bus", items: [] }
+            ],
+            generatedAt: new Date().toISOString()
+        })
+    };
+
+    const buttons = document.querySelectorAll(".panel button[data-scenario]");
+    function apply(name) {
+        const maker = scenarios[name] || scenarios.realtime;
+        mod.payload = maker();
         mod.errorMsg = null;
-        mod.updateDom = function () {
-            const el = this.getDom();
-            mountEl.innerHTML = "";
-            mountEl.appendChild(el);
-        };
-        mod.sendSocketNotification = function () { /* no helper here */ };
-
-        // Live countdown — re-render every second so "X min" ticks down
-        setInterval(() => mod.updateDom(), 500);
-
-        const NOW = () => Date.now();
-        const scenarios = {
-            realtime: () => ({
-                stopName: "Vlhká",
-                departures: [
-                    { line: "9", mode: "tram", items: [
-                        { arrivalMs: NOW() + 3 * 60 * 1000 + 20 * 1000,
-                          displayHm: "14:35", realtime: true, delayMin: 2, scheduledHm: "14:33" },
-                        { arrivalMs: NOW() + 13 * 60 * 1000,
-                          displayHm: "14:45", realtime: true, delayMin: 1, scheduledHm: "14:44" }
-                    ]},
-                    { line: "67", mode: "bus", items: [
-                        { arrivalMs: NOW() + 7 * 60 * 1000 + 10 * 1000,
-                          displayHm: "14:39", realtime: true, delayMin: 0, scheduledHm: null },
-                        { arrivalMs: NOW() + 37 * 60 * 1000,
-                          displayHm: "15:09", realtime: false, delayMin: null, scheduledHm: null }
-                    ]}
-                ],
-                generatedAt: new Date().toISOString()
-            }),
-            scheduled: () => ({
-                stopName: "Vlhká",
-                departures: [
-                    { line: "9", mode: "tram", items: [
-                        { arrivalMs: NOW() + 3 * 60 * 1000,
-                          displayHm: "14:33", realtime: false, delayMin: null, scheduledHm: null },
-                        { arrivalMs: NOW() + 13 * 60 * 1000,
-                          displayHm: "14:43", realtime: false, delayMin: null, scheduledHm: null }
-                    ]},
-                    { line: "67", mode: "bus", items: [
-                        { arrivalMs: NOW() + 12 * 60 * 1000,
-                          displayHm: "14:42", realtime: false, delayMin: null, scheduledHm: null },
-                        { arrivalMs: NOW() + 42 * 60 * 1000,
-                          displayHm: "15:12", realtime: false, delayMin: null, scheduledHm: null }
-                    ]}
-                ],
-                generatedAt: new Date().toISOString()
-            }),
-            rush: () => ({
-                stopName: "Vlhká",
-                departures: [
-                    { line: "9", mode: "tram", items: [
-                        { arrivalMs: NOW() + 5 * 60 * 1000,
-                          displayHm: "17:35", realtime: true, delayMin: 4, scheduledHm: "17:31" },
-                        { arrivalMs: NOW() + 12 * 60 * 1000,
-                          displayHm: "17:42", realtime: true, delayMin: 3, scheduledHm: "17:39" }
-                    ]},
-                    { line: "67", mode: "bus", items: [
-                        { arrivalMs: NOW() + 8 * 60 * 1000,
-                          displayHm: "17:38", realtime: true, delayMin: 5, scheduledHm: "17:33" },
-                        { arrivalMs: NOW() + 25 * 60 * 1000,
-                          displayHm: "17:55", realtime: false, delayMin: null, scheduledHm: null }
-                    ]}
-                ],
-                generatedAt: new Date().toISOString()
-            }),
-            empty: () => ({
-                stopName: "Vlhká",
-                departures: [
-                    { line: "9", mode: "tram", items: [
-                        { arrivalMs: NOW() + 3 * 60 * 1000,
-                          displayHm: "02:33", realtime: true, delayMin: 1, scheduledHm: "02:32" }
-                    ]},
-                    { line: "67", mode: "bus", items: [] }
-                ],
-                generatedAt: new Date().toISOString()
-            })
-        };
-
-        function apply() {
-            const name = (location.hash || "#realtime").slice(1);
-            const maker = scenarios[name] || scenarios.realtime;
-            mod.payload = maker();
-            mod.errorMsg = null;
-            mod.updateDom();
-        }
-        window.addEventListener("hashchange", apply);
-        apply();
-    </script>
+        mod.updateDom();
+        buttons.forEach((b) => b.classList.toggle("active", b.dataset.scenario === name));
+    }
+    buttons.forEach((b) => b.addEventListener("click", () => apply(b.dataset.scenario)));
+    apply("realtime");
+</script>
 </body>
 </html>

@@ -1,10 +1,10 @@
 /* MMM-Profile — indicator UI styles
  *
- * Mirrors the Face ID animation in tests/face-id-animation.html so the
- * mirror produces the exact same visual output the demo defines. Do not
- * edit the demo HTML — it's the source of truth for the look. Tweak
- * here only if the integration into MagicMirror needs different sizing
- * or a state mapping the demo doesn't have.
+ * Mirrors the Face ID animation in demo.html (this folder) so the mirror
+ * produces the exact same visual output the demo defines. Do not edit
+ * the demo HTML — it's the source of truth for the look. Tweak here
+ * only if the integration into MagicMirror needs different sizing or a
+ * state mapping the demo doesn't have.
  *
  * State mapping (controlled by data-state on .mmp + class on .profile):
  *   asleep    -> .mmp[data-state="asleep"] hides everything
