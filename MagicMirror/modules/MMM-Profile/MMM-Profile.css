@@ -15,23 +15,23 @@
  */
 
 :root {
-    --mmp-ring-size: 180px;
-    --mmp-avatar-size: 70px;
-    --mmp-error-size: 100px;
+    --mmp-ring-size: 90px;
+    --mmp-avatar-size: 35px;
+    --mmp-error-size: 50px;
     --mmp-face-color: #ffffff;
     --mmp-accent: #ffffff;
     --mmp-error-color: rgba(255,255,255,0.55);
-    --mmp-scan-duration: 3.2s;
+    --mmp-scan-duration: 1.6s;
 }
 
 .mmp {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 24px;
+    gap: 12px;
     color: var(--mmp-face-color);
     font-family: "Roboto", "Helvetica Neue", sans-serif;
-    min-height: 220px;
+    min-height: 110px;
 }
 
 .mmp[data-state="asleep"] { visibility: hidden; }
@@ -41,7 +41,7 @@
     align-items: center;
     justify-content: center;
     gap: 0;
-    transition: gap 0.6s ease 0.6s;
+    transition: gap 0.3s ease 0.3s;
 }
 
 .scanner {
@@ -53,12 +53,12 @@
     justify-content: center;
     transform-origin: center center;
     transition:
-        width 0.7s cubic-bezier(.2,.8,.2,1) 0.5s,
-        height 0.7s cubic-bezier(.2,.8,.2,1) 0.5s;
+        width 0.35s cubic-bezier(.2,.8,.2,1) 0.25s,
+        height 0.35s cubic-bezier(.2,.8,.2,1) 0.25s;
 }
 
 .scanner.intro {
-    animation: mmp-scannerIntro 0.4s ease both;
+    animation: mmp-scannerIntro 0.2s ease both;
 }
 
 @keyframes mmp-scannerIntro {
@@ -68,8 +68,8 @@
 
 .scanner.intro .scan-line {
     top: 18%;
-    animation: mmp-lineFadeIn 0.2s ease 0.4s both,
-               mmp-sweep 2.2s ease-in-out infinite 0.6s;
+    animation: mmp-lineFadeIn 0.1s ease 0.2s both,
+               mmp-sweep 1.1s ease-in-out infinite 0.3s;
 }
 
 @keyframes mmp-lineFadeIn {
@@ -98,9 +98,9 @@
     stroke-width: 1.5;
     stroke-linecap: butt;
     transition:
-        stroke 0.4s ease,
-        stroke-width 0.4s ease,
-        stroke-dasharray 0.3s ease;
+        stroke 0.2s ease,
+        stroke-width 0.2s ease,
+        stroke-dasharray 0.15s ease;
 }
 
 .ring::after {
@@ -109,7 +109,7 @@
     inset: -10px;
     border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.06);
-    transition: opacity 0.4s ease;
+    transition: opacity 0.2s ease;
 }
 
 @keyframes mmp-spin { to { transform: rotate(360deg); } }
@@ -125,25 +125,25 @@
     fill: none;
     filter: drop-shadow(0 0 6px rgba(255,255,255,0.25));
     transition:
-        stroke 0.5s ease,
-        opacity 0.4s ease 0.7s;
+        stroke 0.25s ease,
+        opacity 0.2s ease 0.35s;
 }
 
 .face path,
 .face circle {
     stroke-dasharray: 240;
     stroke-dashoffset: 240;
-    animation: mmp-draw 1.4s ease forwards;
+    animation: mmp-draw 0.7s ease forwards;
 }
 
 .face .outline { animation-delay: 0s; }
-.face .eye-l   { animation-delay: 0.5s; }
-.face .eye-r   { animation-delay: 0.65s; }
+.face .eye-l   { animation-delay: 0.25s; }
+.face .eye-r   { animation-delay: 0.325s; }
 .face .mouth   {
-    animation-delay: 0.9s;
+    animation-delay: 0.45s;
     d: path("M38 62 Q50 70 62 62");
     transform-origin: 50% 63%;
-    transition: d 0.45s cubic-bezier(.4,1.6,.4,1), transform 0.35s ease;
+    transition: d 0.225s cubic-bezier(.4,1.6,.4,1), transform 0.175s ease;
 }
 
 @keyframes mmp-draw { to { stroke-dashoffset: 0; } }
@@ -162,9 +162,9 @@
                 0 0 24px rgba(255,255,255,0.35);
     border-radius: 2px;
     top: 18%;
-    animation: mmp-sweep 2.2s ease-in-out infinite;
+    animation: mmp-sweep 1.1s ease-in-out infinite;
     opacity: 0.95;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.15s ease;
 }
 
 @keyframes mmp-sweep {
@@ -183,10 +183,10 @@
     background-size: 14px 14px;
     mix-blend-mode: screen;
     opacity: 0.55;
-    animation: mmp-pulseDots 2.2s ease-in-out infinite;
+    animation: mmp-pulseDots 1.1s ease-in-out infinite;
     -webkit-mask-image: radial-gradient(circle, #000 60%, transparent 75%);
             mask-image: radial-gradient(circle, #000 60%, transparent 75%);
-    transition: opacity 0.3s ease;
+    transition: opacity 0.15s ease;
 }
 
 @keyframes mmp-pulseDots {
@@ -206,8 +206,8 @@
     opacity: 0;
     transform: scale(0.6);
     transition:
-        opacity 0.4s ease 0.9s,
-        transform 0.5s cubic-bezier(.2,.8,.2,1.2) 0.9s;
+        opacity 0.2s ease 0.45s,
+        transform 0.25s cubic-bezier(.2,.8,.2,1.2) 0.45s;
 }
 
 .avatar svg {
@@ -226,26 +226,26 @@
     opacity: 0;
     transform: translateX(-12px);
     transition:
-        max-width 0.6s ease 0.7s,
-        opacity 0.4s ease 1s,
-        transform 0.5s ease 1s;
+        max-width 0.3s ease 0.35s,
+        opacity 0.2s ease 0.5s,
+        transform 0.25s ease 0.5s;
 }
 
 .profile-info .name {
-    font-size: 22px;
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.2px;
 }
 
 /* ============ SUCCESS ============ */
 .profile.success .ring {
-    animation: mmp-spin 1.6s linear infinite, mmp-pulseRing 0.6s ease;
+    animation: mmp-spin 0.8s linear infinite, mmp-pulseRing 0.3s ease;
 }
 .profile.success .ring-circle {
     stroke: var(--mmp-accent);
     stroke-dasharray: none;
     stroke-width: 2.5;
-    animation: mmp-tintGreenStroke 1.6s ease forwards;
+    animation: mmp-tintGreenStroke 0.8s ease forwards;
 }
 
 @keyframes mmp-pulseRing {
@@ -264,7 +264,7 @@
 
 .profile.success .face {
     stroke: var(--mmp-accent);
-    animation: mmp-tintGreenStroke 1.6s ease forwards;
+    animation: mmp-tintGreenStroke 0.8s ease forwards;
 }
 .profile.success .scan-line,
 .profile.success .dots,
@@ -275,19 +275,19 @@
     stroke-width: 8;
 }
 .profile.success .face .eye-l,
-.profile.success .face .eye-r { opacity: 0; transition: opacity 0.4s ease; }
-.profile.success .face .outline { opacity: 0; transition: opacity 0.4s ease 0.6s; }
+.profile.success .face .eye-r { opacity: 0; transition: opacity 0.2s ease; }
+.profile.success .face .outline { opacity: 0; transition: opacity 0.2s ease 0.3s; }
 
 .profile.success .scanner {
     width: var(--mmp-avatar-size);
     height: var(--mmp-avatar-size);
 }
 .profile.success .ring {
-    animation: mmp-spin 6s linear infinite;
+    animation: mmp-spin 3s linear infinite;
 }
 .profile.success .face { opacity: 0; }
 .profile.success .avatar { opacity: 1; transform: scale(1); }
-.profile.success { gap: 18px; }
+.profile.success { gap: 9px; }
 .profile.success .profile-info {
     max-width: 240px;
     opacity: 1;
@@ -307,13 +307,13 @@
     stroke: var(--mmp-error-color);
     stroke-dasharray: none;
     stroke-width: 2.5;
-    animation: mmp-tintRedStroke 1.6s ease forwards;
+    animation: mmp-tintRedStroke 0.8s ease forwards;
 }
 .profile.error .ring::after { opacity: 0; }
 .profile.error .face {
     stroke: var(--mmp-error-color);
     opacity: 1;
-    animation: mmp-tintRedStroke 1.6s ease forwards;
+    animation: mmp-tintRedStroke 0.8s ease forwards;
 }
 
 /* Brief red tint that settles back to dimmed white */
@@ -330,11 +330,11 @@
 .profile.error .face .eye-l,
 .profile.error .face .eye-r {
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.1s ease;
 }
 .profile.error .face .outline {
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.15s ease;
 }
 
 .face .x-stroke {
@@ -346,27 +346,27 @@
 }
 .profile.error .face .x-stroke {
     opacity: 1;
-    transition: opacity 0.1s ease;
+    transition: opacity 0.05s ease;
 }
 .profile.error .face .x1 {
-    animation: mmp-drawStroke 0.3s ease 0.15s forwards,
-               mmp-tintRedStroke 1.6s ease forwards;
+    animation: mmp-drawStroke 0.15s ease 0.075s forwards,
+               mmp-tintRedStroke 0.8s ease forwards;
 }
 .profile.error .face .x2 {
-    animation: mmp-drawStroke 0.3s ease 0.35s forwards,
-               mmp-tintRedStroke 1.6s ease forwards;
+    animation: mmp-drawStroke 0.15s ease 0.175s forwards,
+               mmp-tintRedStroke 0.8s ease forwards;
 }
 
 @keyframes mmp-drawStroke { to { stroke-dashoffset: 0; } }
 
 /* Status text below the scanner */
 .mmp-status {
-    font-size: 18px;
+    font-size: 9px;
     letter-spacing: 0.4px;
     color: rgba(255,255,255,0.85);
-    min-height: 24px;
+    min-height: 12px;
     text-align: center;
-    transition: color 0.4s ease;
+    transition: color 0.2s ease;
 }
 .profile.error ~ .mmp-status,
 .profile.error + .mmp-status {
