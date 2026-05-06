@@ -27,11 +27,11 @@ FRAME_HEADER = bytes([0xAA, 0xFF, 0x03, 0x00])  # Engineering mode
 FRAME_FOOTER = bytes([0x55, 0xCC])  # Engineering mode
 FRAME_LEN = 30  # header(4) + data(24) + footer(2)
 
-GPIO_RELAY = 17
+GPIO_BUTTON = 17
 PRESENCE_X_MM = 400      # half-width of detection zone (+-40cm)
 PRESENCE_Y_MM = 1500     # depth of detection zone (1.5m)
 ABSENCE_TIMEOUT_SEC = 60 # spec 2026-04-26: 60 s instead of the v1 120 s
-RELAY_PULSE_MS = 100
+BUTTON_PULSE_MS = 100    # confirmed working on the live monitor
 
 SERIAL_DEVICE = "/dev/ttyAMA0"
 SERIAL_BAUD = 256000
@@ -144,17 +144,21 @@ def mqtt_publish(client: mqtt.Client, topic: str, payload: str) -> None:
 def setup_gpio():
     import RPi.GPIO as GPIO
     GPIO.setmode(GPIO.BCM)
-    GPIO.setup(GPIO_RELAY, GPIO.OUT, initial=GPIO.LOW)
-    log.info("GPIO%d ready", GPIO_RELAY)
+    GPIO.setwarnings(False)
+    GPIO.setup(GPIO_BUTTON, GPIO.IN)  # idle high-Z
+    log.info("GPIO%d ready (idle INPUT)", GPIO_BUTTON)
     return GPIO
 
 
-def pulse_relay(GPIO):
-    """Pulse GPIO_RELAY for RELAY_PULSE_MS ms to simulate a button press."""
-    GPIO.output(GPIO_RELAY, GPIO.HIGH)
-    time.sleep(RELAY_PULSE_MS / 1000)
-    GPIO.output(GPIO_RELAY, GPIO.LOW)
-    log.info("relay pulsed")
+def pulse_button(GPIO):
+    """Pull SIG to GND for BUTTON_PULSE_MS ms to simulate a button press.
+
+    Toggle pattern: INPUT (idle) -> OUTPUT LOW (pulse) -> INPUT (idle).
+    """
+    GPIO.setup(GPIO_BUTTON, GPIO.OUT, initial=GPIO.LOW)
+    time.sleep(BUTTON_PULSE_MS / 1000)
+    GPIO.setup(GPIO_BUTTON, GPIO.IN)
+    log.info("button pulsed")
 
 
 def read_frame(ser) -> bytes:
