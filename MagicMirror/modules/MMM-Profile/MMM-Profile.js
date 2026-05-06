@@ -84,10 +84,8 @@ Module.register("MMM-Profile", {
 
         const profileClass = this._profileClass();
         const display = this._displayName();
-        const status  = this._statusText();
 
         wrap.appendChild(this._buildProfile(profileClass, display));
-        wrap.appendChild(this._buildStatus(status));
         return wrap;
     },
 
