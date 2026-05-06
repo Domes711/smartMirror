@@ -2,14 +2,19 @@
     text-align: left;
     display: inline-block;
     margin-right: 24px;        /* nudge content leftward inside top_right region */
+    /* Lock the footprint so switching between realtime / scheduled / empty
+       (different times string lengths, "— mimo provoz" filler, pulse dot
+       appearing or not) doesn't slide the module sideways. */
+    min-width: 240px;
 }
 
 .mmbt-header {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
-    padding-bottom: 5px;
-    margin-bottom: 10px;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
     border-bottom: 1px solid #666;
     font-size: 15px;
     line-height: 15px;
@@ -21,8 +26,8 @@
 
 .mmbt-header-dot {
     display: inline-block;
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #fff;
     animation: mmbt-pulse 1.8s ease-in-out infinite;
@@ -30,10 +35,10 @@
 
 .mmbt-row {
     display: grid;
-    grid-template-columns: 30px 44px 1fr;
-    column-gap: 16px;
+    grid-template-columns: 22px 34px 1fr;
+    column-gap: 12px;
     align-items: baseline;
-    padding: 7px 0;
+    padding: 4px 0;
     line-height: 1;
 }
 
@@ -42,7 +47,7 @@
 }
 
 .mmbt-icon {
-    font-size: 20px;
+    font-size: 16px;
     color: #999;
     text-align: center;
     line-height: 1;
@@ -50,14 +55,14 @@
 
 .mmbt-line {
     font-weight: 700;
-    font-size: 28px;
+    font-size: 22px;
     color: #fff;
     font-feature-settings: "tnum";
     font-variant-numeric: tabular-nums;
 }
 
 .mmbt-times {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 300;
     white-space: nowrap;
 }
@@ -67,9 +72,9 @@
 }
 
 .mmbt-time + .mmbt-time {
-    margin-left: 14px;
+    margin-left: 12px;
     color: #999;
-    font-size: 19px;
+    font-size: 15px;
 }
 
 @keyframes mmbt-pulse {

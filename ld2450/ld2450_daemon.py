@@ -2,8 +2,9 @@
 
 Reads radar frames from UART, filters targets to a rectangular zone,
 tracks PRESENT/ABSENT state, drives the display via a GPIO-toggled relay
-and notifies the mirror over HTTP. On the PRESENT transition it also
-spawns face_reco_once.py so the mirror knows who walked up.
+and notifies the mirror over MQTT.
+
+Face recognition runs independently as a separate daemon (face_reco_daemon.py).
 
 The parser and PresenceTracker are deliberately platform-independent
 (no `serial` or `RPi.GPIO` import at module level) so the test suite
@@ -15,53 +16,63 @@ import json
 import math
 import os
 import struct
-import subprocess
 import time
-import urllib.request
 import logging
+import paho.mqtt.client as mqtt
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger('ld2450')
 
-FRAME_HEADER = bytes([0xFD, 0xFC, 0xFB, 0xFA])
-FRAME_FOOTER = bytes([0x04, 0x03, 0x02, 0x01])
-FRAME_MIN_LEN = 10  # header(4) + length(2) + data(0+) + footer(4)
+FRAME_HEADER = bytes([0xAA, 0xFF, 0x03, 0x00])  # Engineering mode
+FRAME_FOOTER = bytes([0x55, 0xCC])  # Engineering mode
+FRAME_LEN = 30  # header(4) + data(24) + footer(2)
 
-GPIO_RELAY = 17
+GPIO_BUTTON = 17
 PRESENCE_X_MM = 400      # half-width of detection zone (+-40cm)
 PRESENCE_Y_MM = 1500     # depth of detection zone (1.5m)
 ABSENCE_TIMEOUT_SEC = 60 # spec 2026-04-26: 60 s instead of the v1 120 s
-RELAY_PULSE_MS = 100
+BUTTON_PULSE_MS = 100    # confirmed working on the live monitor
 
 SERIAL_DEVICE = "/dev/ttyAMA0"
 SERIAL_BAUD = 256000
 
-MM_ENDPOINT = os.environ.get(
-    "MMP_ENDPOINT",
-    "http://127.0.0.1:8080/mmm-profile/event",
-)
-FACE_RECO_SCRIPT = os.environ.get(
-    "FACE_RECO_SCRIPT",
-    "/home/admin/ld2450/face_reco_once.py",
-)
+MQTT_BROKER = os.environ.get("MQTT_BROKER", "127.0.0.1")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
+MQTT_TOPIC_PRESENCE = "smartmirror/radar/presence"
 
 
 def parse_frame(data: bytes) -> list:
-    """Parse a LD2450 binary frame. Returns list of (x, y, speed) tuples or []."""
-    if len(data) < FRAME_MIN_LEN:
+    """Parse LD2450 Engineering mode frame. Returns list of (x, y, speed) tuples.
+
+    Frame structure (30 bytes):
+    - Header: AA FF 03 00 (4 bytes)
+    - Target 1: X(2) Y(2) Speed(2) Reserved(2) = 8 bytes
+    - Target 2: X(2) Y(2) Speed(2) Reserved(2) = 8 bytes
+    - Target 3: X(2) Y(2) Speed(2) Reserved(2) = 8 bytes
+    - Footer: 55 CC (2 bytes)
+    """
+    if len(data) != FRAME_LEN:
         return []
     if data[:4] != FRAME_HEADER:
         return []
-    if data[-4:] != FRAME_FOOTER:
+    if data[28:30] != FRAME_FOOTER:
         return []
-    payload_len = struct.unpack_from('<H', data, 4)[0]
-    payload = data[6:6 + payload_len]
+
+    # Extract payload (24 bytes = 3 targets × 8 bytes each)
+    payload = data[4:28]
     targets = []
-    for i in range(0, min(len(payload), 18), 6):
-        if i + 6 > len(payload):
-            break
-        x, y, speed = struct.unpack_from('<hhH', payload, i)
-        targets.append((x, y, speed))
+
+    for i in range(0, 24, 8):  # 3 targets, 8 bytes each
+        x = struct.unpack_from('<H', payload, i)[0]      # unsigned 16-bit X (mm)
+        y_cm = payload[i+2]                               # Y in centimeters!
+        y = y_cm * 10                                     # convert cm to mm
+        speed = struct.unpack_from('<H', payload, i+4)[0] # unsigned 16-bit speed
+        # Bytes i+3, i+6, i+7 - unknown/reserved
+
+        # Filter out empty targets (0,0)
+        if x != 0 or y != 0:
+            targets.append((x, y, speed))
+
     return targets
 
 
@@ -114,41 +125,18 @@ class PresenceTracker:
         return None
 
 
-# --- HTTP + subprocess helpers (no Pi-specific deps) ---------------------
+# --- MQTT helpers (no Pi-specific deps) ---------------------
 
-def post_event(payload: dict, endpoint: str = MM_ENDPOINT) -> None:
-    """POST a JSON event to MMM-Profile. Failures are logged, never raised."""
+def mqtt_publish(client: mqtt.Client, topic: str, payload: str) -> None:
+    """Publish MQTT message. Failures are logged, never raised."""
     try:
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            endpoint, data=data, method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            log.info("posted %s -> HTTP %s", payload.get("event"), resp.status)
+        result = client.publish(topic, payload, qos=1)
+        if result.rc == mqtt.MQTT_ERR_SUCCESS:
+            log.info("MQTT published: %s -> %s", topic, payload)
+        else:
+            log.warning("MQTT publish failed: rc=%d", result.rc)
     except Exception as exc:  # noqa: BLE001
-        log.warning("post failed: %s", exc)
-
-
-def trigger_face_reco(running: subprocess.Popen | None,
-                      script: str = FACE_RECO_SCRIPT) -> subprocess.Popen | None:
-    """Spawn face_reco_once.py if it isn't already running. Returns the handle."""
-    if running is not None and running.poll() is None:
-        log.info("face_reco still running, skipping trigger")
-        return running
-    if not os.path.exists(script):
-        log.warning("face_reco script not found: %s", script)
-        return None
-    try:
-        proc = subprocess.Popen(
-            ["python3", script],
-            stdout=subprocess.DEVNULL,  # logs go to stderr -> journald
-        )
-        log.info("face_reco_once spawned (pid=%s)", proc.pid)
-        return proc
-    except Exception as exc:  # noqa: BLE001
-        log.error("failed to spawn face_reco: %s", exc)
-        return None
+        log.warning("MQTT publish error: %s", exc)
 
 
 # --- hardware-bound (lazy-imported) -------------------------------------
@@ -156,31 +144,43 @@ def trigger_face_reco(running: subprocess.Popen | None,
 def setup_gpio():
     import RPi.GPIO as GPIO
     GPIO.setmode(GPIO.BCM)
-    GPIO.setup(GPIO_RELAY, GPIO.OUT, initial=GPIO.LOW)
-    log.info("GPIO%d ready", GPIO_RELAY)
+    GPIO.setwarnings(False)
+    GPIO.setup(GPIO_BUTTON, GPIO.IN)  # idle high-Z
+    log.info("GPIO%d ready (idle INPUT)", GPIO_BUTTON)
     return GPIO
 
 
-def pulse_relay(GPIO):
-    """Pulse GPIO_RELAY for RELAY_PULSE_MS ms to simulate a button press."""
-    GPIO.output(GPIO_RELAY, GPIO.HIGH)
-    time.sleep(RELAY_PULSE_MS / 1000)
-    GPIO.output(GPIO_RELAY, GPIO.LOW)
-    log.info("relay pulsed")
+def pulse_button(GPIO):
+    """Pull SIG to GND for BUTTON_PULSE_MS ms to simulate a button press.
+
+    Toggle pattern: INPUT (idle) -> OUTPUT LOW (pulse) -> INPUT (idle).
+    """
+    GPIO.setup(GPIO_BUTTON, GPIO.OUT, initial=GPIO.LOW)
+    time.sleep(BUTTON_PULSE_MS / 1000)
+    GPIO.setup(GPIO_BUTTON, GPIO.IN)
+    log.info("button pulsed")
 
 
 def read_frame(ser) -> bytes:
-    """Read one complete LD2450 frame from the serial port."""
+    """Read one complete LD2450 Engineering mode frame (30 bytes)."""
     buf = b""
     while True:
         byte = ser.read(1)
         if not byte:
             continue
         buf += byte
-        if len(buf) >= 4 and buf[-4:] == FRAME_FOOTER:
-            if buf[:4] == FRAME_HEADER:
-                return buf
-            buf = b""  # bad frame, drop and resync
+
+        # Engineering mode frames are exactly 30 bytes
+        if len(buf) >= FRAME_LEN:
+            # Check if we have a valid frame
+            if buf[-FRAME_LEN:][:4] == FRAME_HEADER and buf[-2:] == FRAME_FOOTER:
+                return buf[-FRAME_LEN:]  # Return exactly 30 bytes
+            # Look for header in buffer to resync
+            header_idx = buf.find(FRAME_HEADER)
+            if header_idx >= 0:
+                buf = buf[header_idx:]  # Keep from header onward
+            else:
+                buf = buf[-4:]  # Keep last 4 bytes for potential header match
 
 
 def main() -> int:
@@ -191,7 +191,17 @@ def main() -> int:
         y_mm=PRESENCE_Y_MM,
         timeout_sec=ABSENCE_TIMEOUT_SEC,
     )
-    face_reco_proc: subprocess.Popen | None = None
+
+    # Setup MQTT client
+    mqtt_client = mqtt.Client(client_id="ld2450_daemon")
+    try:
+        mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        mqtt_client.loop_start()  # Run in background thread
+        log.info("MQTT connected to %s:%d", MQTT_BROKER, MQTT_PORT)
+    except Exception as exc:
+        log.error("MQTT connection failed: %s", exc)
+        return 1
+
     try:
         with serial.Serial(SERIAL_DEVICE, SERIAL_BAUD, timeout=1) as ser:
             log.info("daemon started, listening on %s @ %d baud",
@@ -201,18 +211,19 @@ def main() -> int:
                 targets = parse_frame(frame)
                 event = tracker.update(targets)
                 if event == "PRESENT":
-                    log.info("PRESENT — display ON, posting presence_on")
+                    log.info("PRESENT — display ON, publishing to MQTT")
                     pulse_relay(GPIO)
-                    post_event({"event": "presence_on"})
-                    face_reco_proc = trigger_face_reco(face_reco_proc)
+                    mqtt_publish(mqtt_client, MQTT_TOPIC_PRESENCE, "present")
                 elif event == "ABSENT":
-                    log.info("ABSENT — display OFF, posting presence_off")
+                    log.info("ABSENT — display OFF, publishing to MQTT")
                     pulse_relay(GPIO)
-                    post_event({"event": "presence_off"})
+                    mqtt_publish(mqtt_client, MQTT_TOPIC_PRESENCE, "absent")
     except KeyboardInterrupt:
         log.info("daemon stopped")
         return 0
     finally:
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
         try:
             GPIO.cleanup()
         except Exception:  # noqa: BLE001

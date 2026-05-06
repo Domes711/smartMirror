@@ -33,10 +33,8 @@ how to restore them.
 - `MagicMirror/modules/MMM-Mail/` — fork of [MMPieps/MMM-Mail](https://github.com/MMPieps/MMM-Mail) pinned at `c24f973` with added `mailboxes` (multi-folder + per-folder `slaHours` countdown) on top of upstream
 - `MagicMirror/modules/MMM-Spending/` — our own module (today's spending pulled from Wallet by BudgetBakers REST API)
 - `MagicMirror/modules/MMM-GoogleCalendar/` — vendored fork of `randomBrainstormer/MMM-GoogleCalendar` v1.2.0 for visual customisation; replace upstream install on Pi
-- `MagicMirror/modules/MMM-Face-Reco-DNN/dataset/Domes/` — training photos (used by `ld2450/face_reco_once.py`)
-- `MagicMirror/modules/MMM-Face-Reco-DNN/encoded_faces.pickle` — encoded face data
-- `ld2450/` — mirror of `~/ld2450/` (radar daemon, single-shot face_reco_once.py, tests, viewer, `ld2450.service`)
-- `tests/` — standalone HTML previews (e.g. Face ID animation reference, MMM-Mail layout)
+- `camera/` — mirror of `~/smartMirror/camera/` (single-shot face recognition: `face_reco_once.py`, training photos in `dataset/Domes/`, `encoded_faces.pickle`)
+- `ld2450/` — mirror of `~/ld2450/` (radar daemon, tests, `ld2450.service`)
 
 As each plan task is completed on the Pi, the matching files above are copied
 back into this repo and committed. **Nothing here is deployed automatically**
@@ -186,6 +184,15 @@ Background plans (still partially relevant — see headers in each file):
   — superseded by MMM-Profile; tasks 1-3 (deps, MMM-Face-Reco-DNN install,
   encode photos) still feed `face_reco_once.py`.
 
+### 3. Package tracking
+- Spec: `docs/superpowers/specs/2026-04-27-mmm-package-tracker-design.md`
+- Plan: `docs/superpowers/plans/2026-04-27-mmm-package-tracker.md`
+- **What:** New `MMM-Package-Tracker` reads tracking numbers from a dedicated
+  HA todo list (`todo.balicky`, populated from the iPhone HA app), enriches
+  them with courier + status from AfterShip's universal API, and renders them
+  on the mirror. `Delivered` items are auto-completed in HA so they vanish
+  from the iPhone list and the mirror together.
+
 ## Conventions
 
 - **New specs** → `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md`
@@ -195,12 +202,12 @@ Background plans (still partially relevant — see headers in each file):
 - **Commits** use conventional-commit prefixes (`docs:`, `feat:`, `chore:`,
   `test:`); often scoped, e.g. `feat(MMM-Mail): ...`
 - **Branches** for Claude-assisted work: `claude/<slug>`
-- **Visual previews of module `demo.html`:** post the live raw.githack.com
-  URL, e.g. `https://raw.githack.com/Domes711/smartMirror/<branch>/MagicMirror/modules/<MMM-Foo>/demo.html` —
-  user wants a clickable preview link by default, not just PNGs.
-- **HTML previews under `tests/`:** after pushing, paste only the
-  `https://htmlpreview.github.io/?https://github.com/domes711/smartmirror/blob/<branch>/tests/<file>.html`
-  link so the user can open it on mobile.
+- **Module visual previews live in `demo.html` next to the module's source**
+  (`MagicMirror/modules/<MMM-Foo>/demo.html`). After pushing, post the live
+  raw.githack.com URL — user wants a clickable preview link by default, not
+  just PNGs:
+  `https://raw.githack.com/Domes711/smartMirror/<branch>/MagicMirror/modules/<MMM-Foo>/demo.html`
+  Append `?v=<sha>` if cache holds an old version.
 
 ## Executing the plans
 

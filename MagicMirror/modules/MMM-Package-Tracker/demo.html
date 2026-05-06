@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>MMM-Package-Tracker · live demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@100;300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="./MMM-Package-Tracker.css">
+    <style>
+        html, body {
+            background: #000; color: #fff;
+            font-family: "Roboto Condensed", sans-serif;
+            margin: 0; padding: 40px 50px;
+        }
+        .module { display: inline-block; min-width: 360px; }
+        .module-header {
+            font-size: 15px; font-weight: 400;
+            text-transform: uppercase; letter-spacing: 2px;
+            border-bottom: 1px solid #666;
+            padding-bottom: 6px; margin-bottom: 12px;
+            line-height: 1;
+        }
+        .scenarios {
+            position: fixed; right: 16px; top: 16px;
+            font-size: 12px; color: #888;
+            text-align: right; line-height: 1.6;
+        }
+        .scenarios a { color: #888; text-decoration: none; }
+        .scenarios a.active { color: #fff; }
+        .scenarios a:hover { color: #ddd; }
+    </style>
+</head>
+<body>
+    <div class="module">
+        <div class="module-header" id="header">Balíky</div>
+        <div id="mount"></div>
+    </div>
+    <nav class="scenarios" id="nav"></nav>
+    <script>
+        window.Log = console;
+        window.Module = { _def: null, register: function (n, d) { this._def = d; } };
+    </script>
+    <script src="./MMM-Package-Tracker.js"></script>
+    <script>
+        const def = window.Module._def;
+        const mountEl = document.getElementById("mount");
+        const headerEl = document.getElementById("header");
+
+        const mod = Object.assign({}, def);
+        mod.items = null;
+        mod.errorMsg = null;
+        mod.config = Object.assign({}, def.defaults, { language: "cs" });
+        mod.updateDom = function () {
+            const el = this.getDom();
+            mountEl.innerHTML = "";
+            mountEl.appendChild(el);
+        };
+        mod.sendSocketNotification = function () {};
+
+        // Re-render every 5s so relative ETA labels stay current.
+        setInterval(() => mod.updateDom(), 5000);
+
+        function iso(d) { return d.toISOString(); }
+        function isoDate(d) { return d.toISOString().slice(0, 10); }
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
+        const threeDays = new Date(today.getTime() + 3 * 24 * 3600 * 1000);
+        const inTwoWeeks = new Date(today.getTime() + 14 * 24 * 3600 * 1000);
+
+        function pkg(over) {
+            return Object.assign({
+                uid: "u" + Math.random().toString(36).slice(2, 8),
+                trackingNumber: "TEST123",
+                label: "Balík",
+                slug: null,
+                courierName: null,
+                status: "Pending",
+                expectedDelivery: null,
+                lastEvent: null,
+                lastEventTime: null
+            }, over);
+        }
+
+        const scenarios = {
+            mixed: {
+                items: [
+                    pkg({
+                        trackingNumber: "1Z999AA10123456784",
+                        label: "Amazon kabel",
+                        slug: "ups", courierName: "UPS",
+                        status: "OutForDelivery",
+                        expectedDelivery: isoDate(today),
+                        lastEvent: "Out for delivery — Brno"
+                    }),
+                    pkg({
+                        trackingNumber: "PK123456789CZ",
+                        label: "Knihy z Kosmasu",
+                        slug: "ceska-posta", courierName: "Česká pošta",
+                        status: "InTransit",
+                        expectedDelivery: isoDate(tomorrow),
+                        lastEvent: "Departed depot — Praha 022"
+                    }),
+                    pkg({
+                        trackingNumber: "Z000123456",
+                        label: "Zásilkovna výdejna",
+                        slug: "zasilkovna", courierName: "Zásilkovna",
+                        status: "AvailableForPickup",
+                        expectedDelivery: null,
+                        lastEvent: "Připraveno k vyzvednutí — Brno, Veveří 30"
+                    }),
+                    pkg({
+                        trackingNumber: "CP987654321DE",
+                        label: "Aliexpress trafo",
+                        slug: "deutschepost", courierName: "Deutsche Post",
+                        status: "InfoReceived",
+                        expectedDelivery: isoDate(inTwoWeeks),
+                        lastEvent: "Shipping label created"
+                    })
+                ]
+            },
+            warnings: {
+                items: [
+                    pkg({
+                        trackingNumber: "DPD12345",
+                        label: "GoPro náhradní díl",
+                        slug: "dpd", courierName: "DPD",
+                        status: "AttemptFail",
+                        lastEvent: "Doručení se nezdařilo — adresát nezastižen"
+                    }),
+                    pkg({
+                        trackingNumber: "JT99887766",
+                        label: "Wish objednávka",
+                        slug: "jtexpress", courierName: "J&T Express",
+                        status: "Exception",
+                        lastEvent: "Zásilka zadržena na celnici"
+                    }),
+                    pkg({
+                        trackingNumber: "EX0001",
+                        label: "Bazoš stůl",
+                        slug: "ppl", courierName: "PPL",
+                        status: "Expired",
+                        lastEvent: "Sledování již není aktivní"
+                    })
+                ]
+            },
+            delivered: {
+                items: [
+                    pkg({
+                        trackingNumber: "DEL1",
+                        label: "Filtr do kávovaru",
+                        slug: "gls", courierName: "GLS",
+                        status: "Delivered",
+                        expectedDelivery: isoDate(today),
+                        lastEvent: "Doručeno — předáno adresátovi"
+                    }),
+                    pkg({
+                        trackingNumber: "ABC123",
+                        label: "Tonery do tiskárny",
+                        slug: "ups", courierName: "UPS",
+                        status: "InTransit",
+                        expectedDelivery: isoDate(threeDays),
+                        lastEvent: "In transit — Köln hub"
+                    })
+                ],
+                config: { autoCompleteOnDelivered: false }
+            },
+            single: {
+                items: [
+                    pkg({
+                        trackingNumber: "1Z999AA10123456784",
+                        label: "Amazon kabel",
+                        slug: "ups", courierName: "UPS",
+                        status: "OutForDelivery",
+                        expectedDelivery: isoDate(today)
+                    })
+                ]
+            },
+            empty: { items: [] },
+            loading: { items: null },
+            "error-ha":     { items: null, errorMsg: "chyba HA" },
+            "error-aftership": { items: null, errorMsg: "chyba AfterShip" },
+            "error-config": { items: null, errorMsg: "není nakonfigurováno" }
+        };
+
+        const order = Object.keys(scenarios);
+        const nav = document.getElementById("nav");
+        for (const name of order) {
+            const a = document.createElement("a");
+            a.href = "#" + name;
+            a.textContent = name;
+            a.dataset.name = name;
+            nav.appendChild(a);
+            nav.appendChild(document.createElement("br"));
+        }
+
+        function apply() {
+            const name = (location.hash || "#mixed").slice(1);
+            const sc = scenarios[name] || scenarios.mixed;
+            mod.config = Object.assign({}, def.defaults, { language: "cs" }, sc.config || {});
+            mod.items = sc.items === undefined ? scenarios.mixed.items : sc.items;
+            mod.errorMsg = sc.errorMsg || null;
+            headerEl.textContent = mod.config.header || "Balíky";
+            mod.updateDom();
+            for (const a of nav.querySelectorAll("a")) {
+                a.classList.toggle("active", a.dataset.name === name);
+            }
+        }
+        window.addEventListener("hashchange", apply);
+        apply();
+    </script>
+</body>
+</html>
