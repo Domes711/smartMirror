@@ -1,0 +1,8 @@
+{
+    "name": "mmm-package-tracker",
+    "version": "0.1.0",
+    "description": "MagicMirror module that tracks inbound packages via AfterShip, sourced from a Home Assistant todo list.",
+    "main": "MMM-Package-Tracker.js",
+    "private": true,
+    "dependencies": {}
+}

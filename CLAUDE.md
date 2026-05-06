@@ -80,6 +80,15 @@ implementation plan. Both plans are currently **unstarted**.
 The two features are independent — face recognition handles *profile content*,
 the radar handles *display power*.
 
+### 3. Package tracking
+- Spec: `docs/superpowers/specs/2026-04-27-mmm-package-tracker-design.md`
+- Plan: `docs/superpowers/plans/2026-04-27-mmm-package-tracker.md`
+- **What:** New `MMM-Package-Tracker` reads tracking numbers from a dedicated
+  HA todo list (`todo.balicky`, populated from the iPhone HA app), enriches
+  them with courier + status from AfterShip's universal API, and renders them
+  on the mirror. `Delivered` items are auto-completed in HA so they vanish
+  from the iPhone list and the mirror together.
+
 ## Conventions
 
 - **New specs** → `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md`
