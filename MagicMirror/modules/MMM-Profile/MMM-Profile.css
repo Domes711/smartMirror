@@ -15,7 +15,7 @@
  */
 
 :root {
-    --mmp-ring-size: 90px;
+    --mmp-ring-size: 60px;
     --mmp-avatar-size: 35px;
     --mmp-error-size: 50px;
     --mmp-face-color: #ffffff;
@@ -28,10 +28,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     color: var(--mmp-face-color);
     font-family: "Roboto", "Helvetica Neue", sans-serif;
-    min-height: 110px;
+    min-height: 75px;
 }
 
 .mmp[data-state="asleep"] { visibility: hidden; }
@@ -216,12 +216,12 @@
 .profile-info {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     text-align: left;
     max-width: 0;
     overflow: hidden;
     opacity: 0;
-    transform: translateX(-12px);
+    transform: translateX(-8px);
     transition:
         max-width 0.3s ease 0.35s,
         opacity 0.2s ease 0.5s,
@@ -229,7 +229,7 @@
 }
 
 .profile-info .name {
-    font-size: 11px;
+    font-size: 7px;
     font-weight: 600;
     letter-spacing: 0.2px;
 }
@@ -280,7 +280,7 @@
 }
 .profile.success .face { opacity: 0; }
 .profile.success .avatar { opacity: 1; transform: scale(1); }
-.profile.success { gap: 9px; }
+.profile.success { gap: 6px; }
 .profile.success .profile-info {
     max-width: 240px;
     opacity: 1;
@@ -350,10 +350,10 @@
 
 /* Status text below the scanner */
 .mmp-status {
-    font-size: 9px;
+    font-size: 6px;
     letter-spacing: 0.4px;
     color: rgba(255,255,255,0.85);
-    min-height: 12px;
+    min-height: 8px;
     text-align: center;
     transition: color 0.2s ease;
 }
