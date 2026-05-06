@@ -4,8 +4,7 @@
  * Only clock and MMM-Profile modules, single default page.
  */
 
-const path = require("path");
-const pages = require(path.join(__dirname, "pages.js"));
+const pages = require("/home/admin/MagicMirror/config/pages.js");
 
 let config = {
     address: "localhost",
