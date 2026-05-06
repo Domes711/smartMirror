@@ -2,6 +2,10 @@
     text-align: left;
     display: inline-block;
     margin-right: 24px;        /* nudge content leftward inside top_right region */
+    /* Lock the footprint so switching between realtime / scheduled / empty
+       (different times string lengths, "— mimo provoz" filler, pulse dot
+       appearing or not) doesn't slide the module sideways. */
+    min-width: 240px;
 }
 
 .mmbt-header {
@@ -9,8 +13,8 @@
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-    padding-bottom: 5px;
-    margin-bottom: 10px;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
     border-bottom: 1px solid #666;
     font-size: 15px;
     line-height: 15px;
@@ -22,8 +26,8 @@
 
 .mmbt-header-dot {
     display: inline-block;
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #fff;
     animation: mmbt-pulse 1.8s ease-in-out infinite;
@@ -31,10 +35,10 @@
 
 .mmbt-row {
     display: grid;
-    grid-template-columns: 24px 38px 1fr;
+    grid-template-columns: 22px 34px 1fr;
     column-gap: 12px;
     align-items: baseline;
-    padding: 6px 0;
+    padding: 4px 0;
     line-height: 1;
 }
 
@@ -70,7 +74,7 @@
 .mmbt-time + .mmbt-time {
     margin-left: 12px;
     color: #999;
-    font-size: 16px;
+    font-size: 15px;
 }
 
 @keyframes mmbt-pulse {

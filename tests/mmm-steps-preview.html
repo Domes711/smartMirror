@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>MMM-Steps — vizuální náhled</title>
+<style>
+  /* Apple Activity-style ring tile for MagicMirror².
+     White-on-black, Roboto Condensed-ish system fallback, light weights.
+     Sections: rings (Move/Exercise/Stand), steps + distance + floors,
+     last-night sleep with stage breakdown, resting heart rate. */
+  :root {
+    --bg: #000000;
+    --fg: #ffffff;
+    --dimmed: rgba(255, 255, 255, 0.5);
+    --normal: rgba(255, 255, 255, 0.9);
+    --header-color: rgba(255, 255, 255, 0.7);
+    --divider: rgba(255, 255, 255, 0.18);
+
+    /* Apple Activity ring colors. */
+    --move-a:    #fa114f;
+    --move-b:    #ff375f;
+    --exer-a:    #92e82a;
+    --exer-b:    #76ee00;
+    --stand-a:   #1fdec9;
+    --stand-b:   #00c7be;
+
+    /* Apple Sleep stage colors. */
+    --sleep-awake: #ff7a3d;
+    --sleep-rem:   #66c8ff;
+    --sleep-core:  #2d6bd6;
+    --sleep-deep:  #5e4dff;
+
+    /* Heart-rate accent. */
+    --hr-color:    #ff5363;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Roboto Condensed", "HelveticaNeue-CondensedBold", -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  body { display: flex; flex-direction: column; align-items: stretch; }
+
+  /* ---- Tile ----------------------------------------------------- */
+  .tile {
+    width: 100%;
+    max-width: 380px;
+    padding: 24px 24px 0;
+    transition: opacity 0.3s ease;
+  }
+  .tile.hidden { opacity: 0; pointer-events: none; }
+
+  .tile .header {
+    font-size: 15px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--header-color);
+    border-bottom: 1px solid var(--divider);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+
+  /* ---- Rings + labels row -------------------------------------- */
+  .rings-row {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+  }
+  .rings-svg {
+    flex: 0 0 auto;
+    width: 160px;
+    height: 160px;
+    transition: opacity 0.3s ease;
+  }
+  .rings-svg .track {
+    fill: none;
+    stroke-width: 18;
+  }
+  .rings-svg .ring {
+    fill: none;
+    stroke-width: 18;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s cubic-bezier(.2,.8,.2,1);
+  }
+
+  .ring-labels {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .label-row { display: flex; flex-direction: column; gap: 1px; }
+  .label-name {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .label-name.move    { color: var(--move-b); }
+  .label-name.exer    { color: var(--exer-a); }
+  .label-name.stand   { color: var(--stand-b); }
+  .label-val {
+    font-size: 17px;
+    font-weight: 300;
+    color: var(--fg);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .label-val .unit {
+    color: var(--dimmed);
+    font-size: 12px;
+    margin-left: 3px;
+  }
+
+  /* ---- Steps + extras row ------------------------------------- */
+  .steps-row {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--divider);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .steps-row svg.icon {
+    width: 22px;
+    height: 22px;
+    fill: var(--normal);
+    flex-shrink: 0;
+    transform: translateY(4px);
+  }
+  .steps-count {
+    font-size: 26px;
+    font-weight: 300;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .steps-unit {
+    font-size: 13px;
+    color: var(--dimmed);
+    text-transform: lowercase;
+    letter-spacing: 0.3px;
+  }
+  .steps-extra {
+    font-size: 12px;
+    color: var(--dimmed);
+    font-variant-numeric: tabular-nums;
+  }
+  .steps-extra .sep { opacity: 0.5; margin: 0 6px; }
+
+  /* ---- Sleep section ----------------------------------------- */
+  .sleep-section {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--divider);
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--header-color);
+    font-weight: 600;
+  }
+  .sleep-total {
+    font-size: 18px;
+    font-weight: 300;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .sleep-range {
+    font-size: 11px;
+    color: var(--dimmed);
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sleep-bar {
+    display: flex;
+    width: 100%;
+    height: 14px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.06);
+    margin-bottom: 8px;
+  }
+  .sleep-bar .seg {
+    height: 100%;
+    transition: flex 0.6s cubic-bezier(.2,.8,.2,1);
+  }
+  .sleep-bar .seg.awake { background: var(--sleep-awake); }
+  .sleep-bar .seg.rem   { background: var(--sleep-rem); }
+  .sleep-bar .seg.core  { background: var(--sleep-core); }
+  .sleep-bar .seg.deep  { background: var(--sleep-deep); }
+
+  .sleep-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    font-size: 11px;
+    color: var(--dimmed);
+    font-variant-numeric: tabular-nums;
+  }
+  .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+  .legend-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    display: inline-block;
+  }
+  .legend-dot.awake { background: var(--sleep-awake); }
+  .legend-dot.rem   { background: var(--sleep-rem); }
+  .legend-dot.core  { background: var(--sleep-core); }
+  .legend-dot.deep  { background: var(--sleep-deep); }
+  .legend-name { color: rgba(255,255,255,0.7); }
+
+  /* ---- Heart rate row + footer time -------------------------- */
+  .hr-row {
+    margin-top: 16px;
+    padding-top: 12px;
+    padding-bottom: 18px;
+    border-top: 1px solid var(--divider);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .hr-row svg.icon {
+    width: 16px;
+    height: 16px;
+    fill: var(--hr-color);
+    transform: translateY(2px);
+    flex-shrink: 0;
+  }
+  .hr-label {
+    font-size: 12px;
+    color: var(--dimmed);
+    text-transform: lowercase;
+    letter-spacing: 0.3px;
+  }
+  .hr-value {
+    font-size: 16px;
+    font-weight: 300;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .hr-value .unit {
+    font-size: 11px;
+    color: var(--dimmed);
+    margin-left: 3px;
+  }
+  .footer-time {
+    margin-left: auto;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.32);
+    text-transform: lowercase;
+    letter-spacing: 0.3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Stale state: mute everything, give time-line a warning tint */
+  .tile.stale .rings-svg     { opacity: 0.5; }
+  .tile.stale .label-val,
+  .tile.stale .steps-count,
+  .tile.stale .sleep-total,
+  .tile.stale .hr-value      { color: rgba(255, 255, 255, 0.45); }
+  .tile.stale .sleep-bar     { opacity: 0.5; }
+  .tile.stale .footer-time   { color: #b08a3a; }
+
+  /* Status / error states */
+  .status-row {
+    font-size: 14px;
+    color: var(--dimmed);
+    padding: 6px 0 24px;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    flex-direction: column;
+  }
+  .status-row.error { color: #eb5757; }
+  .status-row .last-good {
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 12px;
+  }
+
+  /* ---- Profile gate banner ----------------------------------- */
+  .gate-banner {
+    width: 100%;
+    max-width: 380px;
+    margin: 12px 24px 0;
+    padding: 14px;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: var(--dimmed);
+    font-size: 13px;
+    line-height: 1.4;
+    display: none;
+  }
+  .gate-banner.visible { display: block; }
+
+  /* ---- Control panel ----------------------------------------- */
+  .panel {
+    width: 100%;
+    max-width: 420px;
+    margin: 32px 24px 24px;
+    padding: 18px 22px 22px;
+    background: #0d0d0d;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    color: #d0d0d0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+  }
+  .panel h1 {
+    font-size: 14px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #ccc; font-weight: 600; margin-bottom: 6px;
+  }
+  .panel h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: #666; font-weight: 600; margin: 18px 0 10px;
+  }
+  .panel p { color: #888; line-height: 1.5; margin-bottom: 6px; }
+  .panel code {
+    background: #1a1a1a; color: #c9d1d9;
+    padding: 1px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .panel button {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    background: #1a1a1a;
+    color: #e6e6e6;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .panel button:hover { background: #222; border-color: #3a3a3a; }
+  .panel button.active {
+    background: #1f3a1f; border-color: #2d5a2d; color: #b8e6b8;
+  }
+  .note {
+    color: #888;
+    font-size: 12px;
+    line-height: 1.5;
+    background: #161616;
+    border-left: 3px solid #2d5a2d;
+    padding: 10px 12px;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 8px;
+  }
+  .source-tag {
+    display: inline-block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-right: 4px;
+    font-weight: 600;
+  }
+  .source-tag.companion { background: #1d3a1d; color: #9be09b; }
+  .source-tag.shortcut  { background: #1a2a3a; color: #87b9ff; }
+</style>
+</head>
+<body>
+
+<div class="tile" id="tile">
+  <div class="header">Aktivita & Spánek</div>
+  <div id="body"></div>
+</div>
+
+<div class="gate-banner" id="gateBanner">
+  Modul <code>MMM-Steps</code> je skryt
+  (<code>classes: "Domes"</code>; aktuální profil: anonymous).
+</div>
+
+<div class="panel">
+  <h1>MMM-Steps · náhled</h1>
+  <p>
+    Apple Activity prstence + krokoměr + spánek z minulé noci + klidový tep.
+    Vše zdarma — kombinace HA Companion senzorů a iOS Shortcut s HA webhookem.
+  </p>
+
+  <h2>Stavy dat</h2>
+  <button id="btnTypicalDay" class="active">Typický den + dobrá noc</button>
+  <button id="btnNearGoal">Skoro u cílů + průměrná noc</button>
+  <button id="btnOverGoal">Vše splněno + skvělá noc</button>
+  <button id="btnMorning">Brzké ráno + krátký spánek</button>
+  <button id="btnStale">Stará data (45 min)</button>
+  <button id="btnWaiting">Čekám na data</button>
+  <button id="btnError">HA nedostupné</button>
+
+  <h2>Profile gating</h2>
+  <button id="btnDomes" class="active">Domes je vidět</button>
+  <button id="btnAnon">Anonymous (skryto)</button>
+
+  <h2>Zdroje dat</h2>
+  <div class="note">
+    <span class="source-tag companion">Companion</span>
+    Kroky · Vzdálenost · Patra (žádný setup, automatické)
+    <br><br>
+    <span class="source-tag shortcut">Shortcut</span>
+    Move · Cvičení · Stání · Spánek · Klidový tep
+    (jednorázový iOS Shortcut → HA webhook, zdarma)
+  </div>
+</div>
+
+<script>
+  const fmt = new Intl.NumberFormat("cs-CZ");
+  const goals = { move: 450, exer: 30, stand: 12, steps: 10000 };
+  const staleAfterMin = 30;
+
+  const tile = document.getElementById("tile");
+  const body = document.getElementById("body");
+  const gateBanner = document.getElementById("gateBanner");
+
+  function minsAgoISO(m) { return new Date(Date.now() - m * 60000).toISOString(); }
+
+  // SVG geometry. viewBox is 0..220, center 110,110.
+  const RINGS = [
+    { key: "move",  r: 95, gradId: "g-move"  },
+    { key: "exer",  r: 70, gradId: "g-exer"  },
+    { key: "stand", r: 45, gradId: "g-stand" },
+  ];
+
+  function buildRingsSVG(values) {
+    const parts = [];
+    parts.push('<svg class="rings-svg" viewBox="0 0 220 220" aria-hidden="true">');
+    parts.push('<defs>');
+    parts.push(`<linearGradient id="g-move"  x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="var(--move-a)"/>
+                  <stop offset="100%" stop-color="var(--move-b)"/>
+                </linearGradient>`);
+    parts.push(`<linearGradient id="g-exer"  x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="var(--exer-a)"/>
+                  <stop offset="100%" stop-color="var(--exer-b)"/>
+                </linearGradient>`);
+    parts.push(`<linearGradient id="g-stand" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="var(--stand-a)"/>
+                  <stop offset="100%" stop-color="var(--stand-b)"/>
+                </linearGradient>`);
+    parts.push('</defs>');
+
+    RINGS.forEach((r, i) => {
+      const trackColor = ["var(--move-b)", "var(--exer-a)", "var(--stand-b)"][i];
+      parts.push(`<circle class="track" cx="110" cy="110" r="${r.r}"
+                          stroke="${trackColor}" stroke-opacity="0.18"/>`);
+    });
+
+    parts.push('<g transform="rotate(-90 110 110)">');
+    RINGS.forEach((r) => {
+      const circ = 2 * Math.PI * r.r;
+      const ratio = Math.max(0, Math.min(1, values[r.key] / goals[r.key]));
+      const offset = circ * (1 - ratio);
+      parts.push(`<circle class="ring ring-${r.key}" cx="110" cy="110" r="${r.r}"
+                          stroke="url(#${r.gradId})"
+                          stroke-dasharray="${circ.toFixed(1)}"
+                          stroke-dashoffset="${circ.toFixed(1)}"
+                          data-target-offset="${offset.toFixed(1)}"/>`);
+    });
+    parts.push('</g></svg>');
+    return parts.join("");
+  }
+
+  // --- Icons ----------------------------------------------------
+  function walkIcon() {
+    return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M13.5 5.5a2 2 0 1 0-2-2 2 2 0 0 0 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3a7.3 7.3 0 0 0 5.5 2.5v-2a5.06 5.06 0 0 1-4.3-2.4l-1-1.6a1.94 1.94 0 0 0-1.7-1 1.86 1.86 0 0 0-.7.1L6 6.4V11h2V7.7l1.8-.8"/>
+    </svg>`;
+  }
+  function heartIcon() {
+    return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 5.65-7 10-7 10z"/>
+    </svg>`;
+  }
+
+  // --- Format helpers ------------------------------------------
+  function fmtHm(mins) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h === 0) return m + " min";
+    if (m === 0) return h + " h";
+    return h + " h " + m + " m";
+  }
+  function fmtTime(iso) {
+    return new Intl.DateTimeFormat("cs-CZ",
+      { hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+  }
+
+  // --- Render --------------------------------------------------
+  function renderData(values, lastUpdated, sleep, hr) {
+    tile.classList.remove("stale");
+
+    const ageMin = lastUpdated
+      ? (Date.now() - Date.parse(lastUpdated)) / 60000
+      : null;
+    const isStale = ageMin !== null && ageMin > staleAfterMin;
+    if (isStale) tile.classList.add("stale");
+
+    const hhmm = lastUpdated ? fmtTime(lastUpdated) : "";
+    const timeLabel = hhmm
+      ? (isStale ? "nečerstvé · " + hhmm : "akt. " + hhmm)
+      : "";
+
+    // Sleep
+    let sleepBlock = "";
+    if (sleep) {
+      const total = sleep.awake + sleep.rem + sleep.core + sleep.deep;
+      sleepBlock = `
+        <div class="sleep-section">
+          <div class="section-head">
+            <span class="section-title">Spánek</span>
+            <span class="sleep-total">${fmtHm(total)}</span>
+            <span class="sleep-range">${fmtTime(sleep.start)} → ${fmtTime(sleep.end)}</span>
+          </div>
+          <div class="sleep-bar">
+            <div class="seg awake" style="flex:${sleep.awake}"></div>
+            <div class="seg rem"   style="flex:${sleep.rem}"></div>
+            <div class="seg core"  style="flex:${sleep.core}"></div>
+            <div class="seg deep"  style="flex:${sleep.deep}"></div>
+          </div>
+          <div class="sleep-legend">
+            <span class="legend-item"><span class="legend-dot rem"></span>
+              <span class="legend-name">REM</span> ${fmtHm(sleep.rem)}</span>
+            <span class="legend-item"><span class="legend-dot core"></span>
+              <span class="legend-name">Lehký</span> ${fmtHm(sleep.core)}</span>
+            <span class="legend-item"><span class="legend-dot deep"></span>
+              <span class="legend-name">Hluboký</span> ${fmtHm(sleep.deep)}</span>
+            <span class="legend-item"><span class="legend-dot awake"></span>
+              <span class="legend-name">Bdění</span> ${fmtHm(sleep.awake)}</span>
+          </div>
+        </div>`;
+    }
+
+    body.innerHTML = `
+      <div class="rings-row">
+        ${buildRingsSVG(values)}
+        <div class="ring-labels">
+          <div class="label-row">
+            <div class="label-name move">Pohyb</div>
+            <div class="label-val">${fmt.format(values.move)}<span class="unit">/${fmt.format(goals.move)} kcal</span></div>
+          </div>
+          <div class="label-row">
+            <div class="label-name exer">Cvičení</div>
+            <div class="label-val">${values.exer}<span class="unit">/${goals.exer} min</span></div>
+          </div>
+          <div class="label-row">
+            <div class="label-name stand">Stání</div>
+            <div class="label-val">${values.stand}<span class="unit">/${goals.stand} h</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="steps-row">
+        ${walkIcon()}
+        <span class="steps-count">${fmt.format(values.steps)}</span>
+        <span class="steps-unit">kroků</span>
+        <span class="steps-extra">
+          <span class="sep">·</span>${values.distance.toFixed(1).replace(".", ",")} km
+          <span class="sep">·</span>${values.floors} pater
+        </span>
+      </div>
+
+      ${sleepBlock}
+
+      <div class="hr-row">
+        ${heartIcon()}
+        <span class="hr-label">Klidový tep</span>
+        <span class="hr-value">${hr}<span class="unit">bpm</span></span>
+        ${timeLabel ? `<span class="footer-time">${timeLabel}</span>` : ""}
+      </div>
+    `;
+
+    requestAnimationFrame(() => {
+      body.querySelectorAll(".ring").forEach(el => {
+        el.style.strokeDashoffset = el.dataset.targetOffset;
+      });
+    });
+  }
+
+  function renderWaiting() {
+    tile.classList.remove("stale");
+    body.innerHTML = '<div class="status-row">— čekám na data</div>';
+  }
+
+  function renderError(message, lastGood) {
+    tile.classList.remove("stale");
+    let lg = "";
+    if (lastGood) {
+      lg = `<div class="last-good">naposledy ${fmt.format(lastGood.steps)} kroků · ${fmt.format(lastGood.move)} kcal</div>`;
+    }
+    body.innerHTML = `<div class="status-row error">${message}${lg}</div>`;
+  }
+
+  // ---- State buttons ----------------------------------------------
+  const stateButtons = ["btnTypicalDay", "btnNearGoal", "btnOverGoal",
+                        "btnMorning", "btnStale", "btnWaiting", "btnError"];
+  function setActive(id) {
+    stateButtons.forEach(b => {
+      document.getElementById(b).classList.toggle("active", b === id);
+    });
+  }
+
+  // Yesterday 23:18 → today 06:41 etc, anchored to "now" so range is fresh.
+  function lastNight(awake, rem, core, deep, startHour, endHour) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - 1);
+    start.setHours(startHour.h, startHour.m, 0, 0);
+    const end = new Date(today);
+    end.setHours(endHour.h, endHour.m, 0, 0);
+    return { start: start.toISOString(), end: end.toISOString(),
+             awake, rem, core, deep };
+  }
+
+  document.getElementById("btnTypicalDay").addEventListener("click", () => {
+    setActive("btnTypicalDay");
+    renderData(
+      { move: 280, exer: 18, stand: 7, steps: 6342, distance: 4.8, floors: 9 },
+      minsAgoISO(4),
+      lastNight(12, 84, 261, 58, {h:23,m:18}, {h:6,m:41}),
+      58
+    );
+  });
+  document.getElementById("btnNearGoal").addEventListener("click", () => {
+    setActive("btnNearGoal");
+    renderData(
+      { move: 410, exer: 27, stand: 11, steps: 9480, distance: 7.2, floors: 14 },
+      minsAgoISO(2),
+      lastNight(18, 76, 248, 49, {h:23,m:54}, {h:6,m:30}),
+      62
+    );
+  });
+  document.getElementById("btnOverGoal").addEventListener("click", () => {
+    setActive("btnOverGoal");
+    renderData(
+      { move: 612, exer: 48, stand: 14, steps: 13420, distance: 10.3, floors: 22 },
+      minsAgoISO(8),
+      lastNight(8, 102, 270, 78, {h:22,m:48}, {h:6,m:30}),
+      54
+    );
+  });
+  document.getElementById("btnMorning").addEventListener("click", () => {
+    setActive("btnMorning");
+    renderData(
+      { move: 35, exer: 0, stand: 1, steps: 412, distance: 0.3, floors: 1 },
+      minsAgoISO(1),
+      lastNight(20, 58, 198, 42, {h:1,m:12}, {h:5,m:30}),
+      66
+    );
+  });
+  document.getElementById("btnStale").addEventListener("click", () => {
+    setActive("btnStale");
+    renderData(
+      { move: 220, exer: 14, stand: 5, steps: 4210, distance: 3.1, floors: 6 },
+      minsAgoISO(45),
+      lastNight(14, 78, 244, 52, {h:23,m:30}, {h:6,m:30}),
+      59
+    );
+  });
+  document.getElementById("btnWaiting").addEventListener("click", () => {
+    setActive("btnWaiting");
+    renderWaiting();
+  });
+  document.getElementById("btnError").addEventListener("click", () => {
+    setActive("btnError");
+    renderError("HA nedostupné", { steps: 6342, move: 280 });
+  });
+
+  // ---- Profile gating ---------------------------------------------
+  const btnDomes = document.getElementById("btnDomes");
+  const btnAnon  = document.getElementById("btnAnon");
+  btnDomes.addEventListener("click", () => {
+    btnDomes.classList.add("active");
+    btnAnon.classList.remove("active");
+    tile.classList.remove("hidden");
+    gateBanner.classList.remove("visible");
+  });
+  btnAnon.addEventListener("click", () => {
+    btnAnon.classList.add("active");
+    btnDomes.classList.remove("active");
+    tile.classList.add("hidden");
+    gateBanner.classList.add("visible");
+  });
+
+  // Default state
+  renderData(
+    { move: 280, exer: 18, stand: 7, steps: 6342, distance: 4.8, floors: 9 },
+    minsAgoISO(4),
+    lastNight(12, 84, 261, 58, {h:23,m:18}, {h:6,m:41}),
+    58
+  );
+</script>
+</body>
+</html>
