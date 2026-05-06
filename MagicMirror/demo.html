@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Smart mirror — composite page preview</title>
+
+<!--
+  Top-level mock-up that boots the real module sources (no rewriting) inside
+  a stubbed MagicMirror² framework. Reads pages.js live so the layout always
+  matches production. See CLAUDE.md > "Composite mirror demo" for context.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@200;300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<!-- Real module CSS, exactly as MagicMirror² would inject via getStyles() -->
+<link rel="stylesheet" href="./modules/MMM-Brno-Transit/MMM-Brno-Transit.css">
+<link rel="stylesheet" href="./modules/MMM-HA-Reminders/MMM-HA-Reminders.css">
+<link rel="stylesheet" href="./modules/MMM-Spending/MMM-Spending.css">
+
+<style>
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #15171c;
+  font-family: "Roboto Condensed", -apple-system, "Segoe UI", sans-serif;
+  color: #ddd;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- MagicMirror² base styles (subset, since main.css isn't shipped) ---- */
+.mirror .module { margin-bottom: 30px; }
+.mirror .module-header {
+  text-transform: uppercase;
+  font-size: 15px;
+  color: #999;
+  border-bottom: 1px solid #666;
+  line-height: 15px;
+  padding-bottom: 5px;
+  margin-bottom: 10px;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+.mirror .small  { font-size: 18px; line-height: 1.25; }
+.mirror .normal { color: #999; }
+.mirror .bright { color: #fff; }
+.mirror .light  { color: #999; font-weight: 300; }
+.mirror .dimmed { color: #666; }
+
+/* ---- Page layout ------------------------------------------------------- */
+.stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+  padding: 32px;
+  min-height: 100vh;
+}
+
+/* Frame around the simulated mirror, scaled-down portrait viewport. The
+   inner .mirror is rendered at native 1080×1920 and CSS-scaled, so module
+   pixel sizes match what they'd look like on the real Pi display. */
+.mirror-frame {
+  width: 540px;       /* 1080 × 0.5 */
+  height: 960px;      /* 1920 × 0.5 */
+  background: #000;
+  border: 6px solid #1a1d24;
+  border-radius: 14px;
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.8);
+}
+.mirror {
+  position: absolute;
+  top: 0; left: 0;
+  width: 1080px;
+  height: 1920px;
+  transform: scale(0.5);
+  transform-origin: top left;
+  background: #000;
+  color: #fff;
+  font-family: "Roboto Condensed", sans-serif;
+  font-weight: 400;
+}
+
+/* Region positioning approximates MagicMirror² main.css. */
+.region { position: absolute; }
+.region.fullscreen { top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.region-top-bar     { top: 0; left: 0; right: 0; padding: 12px 24px; text-align: center; }
+.region-top-left    { top: 24px; left: 24px;  text-align: left; max-width: 480px; }
+.region-top-center  { top: 24px; left: 50%; transform: translateX(-50%); text-align: center; }
+.region-top-right   { top: 24px; right: 24px; text-align: right; max-width: 480px; }
+.region-upper-third { top: 33%;  left: 0; right: 0; transform: translateY(-50%); text-align: center; }
+.region-middle-center { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+.region-lower-third { top: 67%;  left: 0; right: 0; transform: translateY(-50%); text-align: center; }
+.region-bottom-left   { bottom: 24px; left: 24px; text-align: left; }
+.region-bottom-center { bottom: 24px; left: 50%; transform: translateX(-50%); text-align: center; }
+.region-bottom-right  { bottom: 24px; right: 24px; text-align: right; max-width: 480px; }
+.region-bottom-bar  { bottom: 0; left: 0; right: 0; padding: 12px 24px; text-align: center; }
+
+/* Bottom regions stack upward (latest module at the bottom-most). */
+.region-bottom-left, .region-bottom-center, .region-bottom-right, .region-bottom-bar {
+  display: flex;
+  flex-direction: column-reverse;
+}
+.region-bottom-left > .module,
+.region-bottom-center > .module,
+.region-bottom-right > .module,
+.region-bottom-bar > .module {
+  margin-bottom: 0;
+  margin-top: 30px;
+}
+
+/* ---- Built-in module stubs --------------------------------------------- */
+.clock-stub { line-height: 1; }
+.clock-stub .clock-time {
+  font-size: 80px; font-weight: 200; color: #fff; letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+.clock-stub .clock-date {
+  font-size: 22px; font-weight: 300; color: #aaa;
+  margin-top: 6px; text-transform: capitalize;
+}
+
+.weather-current {
+  display: flex; align-items: center; gap: 16px; justify-content: flex-end;
+}
+.weather-current .icon { font-size: 56px; color: #ddd; }
+.weather-current .temp { font-size: 56px; font-weight: 200; color: #fff;
+  font-variant-numeric: tabular-nums; line-height: 1; }
+.weather-current .meta { color: #999; font-size: 16px; line-height: 1.3; text-align: left; }
+
+.weather-forecast { display: grid; grid-template-columns: 1fr auto auto auto; row-gap: 6px; column-gap: 16px; }
+.weather-forecast .day { color: #ddd; font-size: 18px; font-weight: 300; text-align: left; }
+.weather-forecast .icon { font-size: 18px; color: #aaa; text-align: center; }
+.weather-forecast .max { color: #fff; font-variant-numeric: tabular-nums; }
+.weather-forecast .min { color: #888; font-variant-numeric: tabular-nums; }
+
+.news-stub {
+  font-size: 22px; color: #ccc;
+  padding: 10px 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.news-stub .source { color: #888; text-transform: uppercase; letter-spacing: 1px;
+  font-size: 14px; margin-right: 12px; }
+.news-stub .date   { color: #888; font-size: 14px; margin-left: 12px; }
+
+.profile-idle {
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  color: #777; font-size: 32px;
+  margin: 0 auto;
+}
+
+.placeholder {
+  border: 1px dashed rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 18px 22px;
+  color: #666;
+  font-style: italic;
+  font-size: 14px;
+  text-align: left;
+}
+
+/* ---- Side control panel ------------------------------------------------ */
+.panel {
+  flex: 1;
+  max-width: 480px;
+  padding: 22px 26px 26px;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  color: #d0d0d0;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+}
+.panel h1 {
+  font-size: 14px; text-transform: uppercase; letter-spacing: 1.5px;
+  color: #ccc; font-weight: 600; margin: 0 0 6px;
+}
+.panel h2 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: #666; font-weight: 600; margin: 22px 0 10px;
+}
+.panel p { color: #888; line-height: 1.5; margin: 0 0 6px; }
+.panel code {
+  background: #1a1a1a; color: #c9d1d9; padding: 1px 5px;
+  border-radius: 3px; font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+.panel select {
+  width: 100%; padding: 10px 12px;
+  background: #1a1a1a; color: #e6e6e6;
+  border: 1px solid #2a2a2a; border-radius: 6px;
+  font-size: 13px; font-family: inherit;
+  cursor: pointer;
+}
+.panel select:hover { border-color: #3a3a3a; }
+.panel ul.layout {
+  list-style: none; margin: 0; padding: 0;
+}
+.panel ul.layout li {
+  display: grid; grid-template-columns: 1fr auto; gap: 10px;
+  padding: 7px 12px;
+  background: #161616; border: 1px solid #222;
+  border-radius: 5px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.panel ul.layout li .id { color: #d8d8d8; }
+.panel ul.layout li .pos { color: #6fcf97; font-family: "SF Mono", Menlo, monospace; font-size: 11px; }
+.panel ul.layout li.skipped { opacity: 0.45; }
+.panel ul.layout li.skipped .pos { color: #999; }
+.panel .meta-row { color: #777; font-size: 12px; margin-top: 6px; }
+.panel .meta-row code { font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="mirror-frame">
+    <div class="mirror" id="mirror">
+      <div class="region region-top-bar"     data-region="top_bar"></div>
+      <div class="region region-top-left"    data-region="top_left"></div>
+      <div class="region region-top-center"  data-region="top_center"></div>
+      <div class="region region-top-right"   data-region="top_right"></div>
+      <div class="region region-upper-third" data-region="upper_third"></div>
+      <div class="region region-middle-center" data-region="middle_center"></div>
+      <div class="region region-lower-third" data-region="lower_third"></div>
+      <div class="region region-bottom-left" data-region="bottom_left"></div>
+      <div class="region region-bottom-center" data-region="bottom_center"></div>
+      <div class="region region-bottom-right" data-region="bottom_right"></div>
+      <div class="region region-bottom-bar"  data-region="bottom_bar"></div>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <h1>Smart mirror · composite preview</h1>
+    <p>
+      Reálné <code>MMM-*.js</code> + <code>.css</code> bootnuté přes stubnutý
+      MagicMirror² framework. Layout čte živě z <code>config/pages.js</code>.
+      Modul, který v <code>config.js</code> není wired (zatím MMM-Mail) se v
+      žádném layoutu neukáže. Skipped: <code>MMM-Profile</code> (controller,
+      jen idle stub), <code>MMM-GoogleCalendar</code> (vendored).
+    </p>
+
+    <h2>Profile · time window</h2>
+    <select id="windowSelect"></select>
+    <div class="meta-row" id="windowMeta"></div>
+
+    <h2>Active layout</h2>
+    <ul class="layout" id="activeLayout"></ul>
+  </aside>
+</div>
+
+<!-- ── MagicMirror² stubs (must run before any module's Module.register) ── -->
+<script>
+window.Log = console;
+window.Module = {
+  _registry: {},
+  register: function (name, def) { this._registry[name] = def; }
+};
+</script>
+
+<!-- ── Real module sources (each calls Module.register on load) ─────────── -->
+<script src="./modules/MMM-Brno-Transit/MMM-Brno-Transit.js"></script>
+<script src="./modules/MMM-HA-Reminders/MMM-HA-Reminders.js"></script>
+<script src="./modules/MMM-Spending/MMM-Spending.js"></script>
+
+<!-- ── Built-in stubs registered through the same Module.register hook ──── -->
+<script>
+const NOW = () => Date.now();
+const minsAgo = (m) => new Date(NOW() - m * 60000).toISOString();
+const minsAhead = (m) => new Date(NOW() + m * 60000).toISOString();
+
+Module.register("clock", {
+  defaults: {},
+  start: function () {
+    setInterval(() => this.updateDom(), 1000);
+  },
+  getStyles: () => [],
+  getHeader: () => undefined,
+  getDom: function () {
+    const wrap = document.createElement("div");
+    wrap.className = "clock-stub";
+    const now = new Date();
+    const time = now.toLocaleTimeString("cs-CZ",
+      { hour: "2-digit", minute: "2-digit" });
+    const date = now.toLocaleDateString("cs-CZ",
+      { weekday: "long", day: "numeric", month: "long" });
+    wrap.innerHTML =
+      `<div class="clock-time">${time}</div><div class="clock-date">${date}</div>`;
+    return wrap;
+  }
+});
+
+Module.register("weather", {
+  defaults: { type: "current" },
+  start: function () { /* static demo data */ },
+  getStyles: () => [],
+  getHeader: function () { return this.data && this.data.header; },
+  getDom: function () {
+    const wrap = document.createElement("div");
+    if (this.config.type === "current") {
+      wrap.className = "weather-current";
+      wrap.innerHTML = `
+        <i class="icon fa-solid fa-cloud-sun"></i>
+        <div class="temp">17°</div>
+        <div class="meta"><div>Brno</div><div>polojasno</div></div>`;
+    } else {
+      wrap.className = "weather-forecast";
+      const days = [
+        ["Po", "fa-cloud-sun",   "19°", "11°"],
+        ["Út", "fa-sun",         "22°", "13°"],
+        ["St", "fa-cloud-showers-heavy", "16°", "10°"],
+        ["Čt", "fa-cloud",       "18°", "12°"],
+        ["Pá", "fa-sun",         "23°", "14°"]
+      ];
+      wrap.innerHTML = days.map(([d, ic, mx, mn]) => `
+        <span class="day">${d}</span>
+        <span class="icon"><i class="fa-solid ${ic}"></i></span>
+        <span class="max">${mx}</span>
+        <span class="min">${mn}</span>`).join("");
+    }
+    return wrap;
+  }
+});
+
+Module.register("newsfeed", {
+  defaults: {},
+  start: function () {
+    this._items = [
+      { source: "NYTimes",        title: "Markets close mixed as tech leads volatile session", date: minsAgo(8) },
+      { source: "Lidovky",        title: "Brno otevírá nový úsek tramvajové trati k Bohunicím", date: minsAgo(45) },
+      { source: "BBC News",       title: "Climate report: April was the warmest on record", date: minsAgo(120) },
+      { source: "Hospodářské",    title: "ČNB ponechala úrokové sazby beze změny", date: minsAgo(180) }
+    ];
+    this._idx = 0;
+    setInterval(() => { this._idx = (this._idx + 1) % this._items.length; this.updateDom(); }, 6000);
+  },
+  getStyles: () => [],
+  getHeader: () => undefined,
+  getDom: function () {
+    const it = this._items[this._idx];
+    const wrap = document.createElement("div");
+    wrap.className = "news-stub";
+    const ago = Math.round((NOW() - new Date(it.date).getTime()) / 60000);
+    wrap.innerHTML = `<span class="source">${it.source}</span>${it.title}<span class="date"> · ${ago} min ago</span>`;
+    return wrap;
+  }
+});
+
+// Stubs for modules we don't ship visuals for yet.
+Module.register("MMM-Profile", {
+  defaults: {}, start: function(){}, getStyles: () => [],
+  getHeader: () => undefined,
+  getDom: function () {
+    const w = document.createElement("div");
+    w.className = "profile-idle";
+    w.innerHTML = '<i class="fa-solid fa-eye"></i>';
+    return w;
+  }
+});
+
+Module.register("MMM-GoogleCalendar", {
+  defaults: {}, start: function(){}, getStyles: () => [],
+  getHeader: function () { return this.data && this.data.header; },
+  getDom: function () {
+    const w = document.createElement("div");
+    w.className = "placeholder";
+    w.textContent = "MMM-GoogleCalendar — vendored fork, není ve v1 wiringu";
+    return w;
+  }
+});
+</script>
+
+<!-- ── Mock data injection: each module that uses sendSocketNotification
+       gets a per-name mock that emits the matching *_DATA / *_DEPARTURES
+       payload back via socketNotificationReceived. Keeps modules' source
+       untouched. ──────────────────────────────────────────────────────── -->
+<script>
+const MOCKS = {
+  "MMM-Brno-Transit": function (inst) {
+    inst.payload = {
+      stopName: inst.config.stopName || "Vlhká",
+      departures: [
+        { line: "9", mode: "tram", items: [
+          { arrivalMs: NOW() + 3 * 60000 + 20000, displayHm: "14:35",
+            realtime: true, delayMin: 2, scheduledHm: "14:33" },
+          { arrivalMs: NOW() + 13 * 60000, displayHm: "14:45",
+            realtime: true, delayMin: 1, scheduledHm: "14:44" }
+        ]},
+        { line: "67", mode: "bus", items: [
+          { arrivalMs: NOW() + 7 * 60000 + 10000, displayHm: "14:39",
+            realtime: true, delayMin: 0, scheduledHm: null },
+          { arrivalMs: NOW() + 37 * 60000, displayHm: "15:09",
+            realtime: false, delayMin: null, scheduledHm: null }
+        ]}
+      ],
+      generatedAt: new Date().toISOString()
+    };
+    inst.errorMsg = null;
+  },
+
+  "MMM-HA-Reminders": function (inst) {
+    const now = Date.now();
+    inst.items = [
+      { uid: "1", summary: "Zaplatit fakturu za internet",
+        status: "needs_action", due: new Date(now + 4 * 3600e3).toISOString() },
+      { uid: "2", summary: "Vyzvednout balík z Alza",
+        status: "needs_action", due: new Date(now + 26 * 3600e3).toISOString() },
+      { uid: "3", summary: "Domluvit kontrolu kola",
+        status: "needs_action", due: new Date(now + 3 * 86400e3).toISOString() },
+      { uid: "4", summary: "Připravit prezentaci na pondělí",
+        status: "needs_action", due: new Date(now - 2 * 3600e3).toISOString() },  // overdue
+      { uid: "5", summary: "Koupit dárek pro mámu",
+        status: "needs_action", due: null },
+      { uid: "6", summary: "Vrátit knihy do knihovny",
+        status: "completed", due: null }
+    ];
+    inst.errorMsg = null;
+  },
+
+  "MMM-Spending": function (inst) {
+    inst.data = {
+      total: 1247.50,
+      currency: "CZK",
+      count: 4,
+      recent: [
+        { payee: "Albert", amount: 312.50, currency: "CZK" },
+        { payee: "Café Práh", amount: 95, currency: "CZK" },
+        { payee: "DPMB jízdenka", amount: 30, currency: "CZK" }
+      ],
+      generatedAt: new Date().toISOString()
+    };
+    inst.errorMsg = null;
+  }
+};
+</script>
+
+<!-- ── Composite page wiring ────────────────────────────────────────────── -->
+<script>
+// Module config copied from config.js. Kept inline so the demo doesn't
+// depend on a CommonJS loader in the browser. Update if config.js changes.
+const MODULE_DEFS = [
+  { id: "clock",            module: "clock" },
+  { id: "weather_current",  module: "weather", config: { type: "current" } },
+  { id: "weather_forecast", module: "weather", header: "Weather Forecast",
+    config: { type: "forecast" } },
+  { id: "transit",          module: "MMM-Brno-Transit",
+    config: {
+      stopName: "Vlhká",
+      lines: [{ line: "9", directionId: 1 }, { line: "67", directionId: 1 }]
+    }},
+  { id: "news",             module: "newsfeed" },
+  { id: "calendar_domes",   module: "MMM-GoogleCalendar", header: "Moro systems" },
+  { id: "reminders_domes",  module: "MMM-HA-Reminders", header: "Reminders",
+    config: { todoEntities: ["todo.iphone_reminders"], maxItems: 6,
+              showDueDate: true, language: "cs" }},
+  { id: "spending_domes",   module: "MMM-Spending", header: "Útrata dnes",
+    config: { currency: "CZK", recentCount: 3, language: "cs" }}
+];
+const PROFILE_FIXED = [
+  // Always rendered, regardless of active page (presence controller).
+  { id: "_profile", module: "MMM-Profile", position: "top_center" }
+];
+
+const regions = {};
+document.querySelectorAll("[data-region]").forEach(el => {
+  regions[el.dataset.region] = el;
+});
+
+const instances = {};   // id -> module instance
+
+function instantiate(def) {
+  const proto = Module._registry[def.module];
+  if (!proto) {
+    console.warn("[demo] no module registered for", def.module);
+    return null;
+  }
+  const inst = Object.assign({}, proto);
+  inst.name = def.module;
+  inst.config = Object.assign({}, proto.defaults || {}, def.config || {});
+  inst.data = { header: def.header };
+  inst._mountEl = null;
+  inst.updateDom = function () {
+    if (!this._mountEl) return;
+    this._mountEl.innerHTML = "";
+    const headerText = (typeof this.getHeader === "function")
+      ? this.getHeader() : this.data.header;
+    if (headerText) {
+      const h = document.createElement("header");
+      h.className = "module-header";
+      h.textContent = headerText;
+      this._mountEl.appendChild(h);
+    }
+    const body = this.getDom();
+    if (body) this._mountEl.appendChild(body);
+  };
+  inst.sendSocketNotification = function (notification) {
+    const mock = MOCKS[this.name];
+    if (!mock) return;
+    // initial-load notifications fire mock once with sensible payload
+    setTimeout(() => {
+      mock(this);
+      this.updateDom();
+    }, 50);
+  };
+  inst.sendNotification = function () { /* swallowed */ };
+  inst.subscribe = function () { /* unused */ };
+  if (typeof inst.start === "function") inst.start();
+  return inst;
+}
+
+// Boot all module instances once. Visibility/positioning is then driven by
+// applyPage() — modules that aren't in the active layout simply have no
+// mount element and don't render.
+for (const def of MODULE_DEFS) {
+  instances[def.id] = instantiate(def);
+}
+for (const def of PROFILE_FIXED) {
+  instances[def.id] = instantiate(def);
+}
+
+function applyPage(layout, globalLayout) {
+  // Reset all regions.
+  Object.values(regions).forEach(r => r.innerHTML = "");
+  // Drop existing mount references; we'll re-attach for visible modules.
+  Object.values(instances).forEach(i => { if (i) i._mountEl = null; });
+
+  const merged = (globalLayout || []).concat(layout || []);
+  // MMM-Profile is always at top_center.
+  for (const fixed of PROFILE_FIXED) merged.push(fixed);
+
+  for (const item of merged) {
+    const inst = instances[item.id];
+    const region = regions[item.position];
+    if (!inst || !region) continue;
+    const wrap = document.createElement("div");
+    wrap.className = "module module-" + item.id;
+    region.appendChild(wrap);
+    inst._mountEl = wrap;
+    inst.updateDom();
+  }
+
+  renderActiveLayoutPanel(merged);
+}
+
+function renderActiveLayoutPanel(layout) {
+  const ul = document.getElementById("activeLayout");
+  ul.innerHTML = "";
+  for (const item of layout) {
+    const li = document.createElement("li");
+    const inst = instances[item.id];
+    const proto = inst && Module._registry[inst.name];
+    const isPlaceholder = inst && inst.name &&
+      (inst.name === "MMM-GoogleCalendar" || inst.name === "MMM-Profile");
+    if (isPlaceholder) li.classList.add("skipped");
+    li.innerHTML = `<span class="id">${item.id}</span>`
+      + `<span class="pos">${item.position}</span>`;
+    ul.appendChild(li);
+  }
+}
+
+// ---- Pages.js loader (live, never duplicated) -------------------------- //
+async function loadPages() {
+  const text = await fetch("./config/pages.js").then(r => r.text());
+  // Strip the comment header + `module.exports = ` wrapper to get the bare
+  // object literal. Keep this lenient — pages.js is hand-edited.
+  const match = text.match(/module\.exports\s*=\s*([\s\S]*?);?\s*$/);
+  if (!match) throw new Error("Couldn't parse pages.js");
+  return new Function("return " + match[1])();
+}
+
+(async function init() {
+  let pages;
+  try {
+    pages = await loadPages();
+  } catch (e) {
+    console.error("[demo] pages.js load failed", e);
+    pages = {
+      globalLayout: [],
+      Domes: { fallback: { layout: MODULE_DEFS.map(d => ({ id: d.id, position: "top_left" })) } }
+    };
+  }
+
+  // Build the (user, window) options. globalLayout is merged at apply time.
+  const sel = document.getElementById("windowSelect");
+  const meta = document.getElementById("windowMeta");
+  const options = [];
+  for (const userKey of Object.keys(pages)) {
+    if (userKey === "globalLayout") continue;
+    const windows = pages[userKey];
+    for (const winKey of Object.keys(windows)) {
+      options.push({ user: userKey, win: winKey, def: windows[winKey] });
+    }
+  }
+  for (const o of options) {
+    const opt = document.createElement("option");
+    opt.value = o.user + "::" + o.win;
+    opt.textContent = `${o.user} · ${o.win}`;
+    sel.appendChild(opt);
+  }
+
+  function pickAndApply() {
+    const [user, win] = sel.value.split("::");
+    const winDef = pages[user][win];
+    const layout = winDef.layout || [];
+    applyPage(layout, pages.globalLayout || []);
+    meta.innerHTML = `<code>from</code> ${winDef.from || "—"}
+                     &nbsp;<code>to</code> ${winDef.to || "—"}
+                     · <strong>${layout.length}</strong> modul(ů)`;
+  }
+
+  sel.addEventListener("change", pickAndApply);
+
+  // Pick a sensible default — the first Domes window if available.
+  const def = options.find(o => o.user === "Domes" && o.win === "morning")
+            || options[0];
+  if (def) {
+    sel.value = def.user + "::" + def.win;
+  }
+  pickAndApply();
+})();
+</script>
+</body>
+</html>
