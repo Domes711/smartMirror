@@ -15,9 +15,9 @@
  */
 
 :root {
-    --mmp-ring-size: 220px;
-    --mmp-avatar-size: 80px;
-    --mmp-error-size: 120px;
+    --mmp-ring-size: 280px;
+    --mmp-avatar-size: 96px;
+    --mmp-error-size: 144px;
     --mmp-face-color: #ffffff;
     --mmp-accent: #ffffff;
     --mmp-error-color: rgba(255,255,255,0.55);
@@ -28,10 +28,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: 36px;
     color: var(--mmp-face-color);
     font-family: "Roboto", "Helvetica Neue", sans-serif;
-    min-height: 240px;
+    min-height: 320px;
 }
 
 .mmp[data-state="asleep"] { visibility: hidden; }
@@ -242,12 +242,13 @@
 
 /* ============ SUCCESS ============ */
 .profile.success .ring {
-    animation: mmp-spin 6s linear infinite, mmp-pulseRing 0.6s ease;
+    animation: mmp-spin 1.6s linear infinite, mmp-pulseRing 0.6s ease;
 }
 .profile.success .ring-circle {
     stroke: var(--mmp-accent);
     stroke-dasharray: none;
     stroke-width: 2.5;
+    animation: mmp-tintGreenStroke 1.6s ease forwards;
 }
 
 @keyframes mmp-pulseRing {
@@ -256,7 +257,18 @@
     100% { transform: scale(1); }
 }
 
-.profile.success .face { stroke: var(--mmp-accent); }
+/* Brief green tint that settles back to white */
+@keyframes mmp-tintGreenStroke {
+    0%   { stroke: rgba(255,255,255,0.9); }
+    15%  { stroke: #34c759; }
+    60%  { stroke: #34c759; }
+    100% { stroke: #ffffff; }
+}
+
+.profile.success .face {
+    stroke: var(--mmp-accent);
+    animation: mmp-tintGreenStroke 1.6s ease forwards;
+}
 .profile.success .scan-line,
 .profile.success .dots,
 .profile.success .ring::after { opacity: 0; }
@@ -272,6 +284,9 @@
 .profile.success .scanner {
     width: var(--mmp-avatar-size);
     height: var(--mmp-avatar-size);
+}
+.profile.success .ring {
+    animation: mmp-spin 6s linear infinite;
 }
 .profile.success .face { opacity: 0; }
 .profile.success .avatar { opacity: 1; transform: scale(1); }
@@ -295,9 +310,22 @@
     stroke: var(--mmp-error-color);
     stroke-dasharray: none;
     stroke-width: 2.5;
+    animation: mmp-tintRedStroke 1.6s ease forwards;
 }
 .profile.error .ring::after { opacity: 0; }
-.profile.error .face { stroke: var(--mmp-error-color); opacity: 1; }
+.profile.error .face {
+    stroke: var(--mmp-error-color);
+    opacity: 1;
+    animation: mmp-tintRedStroke 1.6s ease forwards;
+}
+
+/* Brief red tint that settles back to dimmed white */
+@keyframes mmp-tintRedStroke {
+    0%   { stroke: rgba(255,255,255,0.9); }
+    15%  { stroke: #ff3b30; }
+    60%  { stroke: #ff3b30; }
+    100% { stroke: rgba(255,255,255,0.55); }
+}
 .profile.error .scan-line { opacity: 0; animation: none; }
 .profile.error .dots { animation: none; opacity: 0.45; }
 
@@ -323,8 +351,14 @@
     opacity: 1;
     transition: opacity 0.1s ease;
 }
-.profile.error .face .x1 { animation: mmp-drawStroke 0.3s ease 0.15s forwards; }
-.profile.error .face .x2 { animation: mmp-drawStroke 0.3s ease 0.35s forwards; }
+.profile.error .face .x1 {
+    animation: mmp-drawStroke 0.3s ease 0.15s forwards,
+               mmp-tintRedStroke 1.6s ease forwards;
+}
+.profile.error .face .x2 {
+    animation: mmp-drawStroke 0.3s ease 0.35s forwards,
+               mmp-tintRedStroke 1.6s ease forwards;
+}
 
 @keyframes mmp-drawStroke { to { stroke-dashoffset: 0; } }
 
