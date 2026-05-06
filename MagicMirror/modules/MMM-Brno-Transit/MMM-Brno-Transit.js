@@ -23,23 +23,37 @@ Module.register("MMM-Brno-Transit", {
     start: function () {
         this.payload = null;
         this.errorMsg = null;
-        // Re-render every 30 s so "X min" labels stay fresh between helper updates.
-        this.uiTick = setInterval(() => this.updateDom(), 30 * 1000);
+        this._scheduleUiTick();
         this.sendSocketNotification("MMBT_INIT", this.config);
     },
 
     suspend: function () {
         if (this.uiTick) { clearInterval(this.uiTick); this.uiTick = null; }
+        if (this.uiTimeout) { clearTimeout(this.uiTimeout); this.uiTimeout = null; }
     },
 
     resume: function () {
-        if (!this.uiTick) {
-            this.uiTick = setInterval(() => this.updateDom(), 30 * 1000);
-        }
+        this._scheduleUiTick();
     },
 
+    // Re-render every 30 s aligned to wall-clock :00 / :30 boundaries, so the
+    // "X min" countdown ticks down on real second-of-minute marks rather than
+    // wherever the module happened to start.
+    _scheduleUiTick: function () {
+        if (this.uiTick) { clearInterval(this.uiTick); this.uiTick = null; }
+        if (this.uiTimeout) { clearTimeout(this.uiTimeout); this.uiTimeout = null; }
+        const ms = (30000 - (Date.now() % 30000)) % 30000;
+        this.uiTimeout = setTimeout(() => {
+            this.updateDom();
+            this.uiTick = setInterval(() => this.updateDom(), 30 * 1000);
+        }, ms || 30000);
+    },
+
+    // We render the header ourselves inside getDom() so we can place a single
+    // pulsing live-status dot next to the stop name (only when realtime data
+    // is currently flowing for at least one displayed departure).
     getHeader: function () {
-        return this.config.header || this.config.stopName;
+        return undefined;
     },
 
     getStyles: function () {
@@ -61,6 +75,8 @@ Module.register("MMM-Brno-Transit", {
         const wrap = document.createElement("div");
         wrap.className = "mmbt";
 
+        wrap.appendChild(this._headerRow());
+
         if (this.errorMsg) {
             wrap.appendChild(this._statusRow(this.errorMsg));
             return wrap;
@@ -73,6 +89,26 @@ Module.register("MMM-Brno-Transit", {
             wrap.appendChild(this._lineRow(dep));
         }
         return wrap;
+    },
+
+    _headerRow: function () {
+        const header = document.createElement("div");
+        header.className = "mmbt-header";
+
+        const isLive = !!(this.payload && this.payload.departures
+            && this.payload.departures.some(d => d.items && d.items.some(it => it.realtime)));
+        if (isLive) {
+            const dot = document.createElement("span");
+            dot.className = "mmbt-header-dot";
+            header.appendChild(dot);
+        }
+
+        const title = document.createElement("span");
+        title.className = "mmbt-title";
+        title.textContent = this.config.header || this.config.stopName;
+        header.appendChild(title);
+
+        return header;
     },
 
     _lineRow: function (dep) {
@@ -103,14 +139,21 @@ Module.register("MMM-Brno-Transit", {
             empty.textContent = "— mimo provoz";
             times.appendChild(empty);
         } else {
-            for (const it of dep.items) {
+            // Skip departures that round to "0 min" (i.e. already happened or
+            // <30 s away) — user wants to always see the upcoming one.
+            const visible = dep.items.filter((it) => {
+                const diffSec = Math.max(0, Math.round((it.arrivalMs - Date.now()) / 1000));
+                return Math.round(diffSec / 60) > 0;
+            }).slice(0, this.config.perLine);
+
+            if (visible.length === 0) {
+                const empty = document.createElement("span");
+                empty.className = "mmbt-empty";
+                empty.textContent = "— mimo provoz";
+                times.appendChild(empty);
+            } else for (const it of visible) {
                 const t = document.createElement("span");
                 t.className = "mmbt-time" + (it.realtime ? " mmbt-rt" : "");
-                if (it.realtime) {
-                    const dot = document.createElement("span");
-                    dot.className = "mmbt-dot";
-                    t.appendChild(dot);
-                }
                 t.appendChild(document.createTextNode(this._formatTime(it)));
                 if (it.realtime && typeof it.delayMin === "number" && it.delayMin !== 0) {
                     t.title = `scheduled ${it.scheduledHm || "?"} · delay ${it.delayMin > 0 ? "+" : ""}${it.delayMin} min`;
