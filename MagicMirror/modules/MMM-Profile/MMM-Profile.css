@@ -52,9 +52,6 @@
     align-items: center;
     justify-content: center;
     transform-origin: center center;
-    transition:
-        width 0.35s cubic-bezier(.2,.8,.2,1) 0.25s,
-        height 0.35s cubic-bezier(.2,.8,.2,1) 0.25s;
 }
 
 .scanner.intro {
@@ -278,10 +275,6 @@
 .profile.success .face .eye-r { opacity: 0; transition: opacity 0.2s ease; }
 .profile.success .face .outline { opacity: 0; transition: opacity 0.2s ease 0.3s; }
 
-.profile.success .scanner {
-    width: var(--mmp-avatar-size);
-    height: var(--mmp-avatar-size);
-}
 .profile.success .ring {
     animation: mmp-spin 3s linear infinite;
 }
@@ -295,10 +288,6 @@
 }
 
 /* ============ ERROR ============ */
-.profile.error .scanner {
-    width: var(--mmp-error-size);
-    height: var(--mmp-error-size);
-}
 .profile.error .ring {
     animation: none;
     transform: rotate(0deg);
