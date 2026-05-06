@@ -220,28 +220,49 @@ Module.register("MMM-Profile", {
     // --- DOM remap of other modules ---------------------------------------
 
     _project: function (layout) {
+        Log.log("[MMM-Profile] _project called, layout:", JSON.stringify(layout));
+
         const wantedById = new Map();
         for (const entry of layout) {
             if (!entry || !entry.id || !entry.position) continue;
             wantedById.set(entry.id, entry.position);
         }
 
+        Log.log("[MMM-Profile] wantedById map:", Array.from(wantedById.entries()));
+
         const mods = MM.getModules().enumerate(() => true);
+        Log.log("[MMM-Profile] Found modules:", mods.map(m => m.name + " (id: " + (m.data && m.data.id) + ")"));
+
         for (const mod of mods) {
             if (mod.name === "MMM-Profile") continue;
             const id = mod.data && mod.data.id;
-            if (!id) continue;
+            if (!id) {
+                Log.log("[MMM-Profile] Skipping module without id:", mod.name);
+                continue;
+            }
             const pos = wantedById.get(id);
             const elNode = document.getElementById(mod.identifier);
-            if (!elNode) continue;
+            if (!elNode) {
+                Log.log("[MMM-Profile] No DOM element for module:", mod.name, id);
+                continue;
+            }
+
+            Log.log("[MMM-Profile] Module", mod.name, "(", id, "):",
+                    "pos=", pos,
+                    "hidden=", mod.hidden,
+                    "lockStrings=", mod.lockStrings);
+
             if (pos) {
                 const region = document.querySelector(
                     ".region." + pos.replace(/_/g, "."));
                 if (region && elNode.parentElement !== region) {
+                    Log.log("[MMM-Profile] Moving", id, "to region", pos);
                     region.appendChild(elNode);
                 }
+                Log.log("[MMM-Profile] Calling show() for", id);
                 mod.show(0, () => {}, { lockString: "mmm-profile" });
             } else {
+                Log.log("[MMM-Profile] Calling hide() for", id);
                 mod.hide(0, () => {}, { lockString: "mmm-profile" });
             }
         }
