@@ -58,6 +58,10 @@ module.exports = NodeHelper.create({
                 }
             }
 
+            // Start in "asleep" state (no indicator shown, but default layout active)
+            this.state = "asleep";
+            this.currentUser = null;
+
             this._connectMQTT();
             // Send the initial state so the frontend can paint immediately.
             this._push();
@@ -208,9 +212,9 @@ module.exports = NodeHelper.create({
     _resolveLayout: function () {
         const pages = this.config && this.config.pages;
         if (!pages) return [];
-        if (this.state === "asleep") return [];   // suppress globalLayout too
 
-        const userKey = (this.state === "scanning" || !this.currentUser)
+        // For asleep, scanning, or no user: show default user layout
+        const userKey = (this.state === "asleep" || this.state === "scanning" || !this.currentUser)
             ? this._defaultUser()
             : this.currentUser;
 

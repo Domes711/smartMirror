@@ -230,10 +230,34 @@ Module.register("MMM-Profile", {
 
         Log.log("[MMM-Profile] wantedById map:", Array.from(wantedById.entries()));
 
-        const mods = MM.getModules().enumerate(() => true);
-        Log.log("[MMM-Profile] Found modules:", mods.map(m => m.name + " (id: " + (m.data && m.data.id) + ")"));
+        if (!MM || !MM.getModules) {
+            Log.error("[MMM-Profile] MM.getModules not available yet");
+            return;
+        }
 
-        for (const mod of mods) {
+        const allModules = MM.getModules();
+        Log.log("[MMM-Profile] MM.getModules() returned:", allModules);
+        Log.log("[MMM-Profile] Type:", typeof allModules, "Array?", Array.isArray(allModules));
+
+        if (!allModules || allModules.length === 0) {
+            Log.warn("[MMM-Profile] No modules found");
+            return;
+        }
+
+        Log.log("[MMM-Profile] Found modules:", allModules.map(m => m.name + " (id: " + (m.data && m.data.id) + ")"));
+
+        // Debug: print first module structure
+        if (allModules.length > 0) {
+            const firstMod = allModules[0];
+            Log.log("[MMM-Profile] First module structure:", {
+                name: firstMod.name,
+                identifier: firstMod.identifier,
+                data: firstMod.data,
+                config: firstMod.config
+            });
+        }
+
+        for (const mod of allModules) {
             if (mod.name === "MMM-Profile") continue;
             const id = mod.data && mod.data.id;
             if (!id) {

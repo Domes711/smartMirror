@@ -15,7 +15,8 @@ module.exports = {
             from: "0 0 * * *",   // Midnight every day
             to:   "59 23 * * *", // 23:59 every day (always active)
             layout: [
-                { id: "clock", position: "top_left" }
+                { id: "clock", position: "top_left" },
+                { id: "news", position: "bottom_bar" }
             ]
         }
     },
