@@ -1,0 +1,16 @@
+# Dependencies for camera scripts (face recognition + gesture recognition)
+# Install on Raspberry Pi with: pip3 install -r requirements.txt
+
+# MQTT client for publishing events to smart mirror
+paho-mqtt>=1.6.1
+
+# Face recognition (face_reco_once.py, encode_faces.py)
+face-recognition>=1.3.0
+numpy>=1.21.0
+
+# Gesture recognition (gesture_reco_once.py)
+mediapipe>=0.10.0
+opencv-contrib-python>=4.8.0
+
+# Note: picamera2 is pre-installed on Raspberry Pi OS (system package)
+# If missing, install via: sudo apt install -y python3-picamera2
