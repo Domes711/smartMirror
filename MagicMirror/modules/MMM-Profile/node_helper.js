@@ -21,6 +21,7 @@ const NodeHelper = require("node_helper");
 const Log = require("logger");
 const cronParser = require("cron-parser");
 const mqtt = require("mqtt");
+const path = require("path");
 
 const DEFAULT_USER = "default";
 const DEFAULT_DIM_MS = 60 * 1000;
@@ -44,6 +45,23 @@ module.exports = NodeHelper.create({
     socketNotificationReceived: function (notification, payload) {
         if (notification === "MMP_INIT") {
             this.config = payload || {};
+
+            // Load pages.js from module if not provided in config
+            if (!this.config.pages) {
+                const pagesPath = path.join(__dirname, "pages.js");
+                try {
+                    this.config.pages = require(pagesPath);
+                    Log.info("[MMM-Profile] Loaded pages.js from module:", pagesPath);
+                } catch (err) {
+                    Log.error("[MMM-Profile] Failed to load pages.js from module:", err);
+                    this.config.pages = null;
+                }
+            }
+
+            // Start in "asleep" state (no indicator shown, but default layout active)
+            this.state = "asleep";
+            this.currentUser = null;
+
             this._connectMQTT();
             // Send the initial state so the frontend can paint immediately.
             this._push();
@@ -194,9 +212,9 @@ module.exports = NodeHelper.create({
     _resolveLayout: function () {
         const pages = this.config && this.config.pages;
         if (!pages) return [];
-        if (this.state === "asleep") return [];   // suppress globalLayout too
 
-        const userKey = (this.state === "scanning" || !this.currentUser)
+        // For asleep, scanning, or no user: show default user layout
+        const userKey = (this.state === "asleep" || this.state === "scanning" || !this.currentUser)
             ? this._defaultUser()
             : this.currentUser;
 

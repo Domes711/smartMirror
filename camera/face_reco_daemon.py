@@ -159,9 +159,9 @@ class FaceRecoDaemon:
         try:
             from picamera2 import Picamera2
             self.picam = Picamera2()
-            # Very low resolution for maximum speed on Pi
+            # Medium resolution for balance between speed and accuracy
             config = self.picam.create_preview_configuration(
-                main={"size": (160, 120), "format": "RGB888"}
+                main={"size": (320, 240), "format": "RGB888"}
             )
             self.picam.configure(config)
             self.picam.start()
@@ -169,7 +169,7 @@ class FaceRecoDaemon:
             time.sleep(0.3)
             for _ in range(3):
                 self.picam.capture_array()
-            log.info("Camera initialized and ready (160x120, optimized)")
+            log.info("Camera initialized and ready (320x240, balanced)")
         except Exception as exc:
             log.error("Failed to initialize camera: %s", exc)
             self.picam = None

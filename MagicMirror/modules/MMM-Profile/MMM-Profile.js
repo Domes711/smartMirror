@@ -62,11 +62,11 @@ Module.register("MMM-Profile", {
 
         this.updateDom(0);
 
-        const key = this._layoutKey(this.activeLayout);
-        if (key !== this.activeLayoutKey) {
-            this.activeLayoutKey = key;
-            if (this.domReady) this._project(this.activeLayout);
+        // Always project layout, even if key didn't change (modules need to show/hide)
+        if (this.domReady) {
+            this._project(this.activeLayout);
         }
+        this.activeLayoutKey = this._layoutKey(this.activeLayout);
     },
 
     _layoutKey: function (layout) {
@@ -84,10 +84,8 @@ Module.register("MMM-Profile", {
 
         const profileClass = this._profileClass();
         const display = this._displayName();
-        const status  = this._statusText();
 
         wrap.appendChild(this._buildProfile(profileClass, display));
-        wrap.appendChild(this._buildStatus(status));
         return wrap;
     },
 
@@ -222,28 +220,73 @@ Module.register("MMM-Profile", {
     // --- DOM remap of other modules ---------------------------------------
 
     _project: function (layout) {
+        Log.log("[MMM-Profile] _project called, layout:", JSON.stringify(layout));
+
         const wantedById = new Map();
         for (const entry of layout) {
             if (!entry || !entry.id || !entry.position) continue;
             wantedById.set(entry.id, entry.position);
         }
 
-        const mods = MM.getModules().enumerate(() => true);
-        for (const mod of mods) {
+        Log.log("[MMM-Profile] wantedById map:", Array.from(wantedById.entries()));
+
+        if (!MM || !MM.getModules) {
+            Log.error("[MMM-Profile] MM.getModules not available yet");
+            return;
+        }
+
+        const allModules = MM.getModules();
+        Log.log("[MMM-Profile] MM.getModules() returned:", allModules);
+        Log.log("[MMM-Profile] Type:", typeof allModules, "Array?", Array.isArray(allModules));
+
+        if (!allModules || allModules.length === 0) {
+            Log.warn("[MMM-Profile] No modules found");
+            return;
+        }
+
+        Log.log("[MMM-Profile] Found modules:", allModules.map(m => m.name + " (id: " + (m.data && m.data.id) + ")"));
+
+        // Debug: print first module structure
+        if (allModules.length > 0) {
+            const firstMod = allModules[0];
+            Log.log("[MMM-Profile] First module structure:", {
+                name: firstMod.name,
+                identifier: firstMod.identifier,
+                data: firstMod.data,
+                config: firstMod.config
+            });
+        }
+
+        for (const mod of allModules) {
             if (mod.name === "MMM-Profile") continue;
             const id = mod.data && mod.data.id;
-            if (!id) continue;
+            if (!id) {
+                Log.log("[MMM-Profile] Skipping module without id:", mod.name);
+                continue;
+            }
             const pos = wantedById.get(id);
             const elNode = document.getElementById(mod.identifier);
-            if (!elNode) continue;
+            if (!elNode) {
+                Log.log("[MMM-Profile] No DOM element for module:", mod.name, id);
+                continue;
+            }
+
+            Log.log("[MMM-Profile] Module", mod.name, "(", id, "):",
+                    "pos=", pos,
+                    "hidden=", mod.hidden,
+                    "lockStrings=", mod.lockStrings);
+
             if (pos) {
                 const region = document.querySelector(
                     ".region." + pos.replace(/_/g, "."));
                 if (region && elNode.parentElement !== region) {
+                    Log.log("[MMM-Profile] Moving", id, "to region", pos);
                     region.appendChild(elNode);
                 }
+                Log.log("[MMM-Profile] Calling show() for", id);
                 mod.show(0, () => {}, { lockString: "mmm-profile" });
             } else {
+                Log.log("[MMM-Profile] Calling hide() for", id);
                 mod.hide(0, () => {}, { lockString: "mmm-profile" });
             }
         }

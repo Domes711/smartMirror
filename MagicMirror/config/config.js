@@ -4,8 +4,6 @@
  * Only clock and MMM-Profile modules, single default page.
  */
 
-const pages = require("./pages.js");
-
 let config = {
     address: "localhost",
     port: 8080,
@@ -30,21 +28,38 @@ let config = {
             position: "top_center",
             config: {
                 defaultUser: "default",
-                pages: pages,
+                // pages se načte automaticky z modulu MMM-Profile/pages.js
                 scanningStatus: "Skenování obličeje…",
                 recognizedStatus: "Obličej rozpoznán",
                 unknownStatus: "Obličej nerozpoznán",
+                userDisplayNames: {
+                    "Domes": "Domes"
+                },
                 dimTimeoutMs: 60000,
                 mqttBroker: "mqtt://127.0.0.1:1883"
             }
         },
 
-        // ── managed: position controlled by pages.js ──
+        // ── managed: initially rendered here, then moved by MMM-Profile according to pages.js ──
         {
             id: "clock",
             module: "clock",
+            position: "top_left",  // Initial position (will be moved by MMM-Profile)
             config: {
                 displaySeconds: false
+            }
+        },
+        {
+            id: "google-calendar",
+            module: "MMM-GoogleCalendar",
+            position: "top_left",  // Initial position (will be moved by MMM-Profile)
+            config: {
+                calendars: [
+                    {
+                        symbol: "calendar-week",
+                        calendarID: "TVOJE_CALENDAR_ID@group.calendar.google.com"  // Nahraď svým Calendar ID
+                    }
+                ]
             }
         }
     ]
