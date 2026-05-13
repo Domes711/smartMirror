@@ -164,7 +164,8 @@ def recognize_gesture_stream(
 
             # Show preview if requested
             if show_preview:
-                display_frame = frame.copy()
+                # Convert RGB to BGR for OpenCV display
+                display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 remaining = max(0, int(max_duration - elapsed))
                 cv2.putText(display_frame, f"Scanning... {remaining}s", (10, 30),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
