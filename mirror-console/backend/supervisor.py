@@ -129,6 +129,18 @@ def daemon_active() -> bool:
         return False
 
 
+def _service_exists(name: str) -> bool:
+    """True if the systemd unit <name>.service is installed."""
+    try:
+        out = subprocess.run(
+            [SYSTEMCTL, "list-unit-files", f"{name}.service"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return f"{name}.service" in out.stdout
+    except Exception:  # noqa: BLE001
+        return False
+
+
 # --------------------------------------------------------------------------- #
 # Supervisor: owns the mode + the camera capture thread
 # --------------------------------------------------------------------------- #
@@ -138,10 +150,24 @@ class Supervisor:
         self.output = StreamingOutput()
         self.lock = threading.RLock()          # serialize mode transitions
         self.mode = DEFAULT_MODE
+        # Single persistent camera instance + single capture thread. We never
+        # close/reopen the camera just to switch between test modes (libcamera
+        # struggles to re-acquire in the same process); instead we keep one
+        # instance and only flip self.overlay.
+        self.picam = None
+        self.overlay = None                    # "face" | "gesture" | None
         self.capture_thread = None
         self.stop_capture = threading.Event()
         self.camera_open = False
         self.fps = 0.0
+        # cached detectors (lazy, kept across overlay switches)
+        self._mp = None
+        self._hands = None
+        self._count_fingers = None
+        self._fr = None
+        self._known_encodings = None
+        self._known_names = None
+        self._last_faces = []
 
     # ---- persistence -------------------------------------------------- #
     def load_mode(self) -> str:
@@ -169,37 +195,37 @@ class Supervisor:
             raise ValueError(f"unknown mode: {mode}")
         with self.lock:
             log.info("switching mode: %s -> %s", self.mode, mode)
-            # 1) release whoever currently holds the camera
-            self._stop_capture()
-            _systemctl("stop")  # idempotent; ensures daemon isn't holding it
 
-            # 2) hand the camera to the new owner
             if mode in ("test_face", "test_gesture"):
-                self._start_capture(face=(mode == "test_face"))
+                # A test mode owns the camera. If the daemon exists, stop it so
+                # it isn't holding the device, then reuse our single camera
+                # instance and just flip the overlay (no close/reopen).
+                if _service_exists(FACE_SERVICE):
+                    _systemctl("stop")
+                self.overlay = "face" if mode == "test_face" else "gesture"
+                self._ensure_capture()
             elif mode == "face_detect":
-                _systemctl("start")
+                # Hand the camera to the production daemon (if installed).
+                self.overlay = None
+                self._pause_capture()
+                if _service_exists(FACE_SERVICE):
+                    self._release_camera()   # fully close so the daemon can acquire
+                    _systemctl("start")
+                # else: no daemon here — keep the (paused) instance so switching
+                # back to a test mode is instant and reliable.
 
             self.mode = mode
             self.save_mode(mode)
             log.info("mode active: %s", mode)
 
-    # ---- capture lifecycle -------------------------------------------- #
-    def _start_capture(self, face: bool) -> None:
-        self.stop_capture.clear()
-        self.capture_thread = threading.Thread(
-            target=self._capture_loop, args=(face,), daemon=True,
-        )
-        self.capture_thread.start()
-
-    def _stop_capture(self) -> None:
-        if self.capture_thread and self.capture_thread.is_alive():
-            self.stop_capture.set()
-            self.capture_thread.join(timeout=5)
-        self.capture_thread = None
-        self.camera_open = False
-
-    def _open_camera(self):
-        """Open Picamera2, retrying while the daemon releases the device."""
+    # ---- camera + capture lifecycle ----------------------------------- #
+    def _ensure_camera(self) -> None:
+        """Open the single persistent Picamera2 instance, or resume it."""
+        if self.picam is not None:
+            if not self.camera_open:
+                self.picam.start()
+                self.camera_open = True
+            return
         from picamera2 import Picamera2
         last_exc = None
         for attempt in range(CAMERA_OPEN_RETRIES):
@@ -212,11 +238,13 @@ class Supervisor:
                 )
                 picam.configure(config)
                 picam.start()
-                return picam
+                self.picam = picam
+                self.camera_open = True
+                log.info("camera open (%dx%d)", self.args.width,
+                         self.args.height)
+                return
             except Exception as exc:  # noqa: BLE001 -- device may be busy
                 last_exc = exc
-                # Release the half-initialized instance, otherwise it keeps the
-                # camera in "Configured" state and the next acquire() fails.
                 if picam is not None:
                     try:
                         picam.close()
@@ -227,92 +255,55 @@ class Supervisor:
                 time.sleep(0.5)
         raise RuntimeError(f"could not open camera: {last_exc}")
 
-    def _capture_loop(self, face: bool) -> None:
+    def _ensure_capture(self) -> None:
+        """Open the camera and start the capture thread if not running."""
+        self._ensure_camera()
+        if self.capture_thread is None or not self.capture_thread.is_alive():
+            self.stop_capture.clear()
+            self.capture_thread = threading.Thread(
+                target=self._capture_loop, daemon=True)
+            self.capture_thread.start()
+
+    def _pause_capture(self) -> None:
+        """Stop the capture thread and pause the camera (keep the instance)."""
+        if self.capture_thread and self.capture_thread.is_alive():
+            self.stop_capture.set()
+            self.capture_thread.join(timeout=5)
+        self.capture_thread = None
+        if self.picam is not None and self.camera_open:
+            try:
+                self.picam.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        self.camera_open = False
+        self.fps = 0.0
+
+    def _release_camera(self) -> None:
+        """Fully close the camera so another process can acquire it."""
+        if self.picam is not None:
+            try:
+                self.picam.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self.picam = None
+        self.camera_open = False
+
+    def _capture_loop(self) -> None:
         import cv2
-
-        try:
-            picam = self._open_camera()
-        except Exception as exc:  # noqa: BLE001
-            log.error("%s", exc)
-            return
-
-        self.camera_open = True
-        log.info("camera open (%dx%d), overlay=%s",
-                 self.args.width, self.args.height,
-                 "face" if face else "gesture")
-
-        # init the requested detector once
-        hands = mp_hands = mp_drawing = mp_styles = None
-        face_recognition = known_encodings = known_names = None
-        last_faces = []
-        if face:
-            import face_recognition as _fr
-            face_recognition = _fr
-            known_encodings, known_names = self._load_encodings()
-        else:
-            from gesture_reco_once import count_fingers
-            import mediapipe as mp
-            mp_hands = mp.solutions.hands
-            mp_drawing = mp.solutions.drawing_utils
-            mp_styles = mp.solutions.drawing_styles
-            hands = mp_hands.Hands(
-                static_image_mode=False, max_num_hands=1,
-                min_detection_confidence=HAND_CONFIDENCE,
-                min_tracking_confidence=HAND_CONFIDENCE,
-            )
-
-        # discard a few warm-up frames
-        for _ in range(3):
-            picam.capture_array()
-
         frame_idx = 0
         last_t = time.monotonic()
         try:
+            for _ in range(3):  # discard warm-up frames
+                self.picam.capture_array()
             while not self.stop_capture.is_set():
-                frame = picam.capture_array()  # RGB888 == BGR for cv2
+                frame = self.picam.capture_array()  # RGB888 == BGR for cv2
                 frame_idx += 1
+                overlay = self.overlay
+                if overlay == "gesture":
+                    self._draw_gesture(cv2, frame)
+                elif overlay == "face":
+                    self._draw_face(cv2, frame, frame_idx)
 
-                if hands is not None:
-                    results = hands.process(frame)
-                    if results.multi_hand_landmarks:
-                        for lm, handed in zip(results.multi_hand_landmarks,
-                                              results.multi_handedness):
-                            mp_drawing.draw_landmarks(
-                                frame, lm, mp_hands.HAND_CONNECTIONS,
-                                mp_styles.get_default_hand_landmarks_style(),
-                                mp_styles.get_default_hand_connections_style(),
-                            )
-                            n = count_fingers(lm, handed)
-                            cv2.putText(frame, f"fingers: {n}",
-                                        (10, self.args.height - 20),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                                        (0, 255, 0), 2)
-
-                if face_recognition is not None:
-                    if frame_idx % FACE_EVERY == 0:
-                        locs = face_recognition.face_locations(
-                            frame, model="hog", number_of_times_to_upsample=0)
-                        encs = face_recognition.face_encodings(frame, locs)
-                        last_faces = []
-                        for (top, right, bottom, left), enc in zip(locs, encs):
-                            name = "unknown"
-                            if known_encodings:
-                                matches = face_recognition.compare_faces(
-                                    known_encodings, enc,
-                                    tolerance=self.args.tolerance)
-                                for known, hit in zip(known_names, matches):
-                                    if hit:
-                                        name = known
-                                        break
-                            last_faces.append((top, right, bottom, left, name))
-                    for (top, right, bottom, left, name) in last_faces:
-                        cv2.rectangle(frame, (left, top), (right, bottom),
-                                      (255, 128, 0), 2)
-                        cv2.putText(frame, name, (left, max(top - 8, 12)),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                    (255, 128, 0), 2)
-
-                # HUD + fps
                 now = time.monotonic()
                 dt = now - last_t
                 last_t = now
@@ -327,22 +318,66 @@ class Supervisor:
                 ok, jpg = cv2.imencode(".jpg", frame)
                 if ok:
                     self.output.write(jpg.tobytes())
+        except Exception as exc:  # noqa: BLE001
+            log.exception("capture loop error: %s", exc)
         finally:
-            # stop() halts streaming; close() actually releases the device so
-            # the next mode switch (or the face_reco daemon) can acquire it.
-            try:
-                picam.stop()
-            except Exception:  # noqa: BLE001
-                pass
-            try:
-                picam.close()
-            except Exception:  # noqa: BLE001
-                pass
-            if hands is not None:
-                hands.close()
-            self.camera_open = False
             self.fps = 0.0
-            log.info("camera released")
+            log.info("capture loop stopped")
+
+    # ---- overlays (lazy-initialized, cached across switches) ---------- #
+    def _draw_gesture(self, cv2, frame) -> None:
+        if self._hands is None:
+            from gesture_reco_once import count_fingers
+            import mediapipe as mp
+            self._mp = mp
+            self._count_fingers = count_fingers
+            self._hands = mp.solutions.hands.Hands(
+                static_image_mode=False, max_num_hands=1,
+                min_detection_confidence=HAND_CONFIDENCE,
+                min_tracking_confidence=HAND_CONFIDENCE,
+            )
+        mp = self._mp
+        results = self._hands.process(frame)
+        if results.multi_hand_landmarks:
+            for lm, handed in zip(results.multi_hand_landmarks,
+                                  results.multi_handedness):
+                mp.solutions.drawing_utils.draw_landmarks(
+                    frame, lm, mp.solutions.hands.HAND_CONNECTIONS,
+                    mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
+                    mp.solutions.drawing_styles.get_default_hand_connections_style(),
+                )
+                n = self._count_fingers(lm, handed)
+                cv2.putText(frame, f"fingers: {n}",
+                            (10, self.args.height - 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+    def _draw_face(self, cv2, frame, frame_idx) -> None:
+        if self._fr is None:
+            import face_recognition as fr
+            self._fr = fr
+            self._known_encodings, self._known_names = self._load_encodings()
+        fr = self._fr
+        if frame_idx % FACE_EVERY == 0:
+            locs = fr.face_locations(
+                frame, model="hog", number_of_times_to_upsample=0)
+            encs = fr.face_encodings(frame, locs)
+            faces = []
+            for (top, right, bottom, left), enc in zip(locs, encs):
+                name = "unknown"
+                if self._known_encodings:
+                    matches = fr.compare_faces(
+                        self._known_encodings, enc,
+                        tolerance=self.args.tolerance)
+                    for known, hit in zip(self._known_names, matches):
+                        if hit:
+                            name = known
+                            break
+                faces.append((top, right, bottom, left, name))
+            self._last_faces = faces
+        for (top, right, bottom, left, name) in self._last_faces:
+            cv2.rectangle(frame, (left, top), (right, bottom), (255, 128, 0), 2)
+            cv2.putText(frame, name, (left, max(top - 8, 12)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 128, 0), 2)
 
     def _load_encodings(self):
         import pickle
@@ -468,7 +503,8 @@ def main() -> int:
     except KeyboardInterrupt:
         log.info("shutting down")
     finally:
-        sup._stop_capture()
+        sup._pause_capture()
+        sup._release_camera()
         httpd.shutdown()
     return 0
 
