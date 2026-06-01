@@ -156,9 +156,9 @@ export default function RadarPanel() {
         ) : (
           <div className="radar-targets">
             <strong>{targets.length} cíl(ů)</strong>
-            {targets.map(([x, y, s], i) => (
+            {targets.map(([x, y], i) => (
               <span key={i} className={"radar-chip" + (inZone(x, y) ? " in" : "")}>
-                x {x} mm · y {y} mm{s ? ` · v ${s}` : ""}
+                x {(x / 1000).toFixed(2)} m · y {(y / 1000).toFixed(2)} m
               </span>
             ))}
           </div>

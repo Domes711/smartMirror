@@ -33,6 +33,21 @@ PRESENCE_Y_MM = 1500     # depth of detection zone (1.5m)
 ABSENCE_TIMEOUT_SEC = 60 # spec 2026-04-26: 60 s instead of the v1 120 s
 BUTTON_PULSE_MS = 100    # confirmed working on the live monitor
 
+# --- noise / ghost mitigation -------------------------------------------
+# The LD2450 throws occasional spurious single-frame targets. These filters
+# tame them; tweak the constants to taste.
+ENTER_CONSECUTIVE_FRAMES = 3  # in-zone frames required before declaring PRESENT
+MAX_RANGE_MM = 6000           # drop implausibly far targets (likely ghosts)
+MIN_SPEED = 0                 # drop targets below this raw speed (0 = disabled;
+                              #   LD2450 speed encoding is non-standard — use care)
+
+# Position smoothing (EMA + deadband). Tames jitter/drift so a standing person
+# reports a steady x/y — used for both the map and presence/zone detection.
+SMOOTH_ALPHA = 0.3            # EMA factor: higher = snappier, lower = smoother
+SMOOTH_DEADBAND_MM = 60       # ignore moves smaller than this (anti micro-drift)
+SMOOTH_GATE_MM = 600          # max distance to associate a raw target to a track
+SMOOTH_MAX_MISSES = 5         # drop a track after this many frames unseen
+
 SERIAL_DEVICE = "/dev/ttyAMA0"
 SERIAL_BAUD = 256000
 
@@ -83,13 +98,95 @@ def calculate_distance(x: int, y: int) -> float:
     return math.sqrt(x ** 2 + y ** 2)
 
 
+def clean_targets(targets: list, max_range_mm: int = MAX_RANGE_MM,
+                  min_speed: int = MIN_SPEED) -> list:
+    """Drop empty / implausible / too-slow targets before tracking & broadcast.
+
+    This removes the spurious single-frame ghosts the LD2450 occasionally emits
+    (origin (0,0), absurd distances, and — if min_speed > 0 — near-stationary
+    blips).
+    """
+    cleaned = []
+    for x, y, speed in targets:
+        if x == 0 and y == 0:
+            continue
+        if y <= 0 or y > max_range_mm:
+            continue
+        if min_speed and speed < min_speed:
+            continue
+        cleaned.append((x, y, speed))
+    return cleaned
+
+
+class TargetSmoother:
+    """EMA position smoothing with a deadband + nearest-neighbour association.
+
+    Each physical target keeps a stable smoothed track across frames:
+      - a raw target is matched to the nearest existing track within `gate_mm`;
+      - the track is nudged toward it by `alpha` (EMA), but only if it moved more
+        than `deadband_mm` (so a standing person's coords stay rock steady);
+      - unmatched tracks age out after `max_misses` frames (brief hold avoids
+        flicker on a dropped frame).
+    Output is a list of smoothed (x, y, speed) tuples — suitable for the map and
+    for presence/zone detection.
+    """
+
+    def __init__(self, alpha: float = SMOOTH_ALPHA,
+                 deadband_mm: int = SMOOTH_DEADBAND_MM,
+                 gate_mm: int = SMOOTH_GATE_MM,
+                 max_misses: int = SMOOTH_MAX_MISSES):
+        self.alpha = alpha
+        self.deadband_mm = deadband_mm
+        self.gate_mm = gate_mm
+        self.max_misses = max_misses
+        self._tracks = []  # [{x, y, speed, misses}]
+
+    def update(self, targets: list) -> list:
+        matched = set()
+        new_tracks = []
+        for rx, ry, rspeed in targets:
+            best_i, best_d = None, None
+            for i, tr in enumerate(self._tracks):
+                if i in matched:
+                    continue
+                d = math.hypot(rx - tr["x"], ry - tr["y"])
+                if d <= self.gate_mm and (best_d is None or d < best_d):
+                    best_i, best_d = i, d
+            if best_i is None:
+                new_tracks.append({"x": float(rx), "y": float(ry),
+                                   "speed": rspeed, "misses": 0})
+            else:
+                tr = self._tracks[best_i]
+                dx, dy = rx - tr["x"], ry - tr["y"]
+                if math.hypot(dx, dy) > self.deadband_mm:   # outside deadband
+                    tr["x"] += self.alpha * dx
+                    tr["y"] += self.alpha * dy
+                tr["speed"] = rspeed
+                tr["misses"] = 0
+                matched.add(best_i)
+
+        # age unmatched tracks, drop the stale ones, then add new ones
+        for i, tr in enumerate(self._tracks):
+            if i not in matched:
+                tr["misses"] += 1
+        self._tracks = [tr for i, tr in enumerate(self._tracks)
+                        if tr["misses"] <= self.max_misses]
+        self._tracks.extend(new_tracks)
+
+        return [(int(round(tr["x"])), int(round(tr["y"])), tr["speed"])
+                for tr in self._tracks]
+
+
 class PresenceTracker:
-    def __init__(self, x_mm: int, y_mm: int, timeout_sec: int):
+    def __init__(self, x_mm: int, y_mm: int, timeout_sec: int,
+                 enter_consecutive: int = 1):
         self.x_mm = x_mm      # half-width of detection zone (+-x_mm)
         self.y_mm = y_mm      # depth of detection zone (0 to y_mm)
         self.timeout_sec = timeout_sec
+        self.enter_consecutive = max(1, enter_consecutive)  # debounce frames
         self._present = False
-        self._last_seen = None  # time when presence was last detected
+        self._last_seen = None    # time when presence was last detected
+        self._streak = 0          # consecutive in-zone frames (entry debounce)
 
     @property
     def is_present(self) -> bool:
@@ -98,9 +195,12 @@ class PresenceTracker:
     def update(self, targets: list):
         """
         Feed new targets. Returns 'PRESENT', 'ABSENT', or None.
-        - 'PRESENT': someone just entered the rectangular zone
+        - 'PRESENT': someone has been in the zone for `enter_consecutive` frames
         - 'ABSENT': no one in zone for timeout_sec seconds
         - None: no state change
+
+        The entry debounce (`enter_consecutive`) suppresses one-off ghost frames
+        so a single spurious target can't flip the mirror on.
         """
         in_range = any(
             abs(x) <= self.x_mm and 0 < y <= self.y_mm
@@ -112,12 +212,14 @@ class PresenceTracker:
 
         if in_range:
             self._last_seen = now
-            if not self._present:
+            self._streak += 1
+            if not self._present and self._streak >= self.enter_consecutive:
                 self._present = True
                 return 'PRESENT'
             return None
 
         # Nothing in range
+        self._streak = 0
         if self._present:
             elapsed = (now - self._last_seen) if self._last_seen else self.timeout_sec
             if elapsed >= self.timeout_sec:
@@ -192,7 +294,9 @@ def main() -> int:
         x_mm=PRESENCE_X_MM,
         y_mm=PRESENCE_Y_MM,
         timeout_sec=ABSENCE_TIMEOUT_SEC,
+        enter_consecutive=ENTER_CONSECUTIVE_FRAMES,
     )
+    smoother = TargetSmoother()
 
     # Setup MQTT client
     mqtt_client = mqtt.Client(client_id="ld2450_daemon")
@@ -211,7 +315,7 @@ def main() -> int:
             last_pub = 0.0
             while True:
                 frame = read_frame(ser)
-                targets = parse_frame(frame)
+                targets = smoother.update(clean_targets(parse_frame(frame)))
                 event = tracker.update(targets)
 
                 # Broadcast live target positions for the radar console map

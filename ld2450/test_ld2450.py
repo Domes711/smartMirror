@@ -50,7 +50,7 @@ def test_calculate_distance_zero():
     assert calculate_distance(0, 0) == 0.0
 
 
-from ld2450_daemon import PresenceTracker
+from ld2450_daemon import PresenceTracker, clean_targets, TargetSmoother
 
 
 def test_presence_detected_when_target_in_zone():
@@ -99,6 +99,72 @@ def test_no_absent_event_before_timeout():
     tracker.update([(200, 1000, 0)])   # PRESENT
     event = tracker.update([(600, 2000, 0)])  # outside zone but timeout not elapsed
     assert event is None
+
+
+# --- entry debounce -----------------------------------------------------
+
+def test_debounce_requires_consecutive_frames():
+    tracker = PresenceTracker(x_mm=400, y_mm=1500, timeout_sec=120,
+                              enter_consecutive=3)
+    assert tracker.update([(200, 1000, 0)]) is None   # frame 1 — not yet
+    assert tracker.update([(200, 1000, 0)]) is None   # frame 2 — not yet
+    assert tracker.update([(200, 1000, 0)]) == 'PRESENT'  # frame 3 — fires
+
+
+def test_debounce_resets_on_gap():
+    tracker = PresenceTracker(x_mm=400, y_mm=1500, timeout_sec=120,
+                              enter_consecutive=3)
+    tracker.update([(200, 1000, 0)])          # streak 1
+    tracker.update([])                         # ghost gone -> streak reset
+    assert tracker.update([(200, 1000, 0)]) is None   # streak 1 again, no fire
+
+
+# --- target cleaning ----------------------------------------------------
+
+def test_clean_targets_drops_origin_and_far():
+    targets = [(0, 0, 0), (200, 1000, 5), (100, 9000, 5)]
+    assert clean_targets(targets, max_range_mm=6000) == [(200, 1000, 5)]
+
+
+def test_clean_targets_min_speed():
+    targets = [(200, 1000, 2), (200, 1000, 20)]
+    assert clean_targets(targets, min_speed=10) == [(200, 1000, 20)]
+
+
+# --- target smoothing (EMA + deadband) ----------------------------------
+
+def test_smoother_first_target_passes_through():
+    s = TargetSmoother(alpha=0.5, deadband_mm=50, gate_mm=600)
+    assert s.update([(200, 1000, 0)]) == [(200, 1000, 0)]
+
+
+def test_smoother_ema_pulls_partway():
+    s = TargetSmoother(alpha=0.5, deadband_mm=50, gate_mm=600)
+    s.update([(200, 1000, 0)])                 # track at (200,1000)
+    out = s.update([(400, 1000, 0)])           # move 200mm -> EMA half-way
+    assert out == [(300, 1000, 0)]             # 200 + 0.5*(400-200)
+
+
+def test_smoother_deadband_holds_position():
+    s = TargetSmoother(alpha=0.5, deadband_mm=50, gate_mm=600)
+    s.update([(200, 1000, 0)])
+    out = s.update([(230, 1000, 0)])           # 30mm move < 50mm deadband
+    assert out == [(200, 1000, 0)]             # unchanged
+
+
+def test_smoother_separate_tracks_beyond_gate():
+    s = TargetSmoother(alpha=0.5, deadband_mm=50, gate_mm=600)
+    s.update([(200, 1000, 0)])
+    out = s.update([(200, 1000, 0), (-1500, 1000, 0)])  # 2nd is far -> new track
+    assert len(out) == 2
+
+
+def test_smoother_drops_stale_track():
+    s = TargetSmoother(alpha=0.5, deadband_mm=50, gate_mm=600, max_misses=2)
+    s.update([(200, 1000, 0)])
+    s.update([]); s.update([])                 # 2 misses -> still alive
+    out = s.update([])                          # 3rd miss -> dropped
+    assert out == []
 
 
 if __name__ == '__main__':
