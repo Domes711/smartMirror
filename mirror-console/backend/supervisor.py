@@ -370,17 +370,18 @@ def make_handler(sup: Supervisor):
             self.wfile.write(body)
 
         def do_GET(self):  # noqa: N802
-            if self.path == "/healthz":
+            path = self.path.split("?", 1)[0]  # ignore query (e.g. ?k=cachebust)
+            if path == "/healthz":
                 self._json(200, sup.health())
-            elif self.path == "/mode":
+            elif path == "/mode":
                 self._json(200, {"mode": sup.mode})
-            elif self.path == "/stream.mjpg":
+            elif path == "/stream.mjpg":
                 self._stream()
             else:
                 self._json(404, {"error": "not found"})
 
         def do_POST(self):  # noqa: N802
-            if self.path != "/mode":
+            if self.path.split("?", 1)[0] != "/mode":
                 self._json(404, {"error": "not found"})
                 return
             try:
