@@ -55,7 +55,13 @@ app.use(
     changeOrigin: true,
     ws: false,
     pathFilter: (p) =>
-      p === "/mode" || p === "/healthz" || p.startsWith("/stream.mjpg"),
+      p === "/mode" ||
+      p === "/healthz" ||
+      p.startsWith("/stream.mjpg") ||
+      p === "/capture" ||
+      p === "/encode" ||
+      p.startsWith("/dataset") ||
+      p.startsWith("/photo"),
   })
 );
 

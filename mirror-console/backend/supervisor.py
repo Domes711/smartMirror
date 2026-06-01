@@ -30,10 +30,12 @@ import argparse
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from http import server
 import socketserver
 
@@ -61,13 +63,20 @@ SYSTEMCTL = "/usr/bin/systemctl"
 DEFAULT_WIDTH = 640
 DEFAULT_HEIGHT = 480
 DEFAULT_ENCODINGS = os.path.join(_CAMERA_DIR, "encoded_faces.pickle")
+DATASET_DIR = os.path.join(_CAMERA_DIR, "dataset")
+ENCODE_SCRIPT = os.path.join(_CAMERA_DIR, "encode_faces.py")
 DEFAULT_TOLERANCE = 0.6
 FACE_EVERY = 5            # run face detection every Nth frame (hog is slow)
 HAND_CONFIDENCE = 0.6
 CAMERA_OPEN_RETRIES = 10  # wait for the daemon to release /dev after stop
 
-MODES = ("face_detect", "test_face", "test_gesture")
+# "learn" is a streaming mode used by the face-enrollment flow; it is not shown
+# in the web mode switcher, only entered by the learning UI.
+MODES = ("face_detect", "test_face", "test_gesture", "learn")
 DEFAULT_MODE = "face_detect"
+
+_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+_FILE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,60}\.(jpg|jpeg|png)$", re.IGNORECASE)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -155,7 +164,8 @@ class Supervisor:
         # struggles to re-acquire in the same process); instead we keep one
         # instance and only flip self.overlay.
         self.picam = None
-        self.overlay = None                    # "face" | "gesture" | None
+        self.overlay = None                    # "face" | "gesture" | "learn" | None
+        self.last_raw = None                   # latest clean frame (for enrollment capture)
         self.capture_thread = None
         self.stop_capture = threading.Event()
         self.camera_open = False
@@ -196,13 +206,17 @@ class Supervisor:
         with self.lock:
             log.info("switching mode: %s -> %s", self.mode, mode)
 
-            if mode in ("test_face", "test_gesture"):
-                # A test mode owns the camera. If the daemon exists, stop it so
-                # it isn't holding the device, then reuse our single camera
-                # instance and just flip the overlay (no close/reopen).
+            if mode in ("test_face", "test_gesture", "learn"):
+                # A streaming mode owns the camera. If the daemon exists, stop
+                # it so it isn't holding the device, then reuse our single
+                # camera instance and just flip the overlay (no close/reopen).
                 if _service_exists(FACE_SERVICE):
                     _systemctl("stop")
-                self.overlay = "face" if mode == "test_face" else "gesture"
+                self.overlay = {
+                    "test_face": "face",
+                    "test_gesture": "gesture",
+                    "learn": "learn",
+                }[mode]
                 self._ensure_capture()
             elif mode == "face_detect":
                 # Hand the camera to the production daemon (if installed).
@@ -303,6 +317,10 @@ class Supervisor:
                     self._draw_gesture(cv2, frame)
                 elif overlay == "face":
                     self._draw_face(cv2, frame, frame_idx)
+                elif overlay == "learn":
+                    # snapshot the clean frame BEFORE drawing, for enrollment
+                    self.last_raw = frame.copy()
+                    self._draw_facebox(cv2, frame, frame_idx)
 
                 now = time.monotonic()
                 dt = now - last_t
@@ -379,6 +397,22 @@ class Supervisor:
             cv2.putText(frame, name, (left, max(top - 8, 12)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 128, 0), 2)
 
+    def _draw_facebox(self, cv2, frame, frame_idx) -> None:
+        """Lightweight face box (no recognition) to help framing while learning."""
+        if self._fr is None:
+            import face_recognition as fr
+            self._fr = fr
+        if frame_idx % FACE_EVERY == 0:
+            self._last_faces = [
+                (t, r, b, l, "")
+                for (t, r, b, l) in self._fr.face_locations(
+                    frame, model="hog", number_of_times_to_upsample=0)
+            ]
+        for (top, right, bottom, left, _name) in self._last_faces:
+            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+        cv2.putText(frame, "zarovnej oblicej", (10, self.args.height - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
     def _load_encodings(self):
         import pickle
         try:
@@ -391,6 +425,74 @@ class Supervisor:
             log.warning("could not load encodings (%s): %s",
                         self.args.encodings, exc)
             return [], []
+
+    # ---- face enrollment (dataset capture / encode) ------------------- #
+    @staticmethod
+    def _person_dir(name: str) -> str:
+        if not _NAME_RE.match(name or ""):
+            raise ValueError("invalid name")
+        return os.path.join(DATASET_DIR, name)
+
+    def capture_photo(self, name: str) -> dict:
+        """Save the current clean frame into dataset/<name>/ as the next N.jpg."""
+        import cv2
+        if self.overlay != "learn" or self.last_raw is None:
+            raise RuntimeError("not in learn mode / no frame yet")
+        d = self._person_dir(name)
+        os.makedirs(d, exist_ok=True)
+        nums = []
+        for f in os.listdir(d):
+            stem, ext = os.path.splitext(f)
+            if ext.lower() in (".jpg", ".jpeg", ".png") and stem.isdigit():
+                nums.append(int(stem))
+        idx = (max(nums) + 1) if nums else 1
+        # Match capture_photos.py: convert the camera array RGB->BGR before
+        # writing, so files stay consistent with the existing dataset/encoder.
+        bgr = cv2.cvtColor(self.last_raw, cv2.COLOR_RGB2BGR)
+        fname = f"{idx}.jpg"
+        cv2.imwrite(os.path.join(d, fname), bgr)
+        log.info("captured %s/%s", name, fname)
+        return {"file": fname, "total": len(self.list_photos(name))}
+
+    def list_photos(self, name: str) -> list:
+        d = self._person_dir(name)
+        if not os.path.isdir(d):
+            return []
+        files = [f for f in os.listdir(d)
+                 if os.path.splitext(f)[1].lower() in (".jpg", ".jpeg", ".png")]
+        return sorted(files, key=lambda f: (
+            int(os.path.splitext(f)[0]) if os.path.splitext(f)[0].isdigit() else 0,
+            f))
+
+    def delete_photo(self, name: str, file: str) -> None:
+        if not _FILE_RE.match(file or ""):
+            raise ValueError("invalid file")
+        path = os.path.join(self._person_dir(name), file)
+        if os.path.isfile(path):
+            os.remove(path)
+            log.info("deleted %s/%s", name, file)
+
+    def photo_path(self, name: str, file: str) -> str:
+        if not _FILE_RE.match(file or ""):
+            raise ValueError("invalid file")
+        return os.path.join(self._person_dir(name), file)
+
+    def encode_dataset(self) -> dict:
+        """Retrain encoded_faces.pickle from the dataset, then drop the cache."""
+        try:
+            res = subprocess.run(
+                [sys.executable, ENCODE_SCRIPT,
+                 "--dataset", DATASET_DIR, "--output", self.args.encodings],
+                capture_output=True, text=True, timeout=600, cwd=_CAMERA_DIR,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "output": str(exc)}
+        # force reload of cached encodings on next face/learn frame
+        self._fr = None
+        self._known_encodings = None
+        self._known_names = None
+        out = (res.stdout or "") + (res.stderr or "")
+        return {"ok": res.returncode == 0, "output": out[-4000:]}
 
     # ---- status ------------------------------------------------------- #
     def health(self) -> dict:
@@ -421,6 +523,14 @@ def make_handler(sup: Supervisor):
             self.end_headers()
             self.wfile.write(body)
 
+        def _query(self):
+            q = urllib.parse.urlparse(self.path).query
+            return {k: v[0] for k, v in urllib.parse.parse_qs(q).items()}
+
+        def _body(self) -> dict:
+            length = int(self.headers.get("Content-Length", 0))
+            return json.loads(self.rfile.read(length) or b"{}")
+
         def do_GET(self):  # noqa: N802
             path = self.path.split("?", 1)[0]  # ignore query (e.g. ?k=cachebust)
             if path == "/healthz":
@@ -429,24 +539,70 @@ def make_handler(sup: Supervisor):
                 self._json(200, {"mode": sup.mode})
             elif path == "/stream.mjpg":
                 self._stream()
+            elif path == "/dataset":
+                try:
+                    q = self._query()
+                    self._json(200, {"name": q.get("name"),
+                                     "photos": sup.list_photos(q.get("name", ""))})
+                except ValueError as exc:
+                    self._json(400, {"error": str(exc)})
+            elif path == "/photo":
+                self._photo()
             else:
                 self._json(404, {"error": "not found"})
 
         def do_POST(self):  # noqa: N802
-            if self.path.split("?", 1)[0] != "/mode":
+            path = self.path.split("?", 1)[0]
+            try:
+                if path == "/mode":
+                    sup.apply_mode(self._body().get("mode"))
+                    self._json(200, sup.health())
+                elif path == "/capture":
+                    self._json(200, sup.capture_photo(self._body().get("name", "")))
+                elif path == "/encode":
+                    self._json(200, sup.encode_dataset())
+                else:
+                    self._json(404, {"error": "not found"})
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except RuntimeError as exc:
+                self._json(409, {"error": str(exc)})
+            except Exception as exc:  # noqa: BLE001
+                log.exception("POST %s failed", path)
+                self._json(500, {"error": str(exc)})
+
+        def do_DELETE(self):  # noqa: N802
+            if self.path.split("?", 1)[0] != "/dataset":
                 self._json(404, {"error": "not found"})
                 return
             try:
-                length = int(self.headers.get("Content-Length", 0))
-                payload = json.loads(self.rfile.read(length) or b"{}")
-                mode = payload.get("mode")
-                sup.apply_mode(mode)
-                self._json(200, sup.health())
+                q = self._query()
+                sup.delete_photo(q.get("name", ""), q.get("file", ""))
+                self._json(200, {"ok": True,
+                                 "photos": sup.list_photos(q.get("name", ""))})
             except ValueError as exc:
                 self._json(400, {"error": str(exc)})
             except Exception as exc:  # noqa: BLE001
-                log.exception("mode switch failed")
                 self._json(500, {"error": str(exc)})
+
+        def _photo(self):
+            try:
+                q = self._query()
+                path = sup.photo_path(q.get("name", ""), q.get("file", ""))
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+                return
+            if not os.path.isfile(path):
+                self._json(404, {"error": "not found"})
+                return
+            with open(path, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(data)
 
         def _stream(self):
             self.send_response(200)

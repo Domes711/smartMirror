@@ -13,6 +13,10 @@ export default defineConfig({
       "/mode": BACKEND,
       "/healthz": BACKEND,
       "/stream.mjpg": BACKEND,
+      "/capture": BACKEND,
+      "/encode": BACKEND,
+      "/dataset": BACKEND,
+      "/photo": BACKEND,
       // /api/* is handled by the Express server, not the Python supervisor.
       "/api": process.env.WEB_SERVER || "http://127.0.0.1:8000",
     },

@@ -37,10 +37,20 @@ mode is persisted to `backend/mode.state` and restored on boot (default
   (`{topic, payload}`), `GET /api/mqtt/stream` (SSE), `GET /api/mqtt/status`.
   MQTT broker via `MQTT_URL` (default `mqtt://127.0.0.1:1883`).
 - `web/` — React + Vite front-end (responsive, mobile-friendly), tabbed:
-  - **Kamera** — mode switcher + live stream (the camera arbiter UI).
+  - **Kamera** — mode switcher + live stream (the camera arbiter UI), plus
+    **＋ Naučit nový obličej**: a `learn` mode that streams with a framing box,
+    captures photos into `camera/dataset/<name>/` (configurable count), shows
+    thumbnails you can review/delete/retake, and **Natrénovat** which runs
+    `camera/encode_faces.py` to rebuild `encoded_faces.pickle`.
   - **MQTT** — buttons that publish every message the mirror uses (presence
     `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
     plus a live monitor of the bus.
+
+Enrollment endpoints (on the supervisor, proxied by Node): `POST /capture`
+(`{name}`), `GET /dataset?name=`, `DELETE /dataset?name=&file=`,
+`GET /photo?name=&file=`, `POST /encode`. Photos are saved with the same
+RGB→BGR convention as `camera/capture_photos.py` so they stay consistent with
+the existing dataset and encoder.
 - `systemd/` — autostart units. `sudoers.d/` — lets `admin` toggle `face_reco`.
 
 ## Install & run (on the Pi)
