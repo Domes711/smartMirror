@@ -772,6 +772,49 @@
   color: var(--ok);
   border-color: var(--ok);
 }
+.radar-excl {
+  fill: var(--muted);
+  opacity: 0.5;
+}
+
+/* ---- radar calibration ---- */
+.calib {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.calib-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.calib-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.calib-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.calib-params {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.calib-params input[type="range"] {
+  width: 100%;
+}
+.calib-zone {
+  display: flex;
+  gap: 10px;
+}
+.calib-zone .field {
+  flex: 1;
+}
 
 /* ---- footer ---- */
 .footer {

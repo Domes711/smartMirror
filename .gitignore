@@ -6,6 +6,9 @@ __pycache__/
 .venv/
 venv/
 
+# Per-Pi runtime radar calibration (not source)
+ld2450/radar_config.json
+
 # MagicMirror module artefacts
 node_modules/
 MagicMirror/modules/MMM-Brno-Transit/cache/

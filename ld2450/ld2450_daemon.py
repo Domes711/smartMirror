@@ -16,6 +16,7 @@ import json
 import math
 import os
 import struct
+import threading
 import time
 import logging
 import paho.mqtt.client as mqtt
@@ -55,7 +56,15 @@ MQTT_BROKER = os.environ.get("MQTT_BROKER", "127.0.0.1")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_TOPIC_PRESENCE = "smartmirror/radar/presence"
 MQTT_TOPIC_TARGETS = "smartmirror/radar/targets"
+MQTT_TOPIC_CONTROL = "smartmirror/radar/control"   # calibration commands in
+MQTT_TOPIC_CONFIG = "smartmirror/radar/config"     # current config out (retained)
 TARGET_PUB_INTERVAL = 0.1   # s — throttle live target broadcasts (~10 Hz)
+
+# Calibration / persisted config
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "radar_config.json")
+EXCL_RADIUS_MM = 250     # drop targets within this of a learned ghost spot
+BASELINE_GRID_MM = 150   # quantize baseline ghost points to this grid
 
 
 def parse_frame(data: bytes) -> list:
@@ -116,6 +125,83 @@ def clean_targets(targets: list, max_range_mm: int = MAX_RANGE_MM,
             continue
         cleaned.append((x, y, speed))
     return cleaned
+
+
+# --- calibration: config + coordinate helpers --------------------------
+
+DEFAULT_CONFIG = {
+    "zone": {"x": PRESENCE_X_MM, "y": PRESENCE_Y_MM},
+    "x_offset": 0,            # mm subtracted from x to center the origin
+    "invert_x": False,        # flip left/right if mirrored
+    "enter_frames": ENTER_CONSECUTIVE_FRAMES,
+    "max_range_mm": MAX_RANGE_MM,
+    "min_speed": MIN_SPEED,
+    "alpha": SMOOTH_ALPHA,
+    "deadband_mm": SMOOTH_DEADBAND_MM,
+    "exclusions": [],         # [[x,y],...] learned ghost spots to drop
+}
+_CONFIG_KEYS = ("zone", "x_offset", "invert_x", "enter_frames",
+                "max_range_mm", "min_speed", "alpha", "deadband_mm", "exclusions")
+
+
+def _clone(cfg: dict) -> dict:
+    return json.loads(json.dumps(cfg))
+
+
+def load_config(path: str = CONFIG_PATH) -> dict:
+    cfg = _clone(DEFAULT_CONFIG)
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        for k in _CONFIG_KEYS:
+            if k in data:
+                cfg[k] = data[k]
+    except FileNotFoundError:
+        pass
+    except Exception as exc:  # noqa: BLE001
+        log.warning("config load failed: %s", exc)
+    return cfg
+
+
+def save_config(cfg: dict, path: str = CONFIG_PATH) -> None:
+    try:
+        with open(path, "w") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("config save failed: %s", exc)
+
+
+def apply_axis(targets: list, x_offset: int = 0, invert_x: bool = False) -> list:
+    """Apply mirror + origin offset so the coordinate frame matches reality."""
+    out = []
+    for x, y, s in targets:
+        nx = -x if invert_x else x
+        out.append((nx - x_offset, y, s))
+    return out
+
+
+def drop_excluded(targets: list, exclusions: list,
+                  radius_mm: int = EXCL_RADIUS_MM) -> list:
+    """Drop targets sitting on a learned ghost spot (empty-room baseline)."""
+    if not exclusions:
+        return list(targets)
+    out = []
+    for x, y, s in targets:
+        if any(math.hypot(x - ex, y - ey) <= radius_mm for ex, ey in exclusions):
+            continue
+        out.append((x, y, s))
+    return out
+
+
+def build_exclusions(points: list, grid_mm: int = BASELINE_GRID_MM) -> list:
+    """Quantize baseline ghost points to a grid and de-duplicate."""
+    seen, out = set(), []
+    for x, y in points:
+        cell = (round(x / grid_mm) * grid_mm, round(y / grid_mm) * grid_mm)
+        if cell not in seen:
+            seen.add(cell)
+            out.append([cell[0], cell[1]])
+    return out
 
 
 class TargetSmoother:
@@ -229,6 +315,90 @@ class PresenceTracker:
         return None
 
 
+class RadarState:
+    """Thread-safe holder for the live config + calibration jobs.
+
+    The MQTT thread feeds control commands via handle(); the main serial loop
+    reads snapshot(), records baseline frames via feed_baseline(), and stores
+    the latest smoothed targets via set_last() (used by set_center/set_axis).
+    """
+
+    def __init__(self, config: dict):
+        self.lock = threading.Lock()
+        self.config = config
+        self.last_targets = []
+        self._baseline_deadline = None
+        self._baseline_points = []
+        self._dirty = True   # publish config once at startup
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            return self.config
+
+    def set_last(self, targets: list) -> None:
+        with self.lock:
+            self.last_targets = list(targets)
+
+    def consume_dirty(self) -> bool:
+        with self.lock:
+            d, self._dirty = self._dirty, False
+            return d
+
+    def feed_baseline(self, targets: list, now: float):
+        """Accumulate ghost points while a baseline job is running; finalize on time."""
+        with self.lock:
+            if self._baseline_deadline is None:
+                return
+            for x, y, _ in targets:
+                self._baseline_points.append((x, y))
+            if now >= self._baseline_deadline:
+                excl = build_exclusions(self._baseline_points)
+                self.config = {**self.config, "exclusions": excl}
+                log.info("baseline done: %d samples -> %d exclusions",
+                         len(self._baseline_points), len(excl))
+                self._baseline_deadline = None
+                self._baseline_points = []
+                self._dirty = True
+
+    @staticmethod
+    def _nearest_center(targets: list):
+        best = None
+        for t in targets:
+            if best is None or abs(t[0]) < abs(best[0]):
+                best = t
+        return best
+
+    def handle(self, payload: dict, now: float) -> None:
+        cmd = (payload or {}).get("cmd")
+        with self.lock:
+            cfg = dict(self.config)
+            if cmd == "get_config":
+                pass  # just re-publish (dirty below)
+            elif cmd == "set_config":
+                new = payload.get("config", {}) or {}
+                for k in _CONFIG_KEYS:
+                    if k in new:
+                        cfg[k] = new[k]
+            elif cmd == "set_center":
+                tgt = self._nearest_center(self.last_targets)
+                if tgt is not None:
+                    cfg["x_offset"] = cfg.get("x_offset", 0) + tgt[0]
+            elif cmd == "set_axis":
+                tgt = self._nearest_center(self.last_targets)
+                if tgt is not None and tgt[0] < 0:
+                    cfg["invert_x"] = not cfg.get("invert_x", False)
+            elif cmd == "baseline":
+                self._baseline_deadline = now + float(payload.get("seconds", 10))
+                self._baseline_points = []
+                cfg["exclusions"] = []   # fresh learn
+            elif cmd == "reset":
+                cfg = _clone(DEFAULT_CONFIG)
+            else:
+                return
+            self.config = cfg
+            self._dirty = True
+
+
 # --- MQTT helpers (no Pi-specific deps) ---------------------
 
 def mqtt_publish(client: mqtt.Client, topic: str, payload: str) -> None:
@@ -290,23 +460,54 @@ def read_frame(ser) -> bytes:
 def main() -> int:
     import serial
     GPIO = setup_gpio()
+
+    config = load_config()
+    state = RadarState(config)
     tracker = PresenceTracker(
-        x_mm=PRESENCE_X_MM,
-        y_mm=PRESENCE_Y_MM,
+        x_mm=config["zone"]["x"],
+        y_mm=config["zone"]["y"],
         timeout_sec=ABSENCE_TIMEOUT_SEC,
-        enter_consecutive=ENTER_CONSECUTIVE_FRAMES,
+        enter_consecutive=config["enter_frames"],
     )
-    smoother = TargetSmoother()
+    smoother = TargetSmoother(alpha=config["alpha"],
+                              deadband_mm=config["deadband_mm"])
 
     # Setup MQTT client
     mqtt_client = mqtt.Client(client_id="ld2450_daemon")
+
+    def on_message(client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode("utf-8") or "{}")
+            state.handle(payload, time.monotonic())
+        except Exception as exc:  # noqa: BLE001
+            log.warning("control message error: %s", exc)
+
+    mqtt_client.on_message = on_message
+
     try:
         mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
         mqtt_client.loop_start()  # Run in background thread
-        log.info("MQTT connected to %s:%d", MQTT_BROKER, MQTT_PORT)
+        mqtt_client.subscribe(MQTT_TOPIC_CONTROL)
+        log.info("MQTT connected to %s:%d (control: %s)",
+                 MQTT_BROKER, MQTT_PORT, MQTT_TOPIC_CONTROL)
     except Exception as exc:
         log.error("MQTT connection failed: %s", exc)
         return 1
+
+    def publish_config():
+        try:
+            mqtt_client.publish(MQTT_TOPIC_CONFIG, json.dumps(state.snapshot()),
+                                qos=1, retain=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def apply_config():
+        cfg = state.snapshot()
+        smoother.alpha = cfg["alpha"]
+        smoother.deadband_mm = cfg["deadband_mm"]
+        tracker.x_mm = cfg["zone"]["x"]
+        tracker.y_mm = cfg["zone"]["y"]
+        tracker.enter_consecutive = max(1, cfg["enter_frames"])
 
     try:
         with serial.Serial(SERIAL_DEVICE, SERIAL_BAUD, timeout=1) as ser:
@@ -315,22 +516,39 @@ def main() -> int:
             last_pub = 0.0
             while True:
                 frame = read_frame(ser)
-                targets = smoother.update(clean_targets(parse_frame(frame)))
+                now = time.monotonic()
+                cfg = state.snapshot()
+
+                # raw -> axis correction -> range/speed clean -> baseline learn
+                # -> exclusions -> smoothing
+                corrected = clean_targets(
+                    apply_axis(parse_frame(frame),
+                               cfg["x_offset"], cfg["invert_x"]),
+                    cfg["max_range_mm"], cfg["min_speed"])
+                state.feed_baseline(corrected, now)
+                filtered = drop_excluded(corrected, cfg.get("exclusions", []))
+                targets = smoother.update(filtered)
+                state.set_last(targets)
                 event = tracker.update(targets)
 
                 # Broadcast live target positions for the radar console map
                 # (throttled, fire-and-forget, no logging spam).
-                now = time.monotonic()
                 if now - last_pub >= TARGET_PUB_INTERVAL:
                     last_pub = now
                     try:
                         mqtt_client.publish(MQTT_TOPIC_TARGETS, json.dumps({
                             "targets": [[x, y, s] for (x, y, s) in targets],
                             "present": tracker.is_present,
-                            "zone": {"x": PRESENCE_X_MM, "y": PRESENCE_Y_MM},
+                            "zone": cfg["zone"],
                         }), qos=0)
                     except Exception:  # noqa: BLE001
                         pass
+
+                # config changed (calibration) -> apply live, persist, publish
+                if state.consume_dirty():
+                    apply_config()
+                    save_config(state.snapshot())
+                    publish_config()
 
                 if event == "PRESENT":
                     log.info("PRESENT — display ON, publishing to MQTT")
