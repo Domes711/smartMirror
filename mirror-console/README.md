@@ -38,18 +38,22 @@ mode is persisted to `backend/mode.state` and restored on boot (default
   MQTT broker via `MQTT_URL` (default `mqtt://127.0.0.1:1883`).
 - `web/` — React + Vite front-end (responsive, mobile-friendly), tabbed:
   - **Kamera** — mode switcher + live stream (the camera arbiter UI).
-  - **Profily** — one profile per learned face (`dataset/<name>/`): sample
-    training photo, name, photo count, **Odebrat** (deletes the folder and
-    rebuilds `encoded_faces.pickle` so the face is no longer recognized — empty
-    dataset → empty pickle), and **＋ Přidat profil** → a step **wizard**:
-    - *Krok 1* — profile name (+ photo count).
-    - *Krok 2* — face learning in `learn` mode: **auto-captures every 3 s**,
-      enlargeable thumbnails; the detail view has **Nahradit** (live stream →
-      one shot that overwrites that exact file), then **Dokončit a natrénovat**
-      runs `camera/encode_faces.py`.
+  - **Profily** — one profile per learned face (`dataset/<name>/`). A grid of
+    cards (sample photo, name, count); **＋ Přidat profil** opens a step
+    **wizard**, and clicking a card opens the **profile detail**.
+    - *Wizard* — Krok 1: name + base photo count. Krok 2: `FaceCaptureSession`
+      (auto-capture every 3 s, **＋ Přidat další** to capture beyond the base
+      set, enlargeable thumbnails with replace/delete), then **Dokončit a
+      natrénovat** runs `camera/encode_faces.py`.
+    - *Detail* — card-style tabs (more to come); **Fotky** shows all thumbnails
+      (enlarge + delete), **＋ Přidat další fotky** (modal asks how many →
+      capture session → **Přidat a přetrénovat**), **Přetrénovat**, and
+      **Odebrat profil** (deletes the folder + rebuilds the pickle; empty
+      dataset → empty pickle).
 
-    More steps (module layout, time windows) will be added later. Long
-    operations (training, profile removal) show a full-screen loading overlay.
+    `FaceCaptureSession` is the shared capture component used by both the wizard
+    and the detail. Long operations (training, removal) show a full-screen
+    loading overlay.
   - **MQTT** — buttons that publish every message the mirror uses (presence
     `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
     plus a live monitor of the bus.

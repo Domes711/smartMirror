@@ -274,6 +274,18 @@
   gap: 12px;
   padding: 18px;
 }
+.detail-head-actions {
+  margin-left: auto;
+}
+.subtabs {
+  align-self: flex-start;
+}
+.detail-foot {
+  gap: 10px;
+}
+.ask-box {
+  max-width: 360px;
+}
 .learn-progress-row {
   display: flex;
   align-items: center;
@@ -436,6 +448,19 @@
   gap: 10px;
   padding: 12px;
 }
+.profile-card.clickable {
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition: border-color 0.15s, transform 0.05s;
+}
+.profile-card.clickable:hover {
+  border-color: var(--accent);
+}
+.profile-card.clickable:active {
+  transform: scale(0.99);
+}
 .profile-photo {
   aspect-ratio: 1 / 1;
   border-radius: 10px;
@@ -538,6 +563,24 @@
 }
 .mqtt-btn.k-muted {
   color: var(--muted);
+}
+.mqtt-btn.k-bad {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+/* number input inline with "add more" button */
+.add-more {
+  display: flex;
+  gap: 6px;
+}
+.add-more input {
+  width: 72px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
 }
 
 /* ---- MQTT monitor ---- */

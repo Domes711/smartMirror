@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import ProfileWizard from "./ProfileWizard.jsx";
-import LoadingOverlay from "./LoadingOverlay.jsx";
+import ProfileDetail from "./ProfileDetail.jsx";
 
-// Profiles are driven by the learned faces: one profile per dataset/<name>/
-// folder. Overview (sample photo, name, remove) + the add-profile wizard.
-// Richer per-profile settings (module layout, time windows) come later.
+// Profiles are driven by the learned faces: one profile per dataset/<name>/.
+// Overview grid → click a card to open its detail; ＋ Přidat profil → wizard.
 export default function ProfilesPanel() {
   const [profiles, setProfiles] = useState(null); // null = loading
-  const [busy, setBusy] = useState(null); // name being removed
   const [error, setError] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [detailName, setDetailName] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -28,29 +27,6 @@ export default function ProfilesPanel() {
     load();
   }, [load]);
 
-  const remove = useCallback(
-    async (name) => {
-      if (!window.confirm(`Odebrat profil „${name}"? Smažou se fotky a obličej se přetrénuje.`))
-        return;
-      setBusy(name);
-      setError(null);
-      try {
-        const r = await fetch(`/profiles?name=${encodeURIComponent(name)}`, {
-          method: "DELETE",
-        });
-        const b = await r.json();
-        if (!r.ok) throw new Error(b.error || `remove ${r.status}`);
-        setProfiles(b.profiles || []);
-      } catch (e) {
-        setError(`Odebrání selhalo: ${e.message}`);
-        load();
-      } finally {
-        setBusy(null);
-      }
-    },
-    [load]
-  );
-
   if (adding) {
     return (
       <ProfileWizard
@@ -63,10 +39,20 @@ export default function ProfilesPanel() {
     );
   }
 
+  if (detailName) {
+    return (
+      <ProfileDetail
+        name={detailName}
+        onBack={() => {
+          setDetailName(null);
+          load();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="panel">
-      <LoadingOverlay show={!!busy} message={`Odebírám profil a přetrénovávám…`} />
-
       <div className="panel-head">
         {error ? (
           <span className="pill pill-bad">● {error}</span>
@@ -95,7 +81,11 @@ export default function ProfilesPanel() {
       ) : (
         <div className="profiles">
           {(profiles || []).map((p) => (
-            <div key={p.name} className="card profile-card">
+            <button
+              key={p.name}
+              className="card profile-card clickable"
+              onClick={() => setDetailName(p.name)}
+            >
               <div className="profile-photo">
                 <img
                   src={`/photo?name=${encodeURIComponent(p.name)}&file=${encodeURIComponent(p.sample)}`}
@@ -106,20 +96,13 @@ export default function ProfilesPanel() {
                 <h3>{p.name}</h3>
                 <span className="profile-meta">{p.count} fotek</span>
               </div>
-              <button
-                className="mqtt-btn k-warn"
-                disabled={busy === p.name}
-                onClick={() => remove(p.name)}
-              >
-                {busy === p.name ? "Odebírám…" : "Odebrat"}
-              </button>
-            </div>
+            </button>
           ))}
         </div>
       )}
 
       <p className="profiles-note">
-        Brzy: nastavení rozložení modulů a časových oken pro každý profil.
+        Klikni na profil pro detail. Brzy: rozložení modulů a časová okna.
       </p>
     </div>
   );
