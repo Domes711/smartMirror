@@ -203,6 +203,7 @@ class Supervisor:
         from picamera2 import Picamera2
         last_exc = None
         for attempt in range(CAMERA_OPEN_RETRIES):
+            picam = None
             try:
                 picam = Picamera2()
                 config = picam.create_preview_configuration(
@@ -214,6 +215,13 @@ class Supervisor:
                 return picam
             except Exception as exc:  # noqa: BLE001 -- device may be busy
                 last_exc = exc
+                # Release the half-initialized instance, otherwise it keeps the
+                # camera in "Configured" state and the next acquire() fails.
+                if picam is not None:
+                    try:
+                        picam.close()
+                    except Exception:  # noqa: BLE001
+                        pass
                 log.info("camera busy, retry %d/%d", attempt + 1,
                          CAMERA_OPEN_RETRIES)
                 time.sleep(0.5)
@@ -320,7 +328,16 @@ class Supervisor:
                 if ok:
                     self.output.write(jpg.tobytes())
         finally:
-            picam.stop()
+            # stop() halts streaming; close() actually releases the device so
+            # the next mode switch (or the face_reco daemon) can acquire it.
+            try:
+                picam.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                picam.close()
+            except Exception:  # noqa: BLE001
+                pass
             if hands is not None:
                 hands.close()
             self.camera_open = False
