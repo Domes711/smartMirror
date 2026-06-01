@@ -42,6 +42,11 @@ mode is persisted to `backend/mode.state` and restored on boot (default
     captures photos into `camera/dataset/<name>/` (configurable count), shows
     thumbnails you can review/delete/retake, and **Natrénovat** which runs
     `camera/encode_faces.py` to rebuild `encoded_faces.pickle`.
+  - **Profily** — one profile per learned face (`dataset/<name>/`). Basic
+    overview: a sample training photo, name, photo count, and **Odebrat**
+    (deletes the folder and rebuilds `encoded_faces.pickle` so the face is no
+    longer recognized — empty dataset → empty pickle). Richer per-profile
+    settings (module layout, time windows) come later.
   - **MQTT** — buttons that publish every message the mirror uses (presence
     `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
     plus a live monitor of the bus.

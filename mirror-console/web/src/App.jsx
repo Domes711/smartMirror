@@ -2,9 +2,11 @@ import { useState } from "react";
 import "./App.css";
 import CameraPanel from "./CameraPanel.jsx";
 import MqttPanel from "./MqttPanel.jsx";
+import ProfilesPanel from "./ProfilesPanel.jsx";
 
 const TABS = [
   { id: "camera", label: "Kamera" },
+  { id: "profiles", label: "Profily" },
   { id: "mqtt", label: "MQTT" },
 ];
 
@@ -29,7 +31,9 @@ export default function App() {
         </nav>
       </header>
 
-      {tab === "camera" ? <CameraPanel /> : <MqttPanel />}
+      {tab === "camera" && <CameraPanel />}
+      {tab === "profiles" && <ProfilesPanel />}
+      {tab === "mqtt" && <MqttPanel />}
 
       <footer className="footer">smart mirror · konzole</footer>
     </div>

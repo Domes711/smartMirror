@@ -61,7 +61,8 @@ app.use(
       p === "/capture" ||
       p === "/encode" ||
       p.startsWith("/dataset") ||
-      p.startsWith("/photo"),
+      p.startsWith("/photo") ||
+      p.startsWith("/profiles"),
   })
 );
 

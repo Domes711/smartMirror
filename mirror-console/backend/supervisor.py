@@ -494,6 +494,60 @@ class Supervisor:
         out = (res.stdout or "") + (res.stderr or "")
         return {"ok": res.returncode == 0, "output": out[-4000:]}
 
+    # ---- profiles (one per learned person / dataset folder) ----------- #
+    def list_profiles(self) -> list:
+        import random
+        profiles = []
+        if not os.path.isdir(DATASET_DIR):
+            return profiles
+        for name in sorted(os.listdir(DATASET_DIR)):
+            d = os.path.join(DATASET_DIR, name)
+            if not os.path.isdir(d) or not _NAME_RE.match(name):
+                continue
+            photos = [f for f in os.listdir(d)
+                      if os.path.splitext(f)[1].lower() in (".jpg", ".jpeg", ".png")]
+            if not photos:
+                continue
+            profiles.append({
+                "name": name,
+                "count": len(photos),
+                "sample": random.choice(photos),  # one random training photo
+            })
+        return profiles
+
+    def remove_profile(self, name: str) -> dict:
+        """Delete the person's dataset folder, then rebuild the encodings so
+        the removed face is no longer recognized."""
+        import shutil
+        d = self._person_dir(name)  # validates name
+        if os.path.isdir(d):
+            shutil.rmtree(d)
+            log.info("removed profile %s", name)
+        result = self._rebuild_encodings()
+        return {"removed": name, "encode": result,
+                "profiles": self.list_profiles()}
+
+    def _rebuild_encodings(self) -> dict:
+        """Re-run the encoder, or write an empty pickle if the dataset is now
+        empty (encode_faces.py errors out on an empty dataset)."""
+        has_images = False
+        if os.path.isdir(DATASET_DIR):
+            for p in os.listdir(DATASET_DIR):
+                pd = os.path.join(DATASET_DIR, p)
+                if os.path.isdir(pd) and any(
+                    os.path.splitext(f)[1].lower() in (".jpg", ".jpeg", ".png")
+                    for f in os.listdir(pd)
+                ):
+                    has_images = True
+                    break
+        if not has_images:
+            import pickle
+            with open(self.args.encodings, "wb") as f:
+                pickle.dump({"encodings": [], "names": []}, f)
+            self._fr = self._known_encodings = self._known_names = None
+            return {"ok": True, "output": "dataset empty — wrote empty encodings"}
+        return self.encode_dataset()
+
     # ---- status ------------------------------------------------------- #
     def health(self) -> dict:
         return {
@@ -548,6 +602,8 @@ def make_handler(sup: Supervisor):
                     self._json(400, {"error": str(exc)})
             elif path == "/photo":
                 self._photo()
+            elif path == "/profiles":
+                self._json(200, {"profiles": sup.list_profiles()})
             else:
                 self._json(404, {"error": "not found"})
 
@@ -572,17 +628,21 @@ def make_handler(sup: Supervisor):
                 self._json(500, {"error": str(exc)})
 
         def do_DELETE(self):  # noqa: N802
-            if self.path.split("?", 1)[0] != "/dataset":
-                self._json(404, {"error": "not found"})
-                return
+            path = self.path.split("?", 1)[0]
             try:
                 q = self._query()
-                sup.delete_photo(q.get("name", ""), q.get("file", ""))
-                self._json(200, {"ok": True,
-                                 "photos": sup.list_photos(q.get("name", ""))})
+                if path == "/dataset":
+                    sup.delete_photo(q.get("name", ""), q.get("file", ""))
+                    self._json(200, {"ok": True,
+                                     "photos": sup.list_photos(q.get("name", ""))})
+                elif path == "/profiles":
+                    self._json(200, sup.remove_profile(q.get("name", "")))
+                else:
+                    self._json(404, {"error": "not found"})
             except ValueError as exc:
                 self._json(400, {"error": str(exc)})
             except Exception as exc:  # noqa: BLE001
+                log.exception("DELETE %s failed", path)
                 self._json(500, {"error": str(exc)})
 
         def _photo(self):
