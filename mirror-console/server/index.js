@@ -15,16 +15,17 @@ const DIST = path.join(__dirname, "..", "web", "dist");
 
 const app = express();
 
-// Proxy supervisor endpoints. selfHandleResponse stays false so the multipart
-// MJPEG stream is piped through untouched.
+// Proxy supervisor endpoints. Mounted at the root with a pathFilter (instead
+// of app.use("/path", ...)) so the full request path is preserved — mounting
+// on a path makes Express strip the prefix before the proxy sees it. The
+// multipart MJPEG stream is piped through untouched.
 const proxy = createProxyMiddleware({
   target: BACKEND,
   changeOrigin: true,
   ws: false,
+  pathFilter: ["/mode", "/healthz", "/stream.mjpg"],
 });
-app.use("/mode", proxy);
-app.use("/healthz", proxy);
-app.use("/stream.mjpg", proxy);
+app.use(proxy);
 
 // Static React build + SPA fallback.
 app.use(express.static(DIST));

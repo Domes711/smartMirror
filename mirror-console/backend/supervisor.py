@@ -96,13 +96,24 @@ class StreamingOutput:
 # systemd helpers
 # --------------------------------------------------------------------------- #
 def _systemctl(action: str) -> None:
-    """Run `sudo systemctl <action> face_reco` (allowed via sudoers)."""
+    """Run `sudo -n systemctl <action> face_reco` (allowed via sudoers).
+
+    `-n` keeps sudo non-interactive: if the sudoers rule isn't installed yet it
+    fails immediately instead of blocking on a password prompt with no TTY
+    (which would otherwise hang startup before the HTTP server comes up).
+    """
     try:
-        subprocess.run(
-            ["sudo", SYSTEMCTL, action, FACE_SERVICE],
-            check=False, capture_output=True, timeout=15,
+        res = subprocess.run(
+            ["sudo", "-n", SYSTEMCTL, action, FACE_SERVICE],
+            check=False, capture_output=True, text=True,
+            stdin=subprocess.DEVNULL, timeout=15,
         )
-        log.info("systemctl %s %s", action, FACE_SERVICE)
+        if res.returncode == 0:
+            log.info("systemctl %s %s", action, FACE_SERVICE)
+        else:
+            log.warning("systemctl %s %s failed (rc=%d): %s", action,
+                        FACE_SERVICE, res.returncode,
+                        (res.stderr or "").strip())
     except Exception as exc:  # noqa: BLE001
         log.warning("systemctl %s failed: %s", action, exc)
 
