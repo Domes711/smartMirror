@@ -47,6 +47,46 @@
   background: rgba(248, 113, 113, 0.12);
 }
 
+/* ---- tabs ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 4px;
+}
+.tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab.active {
+  background: var(--accent);
+  color: #04222e;
+}
+
+/* ---- panel ---- */
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.panel-head {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* ---- mode switcher (segmented) ---- */
 .switcher {
   display: grid;
@@ -159,6 +199,144 @@
   font-weight: 600;
 }
 
+/* ---- MQTT panel ---- */
+.mqtt-groups {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.mqtt-group {
+  padding: 14px 16px;
+}
+.mqtt-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.mqtt-group-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.topic {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.mqtt-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mqtt-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 9px 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.05s, border-color 0.15s;
+}
+.mqtt-btn:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+.mqtt-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.mqtt-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.mqtt-btn.compact {
+  min-width: 42px;
+  text-align: center;
+  padding: 9px 12px;
+}
+.mqtt-btn.k-ok {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.mqtt-btn.k-warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.mqtt-btn.k-muted {
+  color: var(--muted);
+}
+
+/* ---- MQTT monitor ---- */
+.monitor {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.monitor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.monitor-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.monitor-log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.monitor-empty {
+  color: var(--muted);
+  padding: 8px 0;
+}
+.logline {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  align-items: start;
+}
+.logline .t {
+  color: var(--muted);
+}
+.logline .tp {
+  color: var(--accent);
+  word-break: break-all;
+}
+.logline .pl {
+  grid-column: 1 / -1;
+  color: var(--text);
+  padding-left: 6px;
+  word-break: break-all;
+}
+.logline.dir-out {
+  background: rgba(56, 189, 248, 0.08);
+}
+.logline.dir-out .d {
+  color: var(--accent);
+}
+.logline.dir-in .d {
+  color: var(--ok);
+}
+.logline.dir-err {
+  background: rgba(248, 113, 113, 0.1);
+}
+.logline.dir-err .d,
+.logline.dir-err .pl {
+  color: var(--bad);
+}
+
 /* ---- footer ---- */
 .footer {
   text-align: center;
@@ -173,6 +351,16 @@
   }
   .switcher {
     grid-template-columns: 1fr;
+  }
+  .mqtt-groups {
+    grid-template-columns: 1fr;
+  }
+  .tabs {
+    width: 100%;
+    justify-content: center;
+  }
+  .tab {
+    flex: 1;
   }
   .seg {
     flex-direction: row;

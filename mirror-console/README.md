@@ -31,9 +31,16 @@ mode is persisted to `backend/mode.state` and restored on boot (default
   `/stream.mjpg`) on `127.0.0.1:8001`. Reuses `count_fingers()` from
   `../camera/gesture_reco_once.py` and the face encodings pickle used by
   `../camera/face_reco_daemon.py`.
-- `server/` — Express app on `0.0.0.0:8000`: serves the React build and proxies
-  the supervisor.
-- `web/` — React + Vite front-end (responsive, mobile-friendly).
+- `server/` — Express app on `0.0.0.0:8000`: serves the React build, proxies
+  the supervisor, and bridges MQTT (publish test messages + a live SSE feed of
+  all `smartmirror/#` traffic). Endpoints: `POST /api/mqtt/publish`
+  (`{topic, payload}`), `GET /api/mqtt/stream` (SSE), `GET /api/mqtt/status`.
+  MQTT broker via `MQTT_URL` (default `mqtt://127.0.0.1:1883`).
+- `web/` — React + Vite front-end (responsive, mobile-friendly), tabbed:
+  - **Kamera** — mode switcher + live stream (the camera arbiter UI).
+  - **MQTT** — buttons that publish every message the mirror uses (presence
+    `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
+    plus a live monitor of the bus.
 - `systemd/` — autostart units. `sudoers.d/` — lets `admin` toggle `face_reco`.
 
 ## Install & run (on the Pi)
