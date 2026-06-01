@@ -433,23 +433,31 @@ class Supervisor:
             raise ValueError("invalid name")
         return os.path.join(DATASET_DIR, name)
 
-    def capture_photo(self, name: str) -> dict:
-        """Save the current clean frame into dataset/<name>/ as the next N.jpg."""
+    def capture_photo(self, name: str, file: str = None) -> dict:
+        """Save the current clean frame into dataset/<name>/.
+
+        Without `file`, appends as the next N.jpg. With `file`, overwrites that
+        exact filename (used to replace a specific photo).
+        """
         import cv2
         if self.overlay != "learn" or self.last_raw is None:
             raise RuntimeError("not in learn mode / no frame yet")
         d = self._person_dir(name)
         os.makedirs(d, exist_ok=True)
-        nums = []
-        for f in os.listdir(d):
-            stem, ext = os.path.splitext(f)
-            if ext.lower() in (".jpg", ".jpeg", ".png") and stem.isdigit():
-                nums.append(int(stem))
-        idx = (max(nums) + 1) if nums else 1
+        if file:
+            if not _FILE_RE.match(file):
+                raise ValueError("invalid file")
+            fname = file
+        else:
+            nums = []
+            for f in os.listdir(d):
+                stem, ext = os.path.splitext(f)
+                if ext.lower() in (".jpg", ".jpeg", ".png") and stem.isdigit():
+                    nums.append(int(stem))
+            fname = f"{(max(nums) + 1) if nums else 1}.jpg"
         # Match capture_photos.py: convert the camera array RGB->BGR before
         # writing, so files stay consistent with the existing dataset/encoder.
         bgr = cv2.cvtColor(self.last_raw, cv2.COLOR_RGB2BGR)
-        fname = f"{idx}.jpg"
         cv2.imwrite(os.path.join(d, fname), bgr)
         log.info("captured %s/%s", name, fname)
         return {"file": fname, "total": len(self.list_photos(name))}
@@ -614,7 +622,9 @@ def make_handler(sup: Supervisor):
                     sup.apply_mode(self._body().get("mode"))
                     self._json(200, sup.health())
                 elif path == "/capture":
-                    self._json(200, sup.capture_photo(self._body().get("name", "")))
+                    body = self._body()
+                    self._json(200, sup.capture_photo(
+                        body.get("name", ""), body.get("file")))
                 elif path == "/encode":
                     self._json(200, sup.encode_dataset())
                 else:

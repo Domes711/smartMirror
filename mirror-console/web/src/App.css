@@ -199,10 +199,112 @@
   font-weight: 600;
 }
 
-/* ---- panel actions (learn button) ---- */
+/* ---- panel actions ---- */
 .panel-actions {
   display: flex;
   justify-content: center;
+}
+
+/* ---- full-screen loading overlay ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 9, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+.overlay-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid var(--surface-2);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.overlay-msg {
+  color: var(--text);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ---- wizard ---- */
+.wizard-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.wizard-head strong {
+  font-size: 1rem;
+}
+.steps {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.step-dot {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.step-dot.active {
+  color: #04222e;
+  background: var(--accent);
+}
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+}
+.learn-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ---- photo detail / replace ---- */
+.detail-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  max-width: min(92vw, 640px);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.detail-img {
+  width: 100%;
+  border-radius: 10px;
+  display: block;
+}
+.detail-stream {
+  aspect-ratio: 4 / 3;
+}
+.detail-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 /* ---- learn face flow ---- */
@@ -286,6 +388,15 @@
   overflow: hidden;
   background: #000;
   border: 1px solid var(--border);
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.05s;
+}
+.thumb:hover {
+  border-color: var(--accent);
+}
+.thumb:active {
+  transform: scale(0.98);
 }
 .thumb img {
   width: 100%;

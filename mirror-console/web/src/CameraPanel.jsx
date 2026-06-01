@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import LearnFace from "./LearnFace.jsx";
 
 // Modes mirror supervisor.py MODES. Order = display order in the switcher.
 const MODES = [
@@ -15,7 +14,6 @@ export default function CameraPanel() {
   const [pending, setPending] = useState(null);
   const [error, setError] = useState(null);
   const [streamKey, setStreamKey] = useState(0);
-  const [learning, setLearning] = useState(false);
   const pollRef = useRef(null);
 
   const refresh = useCallback(async () => {
@@ -64,19 +62,6 @@ export default function CameraPanel() {
 
   const mode = health?.mode;
   const testing = isTestMode(mode);
-
-  if (learning) {
-    return (
-      <div className="panel">
-        <LearnFace
-          onClose={() => {
-            setLearning(false);
-            switchMode("test_face");
-          }}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="panel">
@@ -130,12 +115,6 @@ export default function CameraPanel() {
             </p>
           </div>
         )}
-      </div>
-
-      <div className="panel-actions">
-        <button className="mqtt-btn k-ok" onClick={() => setLearning(true)}>
-          ＋ Naučit nový obličej
-        </button>
       </div>
     </div>
   );

@@ -37,16 +37,19 @@ mode is persisted to `backend/mode.state` and restored on boot (default
   (`{topic, payload}`), `GET /api/mqtt/stream` (SSE), `GET /api/mqtt/status`.
   MQTT broker via `MQTT_URL` (default `mqtt://127.0.0.1:1883`).
 - `web/` — React + Vite front-end (responsive, mobile-friendly), tabbed:
-  - **Kamera** — mode switcher + live stream (the camera arbiter UI), plus
-    **＋ Naučit nový obličej**: a `learn` mode that streams with a framing box,
-    captures photos into `camera/dataset/<name>/` (configurable count), shows
-    thumbnails you can review/delete/retake, and **Natrénovat** which runs
-    `camera/encode_faces.py` to rebuild `encoded_faces.pickle`.
-  - **Profily** — one profile per learned face (`dataset/<name>/`). Basic
-    overview: a sample training photo, name, photo count, and **Odebrat**
-    (deletes the folder and rebuilds `encoded_faces.pickle` so the face is no
-    longer recognized — empty dataset → empty pickle). Richer per-profile
-    settings (module layout, time windows) come later.
+  - **Kamera** — mode switcher + live stream (the camera arbiter UI).
+  - **Profily** — one profile per learned face (`dataset/<name>/`): sample
+    training photo, name, photo count, **Odebrat** (deletes the folder and
+    rebuilds `encoded_faces.pickle` so the face is no longer recognized — empty
+    dataset → empty pickle), and **＋ Přidat profil** → a step **wizard**:
+    - *Krok 1* — profile name (+ photo count).
+    - *Krok 2* — face learning in `learn` mode: **auto-captures every 3 s**,
+      enlargeable thumbnails; the detail view has **Nahradit** (live stream →
+      one shot that overwrites that exact file), then **Dokončit a natrénovat**
+      runs `camera/encode_faces.py`.
+
+    More steps (module layout, time windows) will be added later. Long
+    operations (training, profile removal) show a full-screen loading overlay.
   - **MQTT** — buttons that publish every message the mirror uses (presence
     `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
     plus a live monitor of the bus.
