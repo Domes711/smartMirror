@@ -39,6 +39,8 @@ SERIAL_BAUD = 256000
 MQTT_BROKER = os.environ.get("MQTT_BROKER", "127.0.0.1")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_TOPIC_PRESENCE = "smartmirror/radar/presence"
+MQTT_TOPIC_TARGETS = "smartmirror/radar/targets"
+TARGET_PUB_INTERVAL = 0.1   # s — throttle live target broadcasts (~10 Hz)
 
 
 def parse_frame(data: bytes) -> list:
@@ -206,17 +208,33 @@ def main() -> int:
         with serial.Serial(SERIAL_DEVICE, SERIAL_BAUD, timeout=1) as ser:
             log.info("daemon started, listening on %s @ %d baud",
                      SERIAL_DEVICE, SERIAL_BAUD)
+            last_pub = 0.0
             while True:
                 frame = read_frame(ser)
                 targets = parse_frame(frame)
                 event = tracker.update(targets)
+
+                # Broadcast live target positions for the radar console map
+                # (throttled, fire-and-forget, no logging spam).
+                now = time.monotonic()
+                if now - last_pub >= TARGET_PUB_INTERVAL:
+                    last_pub = now
+                    try:
+                        mqtt_client.publish(MQTT_TOPIC_TARGETS, json.dumps({
+                            "targets": [[x, y, s] for (x, y, s) in targets],
+                            "present": tracker.is_present,
+                            "zone": {"x": PRESENCE_X_MM, "y": PRESENCE_Y_MM},
+                        }), qos=0)
+                    except Exception:  # noqa: BLE001
+                        pass
+
                 if event == "PRESENT":
                     log.info("PRESENT — display ON, publishing to MQTT")
-                    pulse_relay(GPIO)
+                    pulse_button(GPIO)
                     mqtt_publish(mqtt_client, MQTT_TOPIC_PRESENCE, "present")
                 elif event == "ABSENT":
                     log.info("ABSENT — display OFF, publishing to MQTT")
-                    pulse_relay(GPIO)
+                    pulse_button(GPIO)
                     mqtt_publish(mqtt_client, MQTT_TOPIC_PRESENCE, "absent")
     except KeyboardInterrupt:
         log.info("daemon stopped")

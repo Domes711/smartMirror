@@ -651,6 +651,128 @@
   color: var(--bad);
 }
 
+/* ---- radar panel ---- */
+.radar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.switch-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: background 0.15s;
+}
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s, background 0.15s;
+}
+.switch input:checked + .switch-track {
+  background: rgba(52, 211, 153, 0.25);
+  border-color: var(--ok);
+}
+.switch input:checked + .switch-track::after {
+  transform: translateX(20px);
+  background: var(--ok);
+}
+.switch input:disabled + .switch-track {
+  opacity: 0.5;
+}
+.switch-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.radar-card {
+  padding: 10px;
+}
+.radar-map {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #07090c;
+  border-radius: 10px;
+}
+.radar-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.radar-tick {
+  fill: var(--muted);
+  font-size: 9px;
+}
+.radar-zone {
+  fill: rgba(56, 189, 248, 0.1);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.radar-zone.active {
+  fill: rgba(52, 211, 153, 0.18);
+  stroke: var(--ok);
+}
+.radar-zone-label {
+  fill: var(--accent);
+  font-size: 9px;
+  text-anchor: middle;
+}
+.radar-origin {
+  fill: var(--text);
+}
+.radar-target {
+  fill: var(--warn);
+  opacity: 0.9;
+}
+.radar-target.in {
+  fill: var(--ok);
+}
+.radar-info {
+  min-height: 28px;
+}
+.radar-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.radar-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 7px;
+  color: var(--muted);
+}
+.radar-chip.in {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
 /* ---- footer ---- */
 .footer {
   text-align: center;

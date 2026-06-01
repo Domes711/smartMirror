@@ -54,6 +54,12 @@ mode is persisted to `backend/mode.state` and restored on boot (default
     `FaceCaptureSession` is the shared capture component used by both the wizard
     and the detail. Long operations (training, removal) show a full-screen
     loading overlay.
+  - **Radar** — live LD2450 view: an SVG map (radar at top center, range rings,
+    the detection **target zone** ±X/Y where `presence: present` is sent) with
+    live target dots, a presence indicator, and an **Aktivní/Vypnuto** switch
+    that starts/stops the `ld2450` service (off ⇒ no MQTT at all). Live targets
+    come from a new `smartmirror/radar/targets` topic published by the daemon
+    and read via the MQTT SSE feed.
   - **MQTT** — buttons that publish every message the mirror uses (presence
     `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
     plus a live monitor of the bus.

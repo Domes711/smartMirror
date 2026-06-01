@@ -3,10 +3,12 @@ import "./App.css";
 import CameraPanel from "./CameraPanel.jsx";
 import MqttPanel from "./MqttPanel.jsx";
 import ProfilesPanel from "./ProfilesPanel.jsx";
+import RadarPanel from "./RadarPanel.jsx";
 
 const TABS = [
   { id: "camera", label: "Kamera" },
   { id: "profiles", label: "Profily" },
+  { id: "radar", label: "Radar" },
   { id: "mqtt", label: "MQTT" },
 ];
 
@@ -33,6 +35,7 @@ export default function App() {
 
       {tab === "camera" && <CameraPanel />}
       {tab === "profiles" && <ProfilesPanel />}
+      {tab === "radar" && <RadarPanel />}
       {tab === "mqtt" && <MqttPanel />}
 
       <footer className="footer">smart mirror · konzole</footer>

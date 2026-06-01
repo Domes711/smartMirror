@@ -1,7 +1,6 @@
-# Allow the mirror-console supervisor (running as admin) to start/stop and
-# query the face_reco daemon without a password, so it can arbitrate the
-# exclusive camera between production face detection and the test modes.
+# Allow the mirror-console supervisor (running as admin) to start/stop the
+# face_reco (camera arbiter) and ld2450 (radar) daemons without a password.
 #
 # Install: sudo cp mirror-console /etc/sudoers.d/mirror-console
 #          sudo visudo -cf /etc/sudoers.d/mirror-console   # verify syntax
-admin ALL=(root) NOPASSWD: /usr/bin/systemctl start face_reco, /usr/bin/systemctl stop face_reco, /usr/bin/systemctl is-active face_reco
+admin ALL=(root) NOPASSWD: /usr/bin/systemctl start face_reco, /usr/bin/systemctl stop face_reco, /usr/bin/systemctl is-active face_reco, /usr/bin/systemctl start ld2450, /usr/bin/systemctl stop ld2450, /usr/bin/systemctl is-active ld2450

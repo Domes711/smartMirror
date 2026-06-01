@@ -58,6 +58,7 @@ BACKEND_PORT = 8001
 STATE_FILE = os.path.join(_HERE, "mode.state")
 
 FACE_SERVICE = "face_reco"
+RADAR_SERVICE = "ld2450"
 SYSTEMCTL = "/usr/bin/systemctl"
 
 DEFAULT_WIDTH = 640
@@ -104,8 +105,8 @@ class StreamingOutput:
 # --------------------------------------------------------------------------- #
 # systemd helpers
 # --------------------------------------------------------------------------- #
-def _systemctl(action: str) -> None:
-    """Run `sudo -n systemctl <action> face_reco` (allowed via sudoers).
+def _systemctl(action: str, service: str = FACE_SERVICE) -> None:
+    """Run `sudo -n systemctl <action> <service>` (allowed via sudoers).
 
     `-n` keeps sudo non-interactive: if the sudoers rule isn't installed yet it
     fails immediately instead of blocking on a password prompt with no TTY
@@ -113,24 +114,23 @@ def _systemctl(action: str) -> None:
     """
     try:
         res = subprocess.run(
-            ["sudo", "-n", SYSTEMCTL, action, FACE_SERVICE],
+            ["sudo", "-n", SYSTEMCTL, action, service],
             check=False, capture_output=True, text=True,
             stdin=subprocess.DEVNULL, timeout=15,
         )
         if res.returncode == 0:
-            log.info("systemctl %s %s", action, FACE_SERVICE)
+            log.info("systemctl %s %s", action, service)
         else:
             log.warning("systemctl %s %s failed (rc=%d): %s", action,
-                        FACE_SERVICE, res.returncode,
-                        (res.stderr or "").strip())
+                        service, res.returncode, (res.stderr or "").strip())
     except Exception as exc:  # noqa: BLE001
-        log.warning("systemctl %s failed: %s", action, exc)
+        log.warning("systemctl %s %s failed: %s", action, service, exc)
 
 
-def daemon_active() -> bool:
+def service_active(service: str = FACE_SERVICE) -> bool:
     try:
         out = subprocess.run(
-            [SYSTEMCTL, "is-active", FACE_SERVICE],
+            [SYSTEMCTL, "is-active", service],
             capture_output=True, text=True, timeout=10,
         )
         return out.stdout.strip() == "active"
@@ -562,11 +562,24 @@ class Supervisor:
             "mode": self.mode,
             "modes": list(MODES),
             "camera_open": self.camera_open,
-            "daemon_active": daemon_active(),
+            "daemon_active": service_active(FACE_SERVICE),
             "fps": round(self.fps, 1),
             "width": self.args.width,
             "height": self.args.height,
         }
+
+    # ---- radar control ------------------------------------------------ #
+    @staticmethod
+    def radar_status() -> dict:
+        return {
+            "active": service_active(RADAR_SERVICE),
+            "available": _service_exists(RADAR_SERVICE),
+        }
+
+    @staticmethod
+    def set_radar(active: bool) -> dict:
+        _systemctl("start" if active else "stop", RADAR_SERVICE)
+        return Supervisor.radar_status()
 
 
 # --------------------------------------------------------------------------- #
@@ -612,6 +625,8 @@ def make_handler(sup: Supervisor):
                 self._photo()
             elif path == "/profiles":
                 self._json(200, {"profiles": sup.list_profiles()})
+            elif path == "/radar":
+                self._json(200, sup.radar_status())
             else:
                 self._json(404, {"error": "not found"})
 
@@ -627,6 +642,8 @@ def make_handler(sup: Supervisor):
                         body.get("name", ""), body.get("file")))
                 elif path == "/encode":
                     self._json(200, sup.encode_dataset())
+                elif path == "/radar":
+                    self._json(200, sup.set_radar(bool(self._body().get("active"))))
                 else:
                     self._json(404, {"error": "not found"})
             except ValueError as exc:
