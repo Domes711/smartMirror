@@ -23,7 +23,10 @@ const proxy = createProxyMiddleware({
   target: BACKEND,
   changeOrigin: true,
   ws: false,
-  pathFilter: ["/mode", "/healthz", "/stream.mjpg"],
+  pathFilter: (path) =>
+    path === "/mode" ||
+    path === "/healthz" ||
+    path.startsWith("/stream.mjpg"),
 });
 app.use(proxy);
 
