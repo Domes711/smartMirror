@@ -1,0 +1,14 @@
+{
+  "name": "mirror-console-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Express front-end for the smart mirror camera console: serves the React build and proxies the camera supervisor.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^3.0.0"
+  }
+}

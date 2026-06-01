@@ -36,8 +36,18 @@ sudo systemctl start mosquitto
 
 ```bash
 cd ~/smartMirror/camera
-pip3 install -r requirements.txt
+
+# On newer Raspberry Pi OS (Bookworm+), use --break-system-packages
+pip3 install --break-system-packages -r requirements.txt
+
+# If MediaPipe installation fails or takes too long, try the pre-built wheel:
+pip3 install --break-system-packages mediapipe-rpi4
+
+# Check what's already installed:
+pip3 list | grep -E "paho-mqtt|face-recognition|opencv|mediapipe"
 ```
+
+**Note:** Using `--break-system-packages` is safe on dedicated Raspberry Pi projects like smart mirror. For production servers, prefer virtual environments.
 
 ### 3. Train face recognition (first time only)
 
@@ -100,6 +110,13 @@ python3 gesture_reco_once.py --confidence 0.7
 {"gesture": "finger_count", "count": 3, "elapsed": 2.1}  # detected 3 fingers
 {"gesture": null}                                          # no hand detected
 ```
+
+### Live preview / camera console
+
+For a live view of what the camera sees (with gesture/face overlays) from your
+Mac or phone on the LAN, use the **mirror-console** web app — a single arbiter
+that switches the exclusive camera between production face detection and the
+test modes. See [`../mirror-console/README.md`](../mirror-console/README.md).
 
 ## Testing MQTT locally
 

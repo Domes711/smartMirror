@@ -1,0 +1,88 @@
+# mirror-console
+
+Web console for the smart mirror's camera. The RPi camera is **exclusive**
+(one process at a time), so this app is the single **arbiter**: from a phone or
+laptop on the LAN you pick which consumer owns the camera, and in the test
+modes you get a live view with detection overlays.
+
+```
+Browser (Mac / mobile)  ──►  Node/Express :8000  ──►  Python supervisor :8001  ──►  RPi camera
+   mode switch + stream        serves React,            arbitrates the camera,
+                               proxies /mode,/healthz,   runs overlays, toggles
+                               /stream.mjpg              the face_reco daemon
+```
+
+## Modes
+
+| Mode | Camera owner | What you see |
+|---|---|---|
+| **Face detect** (default) | `face_reco` systemd daemon (production) | status panel; daemon does real recognition |
+| **Test obličejů** | this app | live MJPEG + face boxes & names |
+| **Test gest** | this app | live MJPEG + MediaPipe hand landmarks + finger count |
+
+Switching mode is atomic: the supervisor releases the current owner (stops the
+daemon or its own capture), then hands the camera to the new one. The chosen
+mode is persisted to `backend/mode.state` and restored on boot (default
+`face_detect`, so the mirror works normally after power-on).
+
+## Components
+
+- `backend/supervisor.py` — camera arbiter + HTTP API (`/mode`, `/healthz`,
+  `/stream.mjpg`) on `127.0.0.1:8001`. Reuses `count_fingers()` from
+  `../camera/gesture_reco_once.py` and the face encodings pickle used by
+  `../camera/face_reco_daemon.py`.
+- `server/` — Express app on `0.0.0.0:8000`: serves the React build and proxies
+  the supervisor.
+- `web/` — React + Vite front-end (responsive, mobile-friendly).
+- `systemd/` — autostart units. `sudoers.d/` — lets `admin` toggle `face_reco`.
+
+## Install & run (on the Pi)
+
+```bash
+# 1. copy the folder to the Pi (from the repo root on your Mac)
+scp -r mirror-console admin@10.0.0.249:/home/admin/smartMirror/
+
+# 2. build the front-end + install the server deps (on the Pi)
+cd ~/smartMirror/mirror-console/web    && npm install && npm run build
+cd ~/smartMirror/mirror-console/server && npm install
+
+# 3. let the supervisor control the daemon, and make it the sole camera authority
+sudo cp ~/smartMirror/mirror-console/sudoers.d/mirror-console /etc/sudoers.d/
+sudo visudo -cf /etc/sudoers.d/mirror-console     # verify syntax
+sudo systemctl disable face_reco                  # supervisor manages it now
+
+# 4. try it manually
+cd ~/smartMirror/mirror-console/backend && python3 supervisor.py &
+cd ~/smartMirror/mirror-console/server  && node index.js
+#   open http://10.0.0.249:8000 from your Mac or phone
+```
+
+## Autostart
+
+```bash
+sudo cp ~/smartMirror/mirror-console/systemd/*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mirror-console-backend mirror-console-web
+```
+
+Check the node path in `mirror-console-web.service` matches the Pi
+(`which node`; CLAUDE.md mentions `/opt/node22/bin/node`).
+
+## Dev (on the Pi, with the camera free)
+
+```bash
+cd ~/smartMirror/mirror-console/backend && python3 supervisor.py
+cd ~/smartMirror/mirror-console/web     && npm run dev   # Vite proxies to :8001
+```
+
+## Notes
+
+- **Single authority:** keep `face_reco` autostart **disabled** — otherwise it
+  and the supervisor fight over the camera.
+- **Color:** Picamera2 `RGB888` arrays are treated as BGR by OpenCV, so JPEG
+  colors come out right with no conversion. If colors look swapped, add a
+  `cv2.cvtColor` in `_capture_loop`.
+- **Performance:** gesture overlay is light; face recognition (hog) is heavier
+  and is throttled to every 5th frame.
+- **Security:** no auth / TLS — LAN use only. The sudoers grant is limited to
+  three `systemctl` calls on `face_reco`.

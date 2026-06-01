@@ -1,0 +1,20 @@
+[Unit]
+Description=Smart Mirror camera console — web front-end (Express + React)
+After=network.target mirror-console-backend.service
+Wants=mirror-console-backend.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/smartMirror/mirror-console/server
+# Adjust the node path if different on the Pi (CLAUDE.md mentions /opt/node22/bin/node).
+ExecStart=/opt/node22/bin/node /home/admin/smartMirror/mirror-console/server/index.js
+Environment=PORT=8000
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
