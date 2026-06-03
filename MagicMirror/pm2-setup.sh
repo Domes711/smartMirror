@@ -22,12 +22,16 @@ pm2 start ./start-magicmirror.sh --name MagicMirror
 # persist the process list so `pm2 resurrect` (on boot) brings it back
 pm2 save
 
+# install the boot hook (systemd) non-interactively so it autostarts on reboot
+echo "▸ Registering pm2 boot autostart…"
+NODE_BIN_DIR="$(dirname "$(command -v node)")"
+sudo env PATH="$PATH:$NODE_BIN_DIR" "$(command -v pm2)" startup systemd \
+  -u "$(id -un)" --hp "$HOME" || \
+  echo "  (pm2 startup selhal — spusť ručně: pm2 startup a vypsaný sudo příkaz)"
+pm2 save
+
 echo
-echo "✓ MagicMirror je v pm2 (název: MagicMirror)."
+echo "✓ MagicMirror je v pm2 (název: MagicMirror) + autostart po rebootu."
 echo "  Stav:    pm2 status MagicMirror"
 echo "  Logy:    pm2 logs MagicMirror"
 echo "  Restart: pm2 restart MagicMirror"
-echo
-echo "Pro autostart po startu OS spusť JEDNOU:"
-echo "  pm2 startup        # vypíše příkaz se sudo — ten spusť"
-echo "  (pm2 save už proběhlo)"
