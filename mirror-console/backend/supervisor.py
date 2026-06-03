@@ -153,7 +153,10 @@ def _service_exists(name: str) -> bool:
 # --------------------------------------------------------------------------- #
 # Layout editor: generates pages.js + console-modules.js for MMM-Profile
 # --------------------------------------------------------------------------- #
-MAGICMIRROR_DIR = os.environ.get("MAGICMIRROR_DIR", "/home/admin/MagicMirror")
+MAGICMIRROR_DIR = os.environ.get(
+    "MAGICMIRROR_DIR",
+    os.path.normpath(os.path.join(_HERE, "..", "..", "MagicMirror")),
+)
 PAGES_PATH = os.path.join(MAGICMIRROR_DIR, "modules", "MMM-Profile", "pages.js")
 CONSOLE_MODULES_PATH = os.path.join(MAGICMIRROR_DIR, "config", "console-modules.js")
 CONFIG_JS_PATH = os.path.join(MAGICMIRROR_DIR, "config", "config.js")

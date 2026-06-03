@@ -12,7 +12,8 @@ source of truth; this repo exists so nothing is lost if the SD card dies.
 ## Target hardware
 
 - **Pi:** `admin@10.0.0.249` (SSH)
-- **MagicMirror root:** `~/MagicMirror/`
+- **MagicMirror root:** `~/smartMirror/MagicMirror/` (single source = the clone;
+  the standalone `~/MagicMirror` is retired — `cleanup-pi.sh` removes it)
 - **Camera:** RPi Camera Module (ribbon-connected) — face recognition
 - **Radar:** HLK-LD2450 on UART `/dev/ttyAMA0` @ 256000 baud
 - **Relay:** GPIO17 → display power button (presence-based display on/off)
@@ -140,6 +141,11 @@ Each in-repo MagicMirror module follows the same shape:
 git clone <repo> smartMirror && cd smartMirror
 ./setup.sh        # camera + radar + console + MagicMirror, idempotent
 ```
+
+To wipe a messy Pi before re-cloning: run `cleanup-pi.sh` (full reset — removes
+our systemd units, the pm2 app + boot hook, autostart/cron entries, sudoers, and
+the retired `~/MagicMirror`/`~/ld2450`; backs up real config + per-Pi state to
+`~/mirror-backup-<ts>/` first).
 
 `setup.sh` chains each component's `setup.sh` (they detect node/python and the
 repo path, generate systemd units, build the web). Remaining one-time steps it
