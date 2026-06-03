@@ -19,32 +19,59 @@ source of truth; this repo exists so nothing is lost if the SD card dies.
 
 ## Repository layout
 
-Only files we own or have generated are mirrored. Third-party code stays in
-its upstream repos; see [External dependencies](#external-dependencies) for
-how to restore them.
+The repo is now **self-contained and runnable** via setup scripts (see
+[Setup](#setup-fresh-pi)). The MagicMirror **core is a vendored fork** (ours),
+plus our own modules, the camera/radar daemons, and the `mirror-console` web app.
 
 - `docs/superpowers/specs/` — approved design specs
 - `docs/superpowers/plans/` — task-by-task implementation plans
+- `setup.sh` — **master installer**: `git clone` → `./setup.sh` runs every
+  component's own `setup.sh` (camera, radar, console, MagicMirror) + sudoers.
+- `MagicMirror/` — **vendored fork** of MagicMirror² core (full, runnable; our
+  fork adds per-instance `id` support). `MagicMirror/setup.sh` installs core +
+  every module's deps; `start-magicmirror.sh` + `pm2-setup.sh` run it under pm2.
 - `MagicMirror/config/config.js` — mirror of `~/MagicMirror/config/config.js`
-- `MagicMirror/config/pages.js` — per-(user, time-window) layouts consumed by MMM-Profile
+  (hand-maintained; **never auto-edited** — the console splices in
+  `console-modules.js` via a one-time manual `...require(...)`).
+- `MagicMirror/config/pages.js` — **STALE/unused**; the live layout schedule is
+  `MagicMirror/modules/MMM-Profile/pages.js` (loaded by its `node_helper.js`),
+  and is **generated** by the console's layout editor.
 - `MagicMirror/modules/MMM-Profile/` — our own module (presence-driven profile + page scheduler; absorbed the former MMM-FaceRecoIndicator)
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
 - `MagicMirror/modules/MMM-Mail/` — fork of [MMPieps/MMM-Mail](https://github.com/MMPieps/MMM-Mail) pinned at `c24f973` with added `mailboxes` (multi-folder + per-folder `slaHours` countdown) on top of upstream
 - `MagicMirror/modules/MMM-Spending/` — our own module (today's spending pulled from Wallet by BudgetBakers REST API)
 - `MagicMirror/modules/MMM-GoogleCalendar/` — vendored fork of `randomBrainstormer/MMM-GoogleCalendar` v1.2.0 for visual customisation; replace upstream install on Pi
-- `camera/` — mirror of `~/smartMirror/camera/` (single-shot face recognition: `face_reco_once.py`, training photos in `dataset/Domes/`, `encoded_faces.pickle`)
-- `ld2450/` — mirror of `~/ld2450/` (radar daemon, tests, `ld2450.service`)
+- `camera/` — face recognition daemon + training (`face_reco_daemon.py`,
+  `encode_faces.py`, `dataset/`, `encoded_faces.pickle`) + `setup.sh`.
+- `ld2450/` — radar daemon, tests, `ld2450.service`, `setup.sh`. Publishes
+  presence + live `targets` over MQTT; reads `radar_config.json` (per-Pi,
+  gitignored) for calibration (offset/mirror, zone, smoothing, ghost exclusions).
+- `mirror-console/` — **web console** (React + Vite + Express + Python
+  supervisor) on `http://<pi>:8000`. Tabs: **Kamera** (camera arbiter —
+  Face detect / Test obličejů / Test gest), **Profily** (enroll faces + per-
+  profile **Rozložení** layout editor → generates `pages.js` +
+  `console-modules.js`), **Radar** (live map + on/off), **MQTT** (publish test
+  messages + bus monitor). Backend `supervisor.py` is the single camera
+  arbiter; `setup.sh` installs it as `mirror-console-backend`/`-web` systemd units.
 
-As each plan task is completed on the Pi, the matching files above are copied
-back into this repo and committed. **Nothing here is deployed automatically**
-— the Pi is edited directly, then the result is mirrored back.
+Deploy is **git pull**: the user pushes to git, then `git pull` on the Pi.
+Per-Pi runtime state (`radar_config.json`, `layout_store.json`,
+`console-modules.js`, `vendor/`, `fonts/`, `node_modules/`) is gitignored.
 
 ## Architecture: how the mirror decides what to show
 
 The mirror is **event-driven**, not always-on. Read `MagicMirror/modules/MMM-Profile/README.md`
 plus `docs/superpowers/specs/2026-04-26-mmm-profile-design.md` before changing
 anything that touches presence, face recognition, layout, or display power.
+
+> **Note (current arch):** events now flow over **MQTT**, not HTTP. The camera
+> is also arbitrated by `mirror-console` (the supervisor starts/stops
+> `face_reco`). Topics: `smartmirror/radar/presence` (`present`/`absent`),
+> `smartmirror/radar/targets` (live positions), `smartmirror/camera/recognition`
+> (`{user}`), `smartmirror/camera/gesture`, `smartmirror/control/reset`, plus
+> `smartmirror/radar/{control,config}` for calibration. The numbered steps below
+> describe the original HTTP design and are kept for context.
 
 Data flow:
 
@@ -107,6 +134,21 @@ Each in-repo MagicMirror module follows the same shape:
     node /opt/node22/bin/node demo-render.js
   ```
 
+## Setup (fresh Pi)
+
+```bash
+git clone <repo> smartMirror && cd smartMirror
+./setup.sh        # camera + radar + console + MagicMirror, idempotent
+```
+
+`setup.sh` chains each component's `setup.sh` (they detect node/python and the
+repo path, generate systemd units, build the web). Remaining one-time steps it
+prints: enable UART (`raspi-config`), splice `...require('./console-modules.js')`
+into `~/MagicMirror/config/config.js`, and `pm2 startup` for boot autostart.
+Services: `ld2450` (enabled), `mirror-console-backend`/`-web` (enabled),
+`face_reco` (installed but **disabled** — the console starts/stops it),
+MagicMirror under **pm2** (process name `MagicMirror`).
+
 ## Common commands
 
 All commands run **on the Pi via SSH** (`ssh admin@10.0.0.249`) unless noted.
@@ -114,10 +156,18 @@ All commands run **on the Pi via SSH** (`ssh admin@10.0.0.249`) unless noted.
 ### MagicMirror
 
 ```bash
-pm2 restart MagicMirror              # apply config / module changes
+pm2 restart MagicMirror              # apply config / module / pages.js changes
 pm2 logs MagicMirror --lines 100     # tail logs
-cd ~/MagicMirror && git pull && npm install        # update core
-cd ~/MagicMirror/modules/<name> && npm install     # install module deps
+cd ~/MagicMirror && ./setup.sh       # reinstall core + module deps
+```
+
+### Mirror console
+
+```bash
+cd ~/smartMirror/mirror-console && ./setup.sh   # build web + (re)install services
+sudo systemctl restart mirror-console-backend mirror-console-web
+journalctl -u mirror-console-web -f
+curl -s http://127.0.0.1:8000/healthz; echo
 ```
 
 ### LD2450 daemon
@@ -155,7 +205,7 @@ can be rebuilt from scratch.
 
 | Component | Upstream | Install path | Pinned |
 |---|---|---|---|
-| MagicMirror² core | https://github.com/MagicMirrorOrg/MagicMirror | `~/MagicMirror/` | TBD |
+| MagicMirror² core | **vendored fork** https://github.com/Domes711/MagicMirror (branch `feature/mmm-profile-builtin`, adds per-instance `id`) — full core lives in this repo under `MagicMirror/` | `~/MagicMirror/` | v2.36.0 fork |
 | MMM-Face-Reco-DNN | https://github.com/nischi/MMM-Face-Reco-DNN | `~/MagicMirror/modules/MMM-Face-Reco-DNN/` | TBD |
 | MMM-GoogleCalendar | https://github.com/randomBrainstormer/MMM-GoogleCalendar | `~/MagicMirror/modules/MMM-GoogleCalendar/` (vendored fork in this repo) | v1.2.0 |
 | IDS JMK GTFS feed | https://data.brno.cz/datasets/379d2e9a7907460c8ca7fda1f3e84328 | downloaded by `MMM-Brno-Transit/node_helper.js` into its `cache/`, refreshed weekly | n/a |
