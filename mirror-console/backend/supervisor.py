@@ -369,6 +369,58 @@ def _console_modules_array(store: dict) -> list:
     return mods
 
 
+def _node_require_ok(path: str) -> bool:
+    """True if `node -e require(path)` succeeds (config still valid)."""
+    cmd = (
+        'export NVM_DIR="$HOME/.nvm"; '
+        '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1; '
+        'N="${NODE_BIN:-$(command -v node || ls -t "$NVM_DIR"/versions/node/*/bin/node 2>/dev/null | head -1)}"; '
+        '[ -n "$N" ] || exit 0; '  # no node → don't block (can't validate)
+        f'"$N" -e \'require(process.argv[1])\' "{path}"'
+    )
+    try:
+        r = subprocess.run(["bash", "-lc", cmd], capture_output=True,
+                           text=True, timeout=20, stdin=subprocess.DEVNULL)
+        return r.returncode == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def ensure_config_spread() -> None:
+    """Make sure config.js loads console-modules.js (idempotent, self-healing).
+
+    Without this splice the console-created module instances never load and
+    MMM-Profile has nothing to position. Backs up + validates + reverts on break.
+    """
+    path = CONFIG_JS_PATH
+    try:
+        with open(path) as f:
+            text = f.read()
+    except Exception:  # noqa: BLE001
+        return
+    if "console-modules" in text or "modules:" not in text:
+        return  # already spliced, or unexpected shape — leave alone
+    const_line = ('const consoleModules = (() => { try { return '
+                  'require("./console-modules.js"); } catch (e) { return []; } })();\n\n')
+    m = re.search(r'(?:let|const|var)\s+config\s*=\s*\{', text)
+    new = (text[:m.start()] + const_line + text[m.start():]) if m else (const_line + text)
+    new = re.sub(r'(modules:\s*\[)', r'\1\n    ...consoleModules,', new, count=1)
+    bak = f"{path}.bak.{int(time.time())}"
+    try:
+        with open(bak, "w") as f:
+            f.write(text)
+        with open(path, "w") as f:
+            f.write(new)
+        if _node_require_ok(path):
+            log.info("config.js: spliced console-modules.js (backup %s)", bak)
+        else:
+            with open(path, "w") as f:
+                f.write(text)
+            log.warning("config.js splice broke it — reverted")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("config.js splice failed: %s", exc)
+
+
 def generate_files(store: dict) -> None:
     """Write pages.js + console-modules.js from the store."""
     pages_js = _GEN_HEADER + "module.exports = " + \
@@ -836,6 +888,7 @@ class Supervisor:
 
     @staticmethod
     def apply_layout() -> dict:
+        ensure_config_spread()  # self-heal: make sure config.js loads console-modules.js
         # Under systemd, `bash -lc` does NOT load nvm (it lives in ~/.bashrc,
         # skipped for non-interactive shells), so `pm2` isn't on PATH. Source
         # nvm explicitly and fall back to globbing the nvm node bin for pm2.
