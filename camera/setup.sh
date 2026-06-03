@@ -52,9 +52,16 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl disable face_reco 2>/dev/null || true
 
+# sudoers so the console may start/stop face_reco (+ ld2450) — idempotent
+SUDOERS_SRC="$DIR/../mirror-console/sudoers.d/mirror-console"
+if [ -f "$SUDOERS_SRC" ]; then
+  echo "▸ Installing sudoers (console controls face_reco/ld2450)…"
+  sudo cp "$SUDOERS_SRC" /etc/sudoers.d/mirror-console
+  sudo visudo -cf /etc/sudoers.d/mirror-console || true
+fi
+
 echo
 echo "✓ Camera ready."
 echo "  face_reco je nainstalovaný, ale VYPNUTÝ z autostartu — řídí ho"
-echo "  mirror-console (režim Face detect). Aby ho konzole směla ovládat,"
-echo "  nainstaluj sudoers: sudo cp ../mirror-console/sudoers.d/mirror-console /etc/sudoers.d/"
-echo "  Trénink obličejů: přes konzoli (Profily → Přidat profil)."
+echo "  mirror-console (režim Face detect). Trénink obličejů: přes konzoli"
+echo "  (Profily → Přidat profil)."

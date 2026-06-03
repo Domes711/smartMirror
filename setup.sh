@@ -45,12 +45,12 @@ else
   echo "  ✓ Hotovo."
 fi
 echo "════════════════════════════════════════════"
-echo "Zbývající jednorázové kroky (pokud ještě nejsou):"
-echo "  • UART pro radar:  sudo raspi-config → Interface → Serial Port"
-echo "       (login shell = NO, hardware serial = YES)"
-echo "  • console moduly:  do ~/MagicMirror/config/config.js přidej"
-echo "       ...require('./console-modules.js')  (viz mirror-console/README.md)"
-echo "  • pm2 autostart:   pm2 startup   (spusť vypsaný sudo příkaz, pak: pm2 save)"
+echo "Automatizováno: sudoers, UART (raspi-config), config.js spread, pm2 autostart."
+echo
+echo "Ruční (citlivé / vyžaduje rozhodnutí):"
+echo "  • REBOOT pokud se UART zapnul poprvé (radar pak uvidí /dev/ttyAMA0)."
+echo "  • Po cleanu obnov REÁLNÝ config (calendar ID, hesla) ze zálohy:"
+echo "       ~/mirror-backup-*/MagicMirror-config/config.js → MagicMirror/config/config.js"
 echo
 echo "Ověření:"
 echo "  curl -s http://127.0.0.1:8000/healthz; echo      # konzole"

@@ -797,9 +797,19 @@ class Supervisor:
 
     @staticmethod
     def apply_layout() -> dict:
+        # Under systemd, `bash -lc` does NOT load nvm (it lives in ~/.bashrc,
+        # skipped for non-interactive shells), so `pm2` isn't on PATH. Source
+        # nvm explicitly and fall back to globbing the nvm node bin for pm2.
+        cmd = (
+            'export NVM_DIR="$HOME/.nvm"; '
+            '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1; '
+            'PM2="${PM2_BIN:-$(command -v pm2 || ls -t "$NVM_DIR"/versions/node/*/bin/pm2 2>/dev/null | head -1)}"; '
+            '[ -n "$PM2" ] || { echo "pm2 not found (install pm2 / check nvm)"; exit 127; }; '
+            f'"$PM2" restart {PM2_APP}'
+        )
         try:
             res = subprocess.run(
-                ["bash", "-lc", f"pm2 restart {PM2_APP}"],
+                ["bash", "-lc", cmd],
                 capture_output=True, text=True, timeout=60,
                 stdin=subprocess.DEVNULL,
             )

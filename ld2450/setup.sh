@@ -43,6 +43,21 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
+# sudoers so the console may start/stop ld2450 (+ face_reco) — idempotent
+SUDOERS_SRC="$DIR/../mirror-console/sudoers.d/mirror-console"
+if [ -f "$SUDOERS_SRC" ]; then
+  echo "▸ Installing sudoers (console controls ld2450/face_reco)…"
+  sudo cp "$SUDOERS_SRC" /etc/sudoers.d/mirror-console
+  sudo visudo -cf /etc/sudoers.d/mirror-console || true
+fi
+
+# Enable UART (hardware serial ON, serial login console OFF) — best-effort.
+if command -v raspi-config >/dev/null 2>&1; then
+  echo "▸ Enabling UART (raspi-config nonint)…"
+  sudo raspi-config nonint do_serial_hw 0 2>/dev/null || true     # hw serial = ON
+  sudo raspi-config nonint do_serial_cons 1 2>/dev/null || true   # login console = OFF
+fi
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now ld2450
 
@@ -50,9 +65,9 @@ sleep 1
 systemctl status --no-pager --lines=0 ld2450 || true
 
 echo
-echo "✓ Radar běží + autostart po rebootu."
-echo "  Předpoklad: UART musí být povolený — raspi-config → Interface → Serial Port:"
-echo "    'login shell over serial' = NO,  'serial port hardware' = YES"
-echo "    (daemon čte /dev/ttyAMA0 @ 256000 baud)."
-echo "  Zapínat/vypínat lze z konzole (tab Radar); ovládání vyžaduje sudoers:"
-echo "    sudo cp ../mirror-console/sudoers.d/mirror-console /etc/sudoers.d/"
+echo "✓ Radar nainstalován + autostart po rebootu."
+echo "  UART nastaven automaticky (raspi-config). Pokud daemon nečte /dev/ttyAMA0:"
+echo "    • je potřeba REBOOT, aby se UART projevil;"
+echo "    • na Pi 3/4/Zero 2 je navíc nutné uvolnit PL011 od Bluetooth —"
+echo "      přidej do /boot/firmware/config.txt:  dtoverlay=disable-bt  (a reboot)."
+echo "  Zapínat/vypínat radar lze z konzole (tab Radar)."
