@@ -53,7 +53,8 @@ mode is persisted to `backend/mode.state` and restored on boot (default
 
     `FaceCaptureSession` is the shared capture component used by both the wizard
     and the detail. Long operations (training, removal) show a full-screen
-    loading overlay.
+    loading overlay. The profile detail also has a **Rozložení** tab — see
+    *Layout editor* below.
   - **Radar** — live LD2450 view: an SVG map (radar at top center, range rings,
     the detection **target zone** ±X/Y where `presence: present` is sent) with
     live target dots, a presence indicator, and an **Aktivní/Vypnuto** switch
@@ -70,6 +71,46 @@ Enrollment endpoints (on the supervisor, proxied by Node): `POST /capture`
 RGB→BGR convention as `camera/capture_photos.py` so they stay consistent with
 the existing dataset and encoder.
 - `systemd/` — autostart units. `sudoers.d/` — lets `admin` toggle `face_reco`.
+
+## Layout editor (Profily → Rozložení)
+
+Per-profile module layout editor. For each profile (= MMM-Profile user key) you
+create **time windows** (e.g. 09:00–12:00) and place modules on an interactive
+**mirror grid** (a ＋ at each of the 11 MagicMirror positions → modal to pick a
+module and fill its required fields). The console owns a source-of-truth
+`backend/layout_store.json` and **generates** two files in the live
+MagicMirror (`MAGICMIRROR_DIR`, default `/home/admin/MagicMirror`):
+
+- `modules/MMM-Profile/pages.js` — the `(user, window)` layout schedule.
+- `config/console-modules.js` — the module instances it created (one per
+  placement, so e.g. a calendar for user1 ≠ user2).
+
+It **never** edits the hand-maintained `config.js`. Endpoints (proxied by Node):
+`GET /modules`, `GET /layout`, `PUT /layout` (validates + regenerates),
+`POST /layout/apply` (`pm2 restart MagicMirror`). Changes apply only on the
+**Aplikovat na zrcadlo** button.
+
+### One-time config.js edit (required, manual)
+
+For the generated module instances to load, splice `console-modules.js` into the
+modules array of `~/MagicMirror/config/config.js` **once**:
+
+```js
+const consoleModules = (() => {
+  try { return require("./console-modules.js"); } catch (e) { return []; }
+})();
+
+let config = {
+  // …
+  modules: [
+    // …your hand-maintained modules…
+    ...consoleModules,
+  ],
+};
+```
+
+After that the console manages everything else. `pm2 restart MagicMirror` runs as
+`admin` via `bash -lc` (loads the nvm PATH); no sudo needed.
 
 ## Install & run (on the Pi)
 

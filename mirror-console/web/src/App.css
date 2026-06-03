@@ -816,6 +816,164 @@
   flex: 1;
 }
 
+/* ---- layout editor ---- */
+.layout-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.win-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.win-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.win-open {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.new-win {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.new-win-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+.new-win-row .field {
+  flex: 1;
+  min-width: 90px;
+}
+.new-win-row input[type="time"],
+.new-win-row input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 9px 10px;
+}
+
+/* mirror grid */
+.mirror {
+  background: #07090c;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  aspect-ratio: 3 / 4;
+}
+.mirror-row {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+.cell {
+  flex: 1;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 46px;
+  justify-content: center;
+  align-items: center;
+}
+.cell-pos {
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.cell-mods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 8px;
+}
+.cell-mod {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px 4px 2px 9px;
+  font-size: 0.72rem;
+}
+.cell-mod-x {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 2px;
+}
+.cell-mod-x:hover {
+  color: var(--bad);
+}
+.cell-add {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--accent);
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.cell-add:hover {
+  border-color: var(--accent);
+}
+
+/* module pick modal */
+.modpick {
+  gap: 10px;
+}
+.modpick-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.modpick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.modpick-chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 /* ---- footer ---- */
 .footer {
   text-align: center;

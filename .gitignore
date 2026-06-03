@@ -9,6 +9,15 @@ venv/
 # Per-Pi runtime radar calibration (not source)
 ld2450/radar_config.json
 
+# Per-Pi console-generated layout state / modules (not source)
+mirror-console/backend/layout_store.json
+MagicMirror/config/console-modules.js
+
+# MagicMirror core (fork) — generated at install/runtime, not source
+MagicMirror/vendor/
+MagicMirror/fonts/
+MagicMirror/config/basepath.js
+
 # MagicMirror module artefacts
 node_modules/
 MagicMirror/modules/MMM-Brno-Transit/cache/

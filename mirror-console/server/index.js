@@ -63,7 +63,9 @@ app.use(
       p.startsWith("/dataset") ||
       p.startsWith("/photo") ||
       p.startsWith("/profiles") ||
-      p === "/radar",
+      p === "/radar" ||
+      p === "/modules" ||
+      p.startsWith("/layout"),
   })
 );
 

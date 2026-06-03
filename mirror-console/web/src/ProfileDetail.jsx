@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import LoadingOverlay from "./LoadingOverlay.jsx";
 import FaceCaptureSession from "./FaceCaptureSession.jsx";
+import LayoutTab from "./LayoutTab.jsx";
 
 // Detail of one profile. Card-style tabs (more to come); for now just "Fotky":
 // all training thumbnails (enlarge + delete), add more photos (modal → capture
@@ -116,7 +117,12 @@ export default function ProfileDetail({ name, onBack }) {
         <button className={"tab" + (tab === "photos" ? " active" : "")} onClick={() => setTab("photos")}>
           Fotky
         </button>
+        <button className={"tab" + (tab === "layout" ? " active" : "")} onClick={() => setTab("layout")}>
+          Rozložení
+        </button>
       </div>
+
+      {tab === "layout" && <LayoutTab profile={name} />}
 
       {tab === "photos" && !capturing && (
         <>
