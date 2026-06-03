@@ -822,52 +822,85 @@
   flex-direction: column;
   gap: 14px;
 }
-.win-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.win-row {
+/* calendar day column */
+.cal-bar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  flex-wrap: wrap;
 }
-.win-open {
-  flex: 1;
+.save-dot {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.save-dot.ok {
+  color: var(--ok);
+}
+.save-dot.bad {
+  color: var(--bad);
+}
+.cal-scroll {
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0 10px;
+}
+.cal {
+  position: relative;
+}
+.cal-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--border);
+}
+.cal-label {
+  position: absolute;
+  top: -7px;
+  left: 0;
+  width: 44px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.cal-events {
+  position: absolute;
+  left: 52px;
+  right: 6px;
+  top: 0;
+  bottom: 0;
+}
+.cal-event {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid var(--accent);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
   text-align: left;
-  background: transparent;
-  border: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
 }
-.new-win {
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.cal-event:hover {
+  filter: brightness(1.15);
 }
-.new-win-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-end;
+.cal-event-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1.1;
 }
-.new-win-row .field {
-  flex: 1;
-  min-width: 90px;
-}
-.new-win-row input[type="time"],
-.new-win-row input {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 9px 10px;
+.cal-event-time {
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 
 /* mirror grid */
