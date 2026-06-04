@@ -55,6 +55,14 @@ Module.register("MMM-Profile", {
     },
 
     socketNotificationReceived: function (notification, payload) {
+        // Live preview from the layout editor — temporary projection only,
+        // does not touch state/user. A later MMP_STATE reverts to the real one.
+        if (notification === "MMP_PREVIEW" && payload) {
+            if (this.domReady) {
+                this._project(Array.isArray(payload.layout) ? payload.layout : []);
+            }
+            return;
+        }
         if (notification !== "MMP_STATE" || !payload) return;
         this.state = payload.state || "asleep";
         this.currentUser = payload.currentUser || null;

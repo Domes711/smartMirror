@@ -5,6 +5,8 @@ import WindowModal from "./WindowModal.jsx";
 import LoadingOverlay from "./LoadingOverlay.jsx";
 
 const HOUR_PX = 44;
+const PREVIEW_TOPIC = "smartmirror/profile/preview";
+const RELOAD_TOPIC = "smartmirror/profile/reload";
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 const cronFromTime = (t) => {
@@ -17,8 +19,7 @@ const timeFromCron = (c) => {
 };
 const minsFromCron = (c) => {
   const p = (c || "").split(" ");
-  const h = parseInt(p[1], 10);
-  const m = parseInt(p[0], 10);
+  const h = parseInt(p[1], 10), m = parseInt(p[0], 10);
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
 };
 
@@ -26,10 +27,11 @@ export default function LayoutTab({ profile }) {
   const [store, setStore] = useState(null);
   const [catalog, setCatalog] = useState([]);
   const [registered, setRegistered] = useState([]);
-  const [selected, setSelected] = useState(null); // window name → editor
-  const [addPos, setAddPos] = useState(null); // module pick modal
+  const [selected, setSelected] = useState(null);
+  const [moving, setMoving] = useState(null); // instance id being moved
+  const [addPos, setAddPos] = useState(null);
   const [showWindowModal, setShowWindowModal] = useState(false);
-  const [status, setStatus] = useState(null); // "saving" | "saved" | error string
+  const [status, setStatus] = useState(null);
   const [applying, setApplying] = useState(false);
 
   useEffect(() => {
@@ -50,14 +52,30 @@ export default function LayoutTab({ profile }) {
     [store, profile]
   );
 
-  // auto-save: every mutation persists immediately so state survives refresh/back
+  // ── MQTT helpers (live preview / reload via the Node bridge) ──
+  const publishMqtt = useCallback((topic, payload) =>
+    fetch("/api/mqtt/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, payload }),
+    }).catch(() => {}), []);
+  const previewLayout = useCallback((layout) => publishMqtt(PREVIEW_TOPIC, { layout }), [publishMqtt]);
+  const reloadMirror = useCallback(() => publishMqtt(RELOAD_TOPIC, ""), [publishMqtt]);
+
+  // entering a window editor → live preview that window; leaving the tab → revert
+  useEffect(() => {
+    if (selected && store?.windows?.[profile]?.[selected]) {
+      previewLayout(store.windows[profile][selected].layout || []);
+    }
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { reloadMirror(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const persist = useCallback(async (next) => {
     setStore(next);
     setStatus("saving");
     try {
       const r = await fetch("/layout", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
       });
       const b = await r.json().catch(() => ({}));
@@ -68,26 +86,42 @@ export default function LayoutTab({ profile }) {
     }
   }, []);
 
-  const idLabel = useCallback(
-    (id) => {
-      const inst = (store?.instances || []).find((i) => i.id === id);
-      if (!inst) return id;
-      return (catalog.find((c) => c.type === inst.type) || {}).label || inst.type;
-    },
-    [store, catalog]
-  );
+  const apply = useCallback(async (msg) => {
+    setApplying(true);
+    setStatus(null);
+    try {
+      const r = await fetch("/layout/apply", { method: "POST" });
+      const b = await r.json().catch(() => ({}));
+      if (b.reload_needed) reloadMirror();
+      setStatus(b.ok ? (msg || (b.restarted ? "Aplikováno (restart zrcadla)." : "Aplikováno (živě).")) : `Selhalo: ${b.output || ""}`);
+    } catch (e) {
+      setStatus(`Chyba: ${e.message}`);
+    } finally {
+      setApplying(false);
+    }
+  }, [reloadMirror]);
 
-  const nextId = useCallback(
-    (type) => {
-      const taken = new Set(registered);
-      (store?.instances || []).forEach((i) => taken.add(i.id));
-      const base = `${slug(type)}-${slug(profile)}`;
-      let n = 1;
-      while (taken.has(`${base}-${n}`)) n += 1;
-      return `${base}-${n}`;
-    },
-    [registered, store, profile]
-  );
+  const idLabel = useCallback((id) => {
+    const inst = (store?.instances || []).find((i) => i.id === id);
+    if (!inst) return id;
+    return (catalog.find((c) => c.type === inst.type) || {}).label || inst.type;
+  }, [store, catalog]);
+
+  const nextId = useCallback((type) => {
+    const taken = new Set(registered);
+    (store?.instances || []).forEach((i) => taken.add(i.id));
+    const base = `${slug(type)}-${slug(profile)}`;
+    let n = 1;
+    while (taken.has(`${base}-${n}`)) n += 1;
+    return `${base}-${n}`;
+  }, [registered, store, profile]);
+
+  const pruneInstances = (st) => {
+    const used = new Set();
+    Object.values(st.windows || {}).forEach((ws) =>
+      Object.values(ws).forEach((w) => (w.layout || []).forEach((e) => used.add(e.id))));
+    st.instances = (st.instances || []).filter((i) => used.has(i.id));
+  };
 
   const createWindow = ({ name, from, to }) => {
     const key = slug(name) || `okno-${Object.keys(windows).length + 1}`;
@@ -95,63 +129,56 @@ export default function LayoutTab({ profile }) {
     st.windows = st.windows || {};
     st.windows[profile] = st.windows[profile] || {};
     st.windows[profile][key] = {
-      from: cronFromTime(from),
-      to: cronFromTime(to),
-      label: `${from}–${to}`,
-      layout: [],
+      from: cronFromTime(from), to: cronFromTime(to),
+      label: `${from}–${to}`, layout: [],
     };
     persist(st);
     setShowWindowModal(false);
-    setSelected(key); // straight into the module editor
+    setSelected(key);
   };
 
   const deleteWindow = (name) => {
     if (!window.confirm(`Smazat okno „${name}"?`)) return;
     const st = clone(store);
     delete st.windows[profile][name];
-    // prune now-unreferenced console instances
-    const used = new Set();
-    Object.values(st.windows || {}).forEach((ws) =>
-      Object.values(ws).forEach((w) => (w.layout || []).forEach((e) => used.add(e.id)))
-    );
-    st.instances = (st.instances || []).filter((i) => used.has(i.id));
+    pruneInstances(st);
     persist(st);
-    if (selected === name) setSelected(null);
+    if (selected === name) { setSelected(null); reloadMirror(); }
   };
 
+  // add a NEW module instance → needs a one-time pm2 restart to register it
   const addPlacement = ({ type, values }) => {
     const st = clone(store);
     const id = nextId(type);
     st.instances = st.instances || [];
     st.instances.push({ id, type, values });
     st.windows[profile][selected].layout.push({ id, position: addPos });
-    persist(st);
     setAddPos(null);
+    (async () => { await persist(st); await apply("Modul přidán a načten."); })();
+  };
+
+  // move an existing placement → keep the same id → mirror repositions LIVE
+  const movePlacement = (id, position) => {
+    const st = clone(store);
+    const w = st.windows[profile][selected];
+    w.layout = w.layout.map((e) => (e.id === id ? { ...e, position } : e));
+    persist(st);
+    previewLayout(w.layout);
   };
 
   const removePlacement = (id, pos) => {
     const st = clone(store);
     const w = st.windows[profile][selected];
     w.layout = w.layout.filter((e) => !(e.id === id && e.position === pos));
-    const used = new Set();
-    Object.values(st.windows || {}).forEach((ws) =>
-      Object.values(ws).forEach((win) => (win.layout || []).forEach((e) => used.add(e.id)))
-    );
-    st.instances = (st.instances || []).filter((i) => used.has(i.id));
+    pruneInstances(st);
     persist(st);
+    previewLayout(w.layout);
+    if (moving === id) setMoving(null);
   };
 
-  const apply = async () => {
-    setApplying(true);
-    try {
-      const r = await fetch("/layout/apply", { method: "POST" });
-      const b = await r.json().catch(() => ({}));
-      setStatus(b.ok ? "Aplikováno — zrcadlo se restartuje." : `Restart selhal: ${b.output || ""}`);
-    } catch (e) {
-      setStatus(`Chyba: ${e.message}`);
-    } finally {
-      setApplying(false);
-    }
+  const onCellClick = (pos) => {
+    if (moving) { movePlacement(moving, pos); setMoving(null); }
+    else setAddPos(pos);
   };
 
   if (!store) return <div className="monitor-empty">Načítám layout…</div>;
@@ -159,28 +186,29 @@ export default function LayoutTab({ profile }) {
   const statusEl =
     status === "saving" ? <span className="save-dot">ukládám…</span>
     : status === "saved" ? <span className="save-dot ok">uloženo ✓</span>
-    : status ? <span className="save-dot bad">{status}</span>
-    : null;
+    : status ? <span className="save-dot bad">{status}</span> : null;
 
-  // ── editor of a single window ──
+  // ── window editor ──
   if (selected) {
     const w = windows[selected];
     if (!w) { setSelected(null); return null; }
     return (
       <div className="layout-tab">
-        <LoadingOverlay show={applying} message="Aplikuji a restartuji zrcadlo…" />
+        <LoadingOverlay show={applying} message="Aplikuji (restart zrcadla)…" />
         <div className="wizard-head">
-          <button className="mqtt-btn compact" onClick={() => setSelected(null)}>← Kalendář</button>
+          <button className="mqtt-btn compact" onClick={() => { setSelected(null); setMoving(null); reloadMirror(); }}>← Kalendář</button>
           <strong>{selected}</strong>
           <span className="learn-progress">{w.label || `${timeFromCron(w.from)}–${timeFromCron(w.to)}`}</span>
         </div>
-        <MirrorGrid layout={w.layout || []} idLabel={idLabel}
-          onAdd={(pos) => setAddPos(pos)} onRemove={removePlacement} />
+        <MirrorGrid layout={w.layout || []} idLabel={idLabel} movingId={moving}
+          onCellClick={onCellClick} onSelect={(id) => setMoving(moving === id ? null : id)}
+          onRemove={removePlacement} />
         <div className="panel-actions detail-foot">
           {statusEl}
           <button className="mqtt-btn k-bad compact" onClick={() => deleteWindow(selected)}>Smazat okno</button>
-          <button className="mqtt-btn" disabled={applying} onClick={apply}>Aplikovat na zrcadlo</button>
+          <button className="mqtt-btn" disabled={applying} onClick={() => apply()}>Aplikovat na zrcadlo</button>
         </div>
+        <p className="profiles-note">Posun: klikni na modul a pak na ＋ v cílové pozici — projeví se živě. Nový modul vyžaduje krátký restart.</p>
         {addPos && (
           <ModulePickModal catalog={catalog} position={addPos}
             onCancel={() => setAddPos(null)} onConfirm={addPlacement} />
@@ -193,11 +221,11 @@ export default function LayoutTab({ profile }) {
   const entries = Object.entries(windows);
   return (
     <div className="layout-tab">
-      <LoadingOverlay show={applying} message="Aplikuji a restartuji zrcadlo…" />
+      <LoadingOverlay show={applying} message="Aplikuji (restart zrcadla)…" />
       <div className="cal-bar">
         <button className="mqtt-btn k-ok" onClick={() => setShowWindowModal(true)}>＋ Přidat časové okno</button>
         {statusEl}
-        <button className="mqtt-btn" disabled={applying} onClick={apply}>Aplikovat na zrcadlo</button>
+        <button className="mqtt-btn" disabled={applying} onClick={() => apply()}>Aplikovat na zrcadlo</button>
       </div>
 
       <div className="cal-scroll">
@@ -208,12 +236,11 @@ export default function LayoutTab({ profile }) {
             </div>
           ))}
           <div className="cal-events">
-            {entries.length === 0 ? null : entries.map(([name, w]) => {
+            {entries.map(([name, w]) => {
               const top = (minsFromCron(w.from) / 60) * HOUR_PX;
               const height = Math.max(26, ((minsFromCron(w.to) - minsFromCron(w.from)) / 60) * HOUR_PX);
               return (
-                <button key={name} className="cal-event" style={{ top, height }}
-                  onClick={() => setSelected(name)}>
+                <button key={name} className="cal-event" style={{ top, height }} onClick={() => setSelected(name)}>
                   <span className="cal-event-name">{name}</span>
                   <span className="cal-event-time">
                     {timeFromCron(w.from)}–{timeFromCron(w.to)} · {(w.layout || []).length} mod.

@@ -30,6 +30,9 @@ const DEFAULT_MQTT_BROKER = "mqtt://127.0.0.1:1883";
 const TOPIC_PRESENCE = "smartmirror/radar/presence";
 const TOPIC_RECOGNITION = "smartmirror/camera/recognition";
 const TOPIC_CONTROL = "smartmirror/control/reset";
+// Layout editor (mirror-console): live preview + reload pages.js without restart
+const TOPIC_PREVIEW = "smartmirror/profile/preview";   // {layout:[{id,position}]}
+const TOPIC_RELOAD = "smartmirror/profile/reload";     // re-require pages.js + re-project
 
 module.exports = NodeHelper.create({
 
@@ -88,7 +91,7 @@ module.exports = NodeHelper.create({
 
         this.mqttClient.on("connect", () => {
             Log.info("[MMM-Profile] MQTT connected to " + brokerUrl);
-            this.mqttClient.subscribe([TOPIC_PRESENCE, TOPIC_RECOGNITION, TOPIC_CONTROL], (err) => {
+            this.mqttClient.subscribe([TOPIC_PRESENCE, TOPIC_RECOGNITION, TOPIC_CONTROL, TOPIC_PREVIEW, TOPIC_RELOAD], (err) => {
                 if (err) {
                     Log.error("[MMM-Profile] MQTT subscribe failed:", err);
                 } else {
@@ -129,9 +132,32 @@ module.exports = NodeHelper.create({
                 }
             } else if (topic === TOPIC_CONTROL) {
                 this._onReset();
+            } else if (topic === TOPIC_PREVIEW) {
+                // Live preview from the layout editor: temporarily project the
+                // given layout (already-loaded modules only), without touching
+                // state/user. A later reload / presence event reverts it.
+                const data = JSON.parse(payload);
+                const layout = Array.isArray(data) ? data : (data.layout || []);
+                this.sendSocketNotification("MMP_PREVIEW", { layout: layout });
+            } else if (topic === TOPIC_RELOAD) {
+                // Re-read pages.js from disk (cache-bust) and re-project the real
+                // resolved layout — applies saved layout without a pm2 restart.
+                this._reloadPages();
+                this._push();
             }
         } catch (err) {
             Log.error("[MMM-Profile] failed to handle MQTT message:", err);
+        }
+    },
+
+    _reloadPages: function () {
+        const pagesPath = path.join(__dirname, "pages.js");
+        try {
+            delete require.cache[require.resolve(pagesPath)];
+            this.config.pages = require(pagesPath);
+            Log.info("[MMM-Profile] reloaded pages.js");
+        } catch (err) {
+            Log.error("[MMM-Profile] failed to reload pages.js:", err);
         }
     },
 

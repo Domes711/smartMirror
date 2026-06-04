@@ -879,16 +879,41 @@ class Supervisor:
 
     @staticmethod
     def save_layout(store: dict) -> dict:
+        """Persist the draft only — does NOT touch pages.js/config.js (that is
+        done by apply). Keeps the editor state across refresh without changing
+        what the mirror shows."""
         err = validate_store(store)
         if err:
             raise ValueError(err)
         save_store(store)
-        generate_files(store)
         return {"ok": True}
 
     @staticmethod
     def apply_layout() -> dict:
-        ensure_config_spread()  # self-heal: make sure config.js loads console-modules.js
+        """Generate pages.js + console-modules.js from the draft, ensure the
+        config spread, then decide: a changed set of module instances needs a
+        pm2 restart (to (un)register modules); position/window-only changes just
+        need the mirror to reload pages.js (frontend publishes the reload)."""
+        store = load_store()
+        prev_ids = set()
+        try:
+            with open(CONSOLE_MODULES_PATH) as f:
+                prev_ids = set(re.findall(r'"id"\s*:\s*"([^"]+)"', f.read()))
+        except Exception:  # noqa: BLE001
+            pass
+
+        generate_files(store)
+        ensure_config_spread()
+
+        new_ids = {i["id"] for i in store.get("instances", []) if i.get("id")}
+        if new_ids != prev_ids:
+            res = Supervisor._pm2_restart()
+            return {"ok": res["ok"], "restarted": True,
+                    "reload_needed": False, "output": res.get("output", "")}
+        return {"ok": True, "restarted": False, "reload_needed": True}
+
+    @staticmethod
+    def _pm2_restart() -> dict:
         # Under systemd, `bash -lc` does NOT load nvm (it lives in ~/.bashrc,
         # skipped for non-interactive shells), so `pm2` isn't on PATH. Source
         # nvm explicitly and fall back to globbing the nvm node bin for pm2.
