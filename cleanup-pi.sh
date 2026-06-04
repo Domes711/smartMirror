@@ -25,6 +25,11 @@ for f in \
   "$HOME/MagicMirror/config/console-modules.js"; do
   [ -f "$f" ] && cp -a "$f" "$BK/" 2>/dev/null || true
 done
+# Face training data + model are NOT in git (only .gitkeep) — back them up,
+# otherwise a fresh clone loses all enrolled faces.
+REPO="$(cd "$(dirname "$0")" && pwd)"
+[ -d "$REPO/camera/dataset" ] && cp -a "$REPO/camera/dataset" "$BK/dataset" 2>/dev/null || true
+[ -f "$REPO/camera/encoded_faces.pickle" ] && cp -a "$REPO/camera/encoded_faces.pickle" "$BK/" 2>/dev/null || true
 crontab -l > "$BK/crontab.bak" 2>/dev/null || true
 
 # --- systemd units ------------------------------------------------------
@@ -84,7 +89,10 @@ echo "    cd ~ && rm -rf smartMirror"
 echo "    git clone <repo-url> smartMirror"
 echo "    cd smartMirror && ./setup.sh"
 echo
-echo "⚠ Po setupu zkopíruj zpět svůj REÁLNÝ config (calendar ID, hesla…) z:"
-echo "    $BK/MagicMirror-config/config.js"
-echo "  do ~/smartMirror/MagicMirror/config/config.js (repo má jen minimal test)."
-echo "  Kalibrace radaru / layout store jsou taky v záloze (jinak se přenastaví)."
+echo "⚠ Po čistém clonu obnov ze zálohy ($BK):"
+echo "  • REÁLNÝ config (calendar ID, hesla…):"
+echo "      cp $BK/MagicMirror-config/config.js ~/smartMirror/MagicMirror/config/config.js"
+echo "  • NAUČENÉ OBLIČEJE (fotky + model — nejsou v gitu!):"
+echo "      cp -a $BK/dataset/. ~/smartMirror/camera/dataset/"
+echo "      cp -a $BK/encoded_faces.pickle ~/smartMirror/camera/ 2>/dev/null"
+echo "  • Kalibrace radaru / layout store jsou taky v záloze (jinak se přenastaví)."

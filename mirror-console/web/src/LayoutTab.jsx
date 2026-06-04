@@ -86,20 +86,30 @@ export default function LayoutTab({ profile }) {
     }
   }, []);
 
-  const apply = useCallback(async (msg) => {
+  const apply = useCallback(async (msg, layoutAfter) => {
     setApplying(true);
     setStatus(null);
     try {
       const r = await fetch("/layout/apply", { method: "POST" });
       const b = await r.json().catch(() => ({}));
       if (b.reload_needed) reloadMirror();
+      // Re-send the preview so freshly-loaded modules get projected. After a
+      // restart the mirror needs ~15s to come back + reconnect MQTT, so retry.
+      if (layoutAfter) {
+        if (b.restarted) {
+          setTimeout(() => previewLayout(layoutAfter), 14000);
+          setTimeout(() => previewLayout(layoutAfter), 22000);
+        } else {
+          previewLayout(layoutAfter);
+        }
+      }
       setStatus(b.ok ? (msg || (b.restarted ? "Aplikováno (restart zrcadla)." : "Aplikováno (živě).")) : `Selhalo: ${b.output || ""}`);
     } catch (e) {
       setStatus(`Chyba: ${e.message}`);
     } finally {
       setApplying(false);
     }
-  }, [reloadMirror]);
+  }, [reloadMirror, previewLayout]);
 
   const idLabel = useCallback((id) => {
     const inst = (store?.instances || []).find((i) => i.id === id);
@@ -153,8 +163,9 @@ export default function LayoutTab({ profile }) {
     st.instances = st.instances || [];
     st.instances.push({ id, type, values });
     st.windows[profile][selected].layout.push({ id, position: addPos });
+    const layoutAfter = st.windows[profile][selected].layout;
     setAddPos(null);
-    (async () => { await persist(st); await apply("Modul přidán a načten."); })();
+    (async () => { await persist(st); await apply("Modul přidán a načten.", layoutAfter); })();
   };
 
   // move an existing placement → keep the same id → mirror repositions LIVE
