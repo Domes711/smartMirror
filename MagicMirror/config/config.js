@@ -5,10 +5,10 @@
  */
 
 let config = {
-    address: "localhost",
+    address: "0.0.0.0",          // bind all interfaces (reachable on the LAN)
     port: 8080,
     basePath: "/",
-    ipWhitelist: ["127.0.0.1", "::ffff:127.0.0.1", "::1"],
+    ipWhitelist: [],             // [] = allow any client (private LAN); restrict if needed
     useHttps: false,
     httpsPrivateKey: "",
     httpsCertificate: "",
