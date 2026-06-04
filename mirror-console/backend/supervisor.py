@@ -1110,6 +1110,14 @@ def main() -> int:
     # restore persisted mode on boot
     sup.apply_mode(sup.load_mode())
 
+    # Bootstrap layout files from the draft store (pages.js + console-modules.js
+    # are gitignored / per-Pi, so regenerate them on startup — survives a fresh
+    # clone and any git checkout/pull that would otherwise wipe them).
+    try:
+        generate_files(load_store())
+    except Exception as exc:  # noqa: BLE001
+        log.warning("layout bootstrap failed: %s", exc)
+
     httpd = ThreadingHTTPServer((args.host, args.port), make_handler(sup))
     log.info("supervisor listening on http://%s:%d (mode=%s)",
              args.host, args.port, sup.mode)
