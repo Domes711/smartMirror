@@ -1,0 +1,13 @@
+{
+  "name": "mmm-lunch-menu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MagicMirror module: today's lunch menus from menicka.cz (list or nearest-by-location).",
+  "main": "MMM-Lunch-Menu.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0"
+  }
+}

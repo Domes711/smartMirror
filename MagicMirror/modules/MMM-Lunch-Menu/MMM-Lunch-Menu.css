@@ -1,0 +1,49 @@
+.lunch {
+  max-width: 22em;
+}
+
+.lunch-card {
+  margin-bottom: 0.7em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.lunch-card:last-child {
+  border-bottom: none;
+}
+
+.lunch-name {
+  font-weight: 600;
+  font-size: 0.95em;
+  margin-bottom: 0.2em;
+}
+
+.lunch-note {
+  font-style: italic;
+}
+
+.lunch-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6em;
+  font-size: 0.8em;
+  line-height: 1.35;
+  color: var(--color-text, #d8d8d8);
+}
+.lunch-item.soup .lunch-dish {
+  color: var(--color-text-dimmed, #999);
+}
+
+.lunch-dish {
+  flex: 1;
+}
+
+.lunch-allergens {
+  color: var(--color-text-dimmed, #888);
+  font-size: 0.7em;
+}
+
+.lunch-price {
+  white-space: nowrap;
+  color: var(--color-text-dimmed, #aaa);
+  font-variant-numeric: tabular-nums;
+}

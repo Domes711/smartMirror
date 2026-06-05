@@ -123,6 +123,12 @@ Each in-repo MagicMirror module follows the same shape:
 - `<Name>.css` — styles
 - `node_helper.js` — backend (network calls, file I/O, subprocesses)
 - `package.json` — `private: true`, only the deps the module actually needs
+- `translations/en.json` + `translations/cs.json` — **every module ships both**
+  (English is the default). All user-facing strings go through `this.translate("KEY")`
+  with `getTranslations() { return { en: …, cs: … } }`; the displayed language is
+  the **global `config.language`** in config.js. node_helper sends translation
+  **keys** (not English text) for any user-facing errors; the frontend translates.
+  In `demo.html`, stub `translate` with the English strings.
 - `README.md` — what it shows, install + config, conventions
 - `demo.html` — standalone browser preview that stubs `window.Module`,
   `window.Log`, etc., so the module can render with no MagicMirror running.

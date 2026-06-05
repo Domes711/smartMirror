@@ -9,6 +9,9 @@ venv/
 # Per-Pi runtime radar calibration (not source)
 ld2450/radar_config.json
 
+# Per-Pi MMM-Lunch-Menu geocode cache (not source)
+MagicMirror/modules/MMM-Lunch-Menu/geocode-cache.json
+
 # Per-Pi console-generated layout state / modules (not source)
 mirror-console/backend/layout_store.json
 MagicMirror/config/console-modules.js

@@ -208,6 +208,14 @@ MODULE_CATALOG = [
         {"key": "apiKey", "label": "OWM API key", "required": True},
         {"key": "lat", "label": "Lat", "required": True},
         {"key": "lon", "label": "Lon", "required": True}]},
+    {"type": "MMM-Lunch-Menu", "module": "MMM-Lunch-Menu",
+     "label": "Polední menu", "fields": [
+        {"key": "restaurants", "label": "Restaurace (menicka id/URL, čárkou)",
+         "required": False, "placeholder": "5396, 1234-bistro-franz"},
+        {"key": "lat", "label": "Lat (jen pro okolí)", "required": False},
+        {"key": "lon", "label": "Lon (jen pro okolí)", "required": False},
+        {"key": "count", "label": "Počet restaurací", "required": False,
+         "placeholder": "4"}]},
 ]
 _CATALOG_BY_TYPE = {c["type"]: c for c in MODULE_CATALOG}
 
@@ -297,6 +305,22 @@ def module_config(mtype: str, values: dict) -> dict:
         return {"weatherProvider": "openmeteo", "type": "current",
                 "lat": v.get("lat"), "lon": v.get("lon"),
                 "apiKey": v.get("apiKey")}
+    if mtype == "MMM-Lunch-Menu":
+        cfg = {}
+        rests = (v.get("restaurants") or "").strip()
+        if rests:
+            cfg["restaurants"] = [x.strip() for x in rests.split(",") if x.strip()]
+        try:
+            if v.get("lat") and v.get("lon"):
+                cfg["location"] = {"lat": float(v["lat"]), "lon": float(v["lon"])}
+        except (TypeError, ValueError):
+            pass
+        try:
+            if v.get("count"):
+                cfg["count"] = int(v["count"])
+        except (TypeError, ValueError):
+            pass
+        return cfg
     if mtype in ("clock", "compliments"):
         return {}
     return dict(v)  # default: flat passthrough

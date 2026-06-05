@@ -1,0 +1,8 @@
+{
+  "LOADING": "Loading lunch menus…",
+  "NO_RESTAURANTS": "No restaurants configured.",
+  "NO_MENU": "No menu today",
+  "SOUP": "Soup",
+  "UNAVAILABLE": "Menu unavailable",
+  "NO_LOCATION": "No restaurants and no valid location set."
+}

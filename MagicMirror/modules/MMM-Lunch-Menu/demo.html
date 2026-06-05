@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MMM-Lunch-Menu — demo</title>
+  <link rel="stylesheet" href="MMM-Lunch-Menu.css" />
+  <style>
+    body { background:#000; color:#d8d8d8; font-family:"Roboto",sans-serif; padding:24px; }
+    .dimmed { color:#777; } .light { opacity:.8; } .small { font-size:.85em; }
+    :root { --color-text:#d8d8d8; --color-text-dimmed:#999; }
+    h1 { font-weight:300; font-size:1rem; color:#888; }
+  </style>
+</head>
+<body>
+  <h1>MMM-Lunch-Menu — demo</h1>
+  <div id="mount"></div>
+
+  <!-- Stub the MagicMirror runtime so the module renders standalone -->
+  <script>
+    window.Log = { info(){}, warn(){}, error(){}, log(){} };
+    let DEF = null;
+    window.Module = { register(_name, def) { DEF = def; } };
+  </script>
+  <script src="MMM-Lunch-Menu.js"></script>
+  <script>
+    const SAMPLE = {
+      restaurants: [
+        {
+          name: "Restaurace Sharingham", hasMenu: true,
+          soup: { name: "Frankfurtská s párky", allergens: [1], price: 35, isSoup: true },
+          dishes: [
+            { num: 1, name: "Krémové risotto s brokolicí a kuřecím masem", allergens: [7], price: 179 },
+            { num: 2, name: "Smažený holandský řízek s bramborovou kaší", allergens: [1, 3, 7], price: 189 },
+            { num: 3, name: "Pečené kuřecí stehno, dušená rýže", allergens: [], price: 169 },
+          ],
+        },
+        {
+          name: "Bistro Franz", hasMenu: true,
+          soup: { name: "Květáková", allergens: [7], price: 39, isSoup: true },
+          dishes: [
+            { num: 1, name: "Hovězí guláš, houskový knedlík", allergens: [1, 3], price: 165 },
+            { num: 2, name: "Vegetariánské lasagne", allergens: [1, 7], price: 155 },
+          ],
+        },
+        { name: "U Zavřené kuchyně", hasMenu: false },
+        { name: "Offline Diner", error: "UNAVAILABLE" },
+      ],
+      updatedAt: Date.now(),
+    };
+
+    // Stub the translator (no MagicMirror runtime in the demo) with English.
+    const EN = {
+      LOADING: "Loading lunch menus…", NO_RESTAURANTS: "No restaurants configured.",
+      NO_MENU: "No menu today", SOUP: "Soup", UNAVAILABLE: "Menu unavailable",
+      NO_LOCATION: "No restaurants and no valid location set.",
+    };
+    const m = Object.assign(Object.create(DEF), {
+      config: Object.assign({}, DEF.defaults),
+      file: () => "MMM-Lunch-Menu.css",
+      translate: (k) => EN[k] || k,
+    });
+    m.sendSocketNotification = () => {};
+    m.updateDom = () => {
+      const mount = document.getElementById("mount");
+      mount.innerHTML = "";
+      mount.appendChild(m.getDom());
+    };
+    m.start();
+    m.socketNotificationReceived("LUNCH_MENU", SAMPLE);
+  </script>
+</body>
+</html>
