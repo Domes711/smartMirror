@@ -58,6 +58,9 @@ Group=$GROUP_NAME
 WorkingDirectory=$DIR/server
 ExecStart=$NODE $DIR/server/index.js
 Environment=PORT=8000
+# AI module builder needs ANTHROPIC_API_KEY — put it (and any overrides such as
+# MODULE_AI_MODEL) in server/.env; the leading "-" makes the file optional.
+EnvironmentFile=-$DIR/server/.env
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -84,5 +87,6 @@ echo "  Test:    curl -s http://127.0.0.1:8000/healthz; echo"
 echo "  Logy:    journalctl -u mirror-console-web -f"
 echo
 echo "Pozn.: jednorázové předpoklady mimo tento skript —"
+echo "  • AI tvorba modulů:  echo 'ANTHROPIC_API_KEY=sk-ant-…' > server/.env  (volitelně MODULE_AI_MODEL=…)"
 echo "  • sudoers pro face_reco/ld2450:  sudo cp sudoers.d/mirror-console /etc/sudoers.d/"
 echo "  • MagicMirror cesta (volitelně):  Environment=MAGICMIRROR_DIR=… v backend unitě"

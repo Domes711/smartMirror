@@ -1058,3 +1058,117 @@
     text-align: right;
   }
 }
+
+/* ---- AI module builder ---- */
+.field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.field textarea:focus {
+  outline: none;
+  border-color: rgba(120, 180, 255, 0.7);
+}
+
+.mc-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.mc-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+.mc-split.no-preview {
+  grid-template-columns: 1fr;
+}
+
+.mc-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 460px;
+}
+.mc-log {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 460px;
+  overflow-y: auto;
+}
+.mc-msg {
+  padding: 8px 10px;
+  border-radius: 10px;
+  max-width: 92%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.mc-user {
+  align-self: flex-end;
+  background: rgba(120, 180, 255, 0.18);
+}
+.mc-assistant {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.07);
+}
+.mc-sys {
+  align-self: center;
+  color: #9aa4b2;
+  font-size: 12px;
+  background: none;
+  padding: 2px 6px;
+}
+.mc-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: flex-end;
+}
+.mc-input textarea {
+  flex: 1;
+  box-sizing: border-box;
+  resize: none;
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.mc-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 460px;
+}
+.mc-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mc-frame {
+  flex: 1;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #000;
+  min-height: 420px;
+}
+
+@media (max-width: 760px) {
+  .mc-split {
+    grid-template-columns: 1fr;
+  }
+}

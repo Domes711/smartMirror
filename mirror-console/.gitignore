@@ -1,5 +1,7 @@
 node_modules/
 web/dist/
+module-drafts/
+server/.env
 *.state
 __pycache__/
 *.pyc

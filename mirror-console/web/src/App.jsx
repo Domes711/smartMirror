@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./App.css";
 import CameraPanel from "./CameraPanel.jsx";
+import ModuleCreator from "./ModuleCreator.jsx";
 import MqttPanel from "./MqttPanel.jsx";
 import ProfilesPanel from "./ProfilesPanel.jsx";
 import RadarPanel from "./RadarPanel.jsx";
@@ -10,6 +11,7 @@ const TABS = [
   { id: "profiles", label: "Profily" },
   { id: "radar", label: "Radar" },
   { id: "mqtt", label: "MQTT" },
+  { id: "modules", label: "Moduly (AI)" },
 ];
 
 export default function App() {
@@ -37,6 +39,7 @@ export default function App() {
       {tab === "profiles" && <ProfilesPanel />}
       {tab === "radar" && <RadarPanel />}
       {tab === "mqtt" && <MqttPanel />}
+      {tab === "modules" && <ModuleCreator />}
 
       <footer className="footer">smart mirror · konzole</footer>
     </div>

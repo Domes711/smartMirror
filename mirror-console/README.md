@@ -64,6 +64,16 @@ mode is persisted to `backend/mode.state` and restored on boot (default
   - **MQTT** — buttons that publish every message the mirror uses (presence
     `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
     plus a live monitor of the bus.
+  - **Moduly (AI)** — build a brand-new MagicMirror module by chatting with
+    Claude. Krok 1: name + description → scaffolds a standard 6-file module
+    draft under `module-drafts/<name>/` (gitignored). Krok 2: a chat where
+    **Claude runs on the Pi** (via the Claude Agent SDK — the Claude Code engine
+    as a library) and edits the draft files in place; a side button reveals a
+    live `<iframe>` preview of the module's `demo.html` that reloads after each
+    change. **Nainstalovat na zrcadlo** copies the draft into
+    `MagicMirror/modules/`, runs `npm install` if it has deps, and
+    `pm2 restart MagicMirror`. The agent is constrained to file tools inside the
+    draft dir (no Bash). See *AI module builder* below for setup requirements.
 
 Enrollment endpoints (on the supervisor, proxied by Node): `POST /capture`
 (`{name}`), `GET /dataset?name=`, `DELETE /dataset?name=&file=`,
@@ -71,6 +81,27 @@ Enrollment endpoints (on the supervisor, proxied by Node): `POST /capture`
 RGB→BGR convention as `camera/capture_photos.py` so they stay consistent with
 the existing dataset and encoder.
 - `systemd/` — autostart units. `sudoers.d/` — lets `admin` toggle `face_reco`.
+
+## AI module builder (Moduly → AI)
+
+Endpoints (Express, in `server/module-ai.js`): `POST /api/modules/draft`
+(`{name, description}` → scaffold), `GET /api/modules/chat/stream?name=` (SSE of
+agent output), `POST /api/modules/chat` (`{name, message}` → one agent turn),
+`GET /module-draft/<name>/…` (static — the preview iframe), `POST
+/api/modules/finalize` (`{name, overwrite?}` → install + restart).
+
+Requirements on the Pi:
+
+- `npm install` in `server/` pulls in `@anthropic-ai/claude-agent-sdk`.
+- `ANTHROPIC_API_KEY` must be set in the backend's environment (add it to the
+  `mirror-console-web` systemd unit / shell), plus outbound HTTPS to
+  `api.anthropic.com` (mind the network policy).
+- Model defaults to `claude-opus-4-8`; override with `MODULE_AI_MODEL`.
+
+The chat keeps context across turns by resuming the agent's session id (held in
+memory — a backend restart starts a fresh conversation; the draft files on disk
+survive). Finalize does **not** register the module in the layout editor's
+catalog yet — after install, add it to a page via `config.js` manually.
 
 ## Layout editor (Profily → Rozložení)
 
