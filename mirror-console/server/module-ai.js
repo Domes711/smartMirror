@@ -285,9 +285,29 @@ const ADOPT_PROMPT = `Adopt this existing module for visual editing:
 3. Reply with ONE short paragraph (2–3 sentences) describing what this module does and what the preview now shows. Do not change the module's real behavior in this step — only add/repair demo.html.`;
 
 // ---- agent turn ----------------------------------------------------------
+// Guidance shown when the agent can't authenticate.
+const AUTH_HINT =
+  "Backend nemá platný ANTHROPIC_API_KEY. Přidej řádek `ANTHROPIC_API_KEY=sk-ant-…` " +
+  "do mirror-console/server/.env (bez uvozovek a bez `export`) a restartuj: " +
+  "`sudo systemctl restart mirror-console-web`. Ověř: `curl -s localhost:8000/api/modules/ai-status`.";
+
+const looksLikeAuthError = (s) =>
+  /invalid api key|please run \/login|authenticat|unauthor|x-api-key/i.test(String(s || ""));
+
+function hasApiKey() {
+  return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+}
+
 async function runAgent(scope, name, prompt, { adopt = false } = {}) {
   const s = sessionState(scope, name);
   const cwd = dirFor(scope, name);
+
+  if (!hasApiKey()) {
+    sseSend(scope, name, { type: "error", text: AUTH_HINT });
+    sseSend(scope, name, { type: "done", rev: s.rev, touched: false });
+    return;
+  }
+
   let query;
   try {
     ({ query } = await import("@anthropic-ai/claude-agent-sdk"));
@@ -329,11 +349,18 @@ async function runAgent(scope, name, prompt, { adopt = false } = {}) {
           }
         }
       } else if (msg.type === "result" && msg.subtype && msg.subtype !== "success") {
-        sseSend(scope, name, { type: "error", text: `Agent skončil: ${msg.subtype}` });
+        const detail = msg.result || msg.error || msg.subtype;
+        sseSend(scope, name, {
+          type: "error",
+          text: looksLikeAuthError(detail) ? AUTH_HINT : `Agent skončil: ${detail}`,
+        });
       }
     }
   } catch (e) {
-    sseSend(scope, name, { type: "error", text: `Chyba agenta: ${e.message}` });
+    sseSend(scope, name, {
+      type: "error",
+      text: looksLikeAuthError(e.message) ? AUTH_HINT : `Chyba agenta: ${e.message}`,
+    });
   }
 
   // Persist this turn so the conversation can be reopened later.
@@ -424,6 +451,12 @@ function mountModuleAI(app, express) {
   // Live preview (iframe loads <name>/demo.html from the right tree).
   app.use("/module-draft", express.static(DRAFTS_DIR));
   app.use("/module-installed", express.static(MODULES_DIR));
+
+  // Diagnostics: does the backend see an API key + which node will spawn the CLI.
+  // Never returns the key itself, only whether one is present.
+  app.get("/api/modules/ai-status", (_req, res) => {
+    res.json({ hasApiKey: hasApiKey(), keySource: process.env.ANTHROPIC_API_KEY ? "ANTHROPIC_API_KEY" : process.env.ANTHROPIC_AUTH_TOKEN ? "ANTHROPIC_AUTH_TOKEN" : null, model: MODEL, node: NODE_BIN });
+  });
 
   // scope from query/body; "draft" unless explicitly "installed".
   const scopeOf = (v) => (v === "installed" ? "installed" : "draft");
