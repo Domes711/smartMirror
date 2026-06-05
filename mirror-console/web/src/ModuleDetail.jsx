@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import LoadingOverlay from "./LoadingOverlay.jsx";
 import Markdown from "./Markdown.jsx";
+import ModuleEditor from "./ModuleEditor.jsx";
 
 // App-store style module detail: image gallery on top, an install / uninstall
 // button (with live % during install), and the README rendered below.
@@ -17,6 +18,7 @@ export default function ModuleDetail({ module: m, onBack }) {
   const [phase, setPhase] = useState("");
   const [error, setError] = useState(null);
   const [working, setWorking] = useState(null); // overlay message
+  const [editing, setEditing] = useState(false);
   const poll = useRef(null);
 
   // Load README + harvest extra gallery images from it.
@@ -106,6 +108,21 @@ export default function ModuleDetail({ module: m, onBack }) {
 
   const phaseLabel = PHASE_LABELS[phase] || "Instaluji…";
 
+  // Edit mode: the shared chat + live-preview editor over the installed module.
+  if (editing) {
+    return (
+      <ModuleEditor
+        scope="installed"
+        name={m.name}
+        title={m.name}
+        autoPrepare
+        greeting={`Načítám ${m.name} k úpravám…`}
+        onBack={() => setEditing(false)}
+        actions={<RestartButton />}
+      />
+    );
+  }
+
   return (
     <div className="panel">
       <LoadingOverlay show={!!working} message={working} />
@@ -124,9 +141,14 @@ export default function ModuleDetail({ module: m, onBack }) {
 
       <div className="store-detail-actions">
         {installed ? (
-          <button className="mqtt-btn k-bad store-install-btn" onClick={uninstall}>
-            Odinstalovat
-          </button>
+          <>
+            <button className="mqtt-btn k-ok store-install-btn" onClick={() => setEditing(true)}>
+              Upravit
+            </button>
+            <button className="mqtt-btn k-bad store-install-btn" onClick={uninstall}>
+              Odinstalovat
+            </button>
+          </>
         ) : (
           <button
             className="mqtt-btn k-ok store-install-btn"
@@ -167,6 +189,27 @@ export default function ModuleDetail({ module: m, onBack }) {
         <p className="store-note">{m.description || "Popis není k dispozici."}</p>
       )}
     </div>
+  );
+}
+
+// Apply in-place edits to the live mirror (pm2 restart MagicMirror).
+function RestartButton() {
+  const [state, setState] = useState(""); // "" | "busy" | "ok" | "err"
+  const restart = async () => {
+    setState("busy");
+    try {
+      const r = await fetch("/api/modules/edit/restart", { method: "POST" });
+      setState(r.ok ? "ok" : "err");
+    } catch {
+      setState("err");
+    }
+  };
+  const label =
+    state === "busy" ? "Restartuji…" : state === "ok" ? "Restartováno ✓" : state === "err" ? "Restart selhal" : "Restartovat zrcadlo";
+  return (
+    <button className="mqtt-btn compact" disabled={state === "busy"} onClick={restart} title="Aplikovat změny na běžící zrcadlo">
+      {label}
+    </button>
   );
 }
 
