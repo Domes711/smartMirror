@@ -11,6 +11,7 @@ export default function ModuleCreator() {
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
+  const [existingDrafts, setExistingDrafts] = useState([]);
 
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant"|"sys", text}
   const [draft, setDraft] = useState("");
@@ -27,6 +28,35 @@ export default function ModuleCreator() {
   useEffect(() => {
     logEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, draft]);
+
+  // List existing drafts so the user can return to one and keep editing.
+  useEffect(() => {
+    if (step !== 1) return;
+    fetch("/api/modules/list")
+      .then((r) => r.json())
+      .then((b) => setExistingDrafts(b.drafts || []))
+      .catch(() => setExistingDrafts([]));
+  }, [step]);
+
+  const openExisting = useCallback(async (n) => {
+    setError(null);
+    try {
+      const r = await fetch(`/api/modules/draft?name=${encodeURIComponent(n)}`);
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(b.error || "nelze otevřít");
+      setModuleName(b.name);
+      setDescription(b.description || "");
+      setRev(b.rev || 1);
+      const msgs = (b.messages || []).map((m) => ({ role: m.role, text: m.text, files: m.files }));
+      setMessages([
+        { role: "sys", text: `Pokračuješ v úpravách ${b.name}. Historie je zachovaná.` },
+        ...msgs,
+      ]);
+      setStep(2);
+    } catch (e) {
+      setError(e.message);
+    }
+  }, []);
 
   // Subscribe to the agent's SSE output once we have a module name.
   useEffect(() => {
@@ -184,6 +214,20 @@ export default function ModuleCreator() {
             Vytvořit a pokračovat →
           </button>
         </div>
+
+        {existingDrafts.length > 0 && (
+          <div className="card wizard-step">
+            <h3>Pokračovat v rozpracovaném</h3>
+            <div className="mc-draftlist">
+              {existingDrafts.map((d) => (
+                <button key={d.name} className="mqtt-btn mc-draft" onClick={() => openExisting(d.name)}>
+                  <strong>{d.name}</strong>
+                  {d.description && <span className="mc-draft-desc">{d.description}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

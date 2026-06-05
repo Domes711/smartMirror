@@ -211,6 +211,37 @@ MODULE_CATALOG = [
 ]
 _CATALOG_BY_TYPE = {c["type"]: c for c in MODULE_CATALOG}
 
+# Extra catalog entries for modules built by the AI module builder (per-Pi,
+# gitignored). The Node finalize step appends to this; we merge it in at request
+# time so freshly-installed modules become placeable without a restart.
+CUSTOM_MODULES_PATH = os.path.join(_HERE, "custom_modules.json")
+
+
+def custom_modules() -> list:
+    try:
+        with open(CUSTOM_MODULES_PATH) as f:
+            data = json.load(f)
+        return [c for c in data if isinstance(c, dict) and c.get("type")]
+    except FileNotFoundError:
+        return []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("custom_modules.json load failed: %s", exc)
+        return []
+
+
+def full_catalog() -> list:
+    """Built-in catalog plus AI-built modules; custom entries win on type clash."""
+    by_type = dict(_CATALOG_BY_TYPE)
+    for c in custom_modules():
+        c.setdefault("fields", [])
+        c.setdefault("module", c["type"])
+        by_type[c["type"]] = c
+    return list(by_type.values())
+
+
+def catalog_by_type() -> dict:
+    return {c["type"]: c for c in full_catalog()}
+
 DEFAULT_STORE = {
     "globalLayout": [],
     "windows": {
@@ -330,7 +361,7 @@ def validate_store(store: dict):
         if iid in seen_ids:
             return f"duplicate instance id: {iid}"
         seen_ids.add(iid)
-        cat = _CATALOG_BY_TYPE.get(mtype)
+        cat = catalog_by_type().get(mtype)
         if not cat:
             return f"unknown module type: {mtype}"
         for fld in cat["fields"]:
@@ -359,7 +390,7 @@ def _pages_object(store: dict) -> dict:
 def _console_modules_array(store: dict) -> list:
     mods = []
     for inst in store.get("instances", []):
-        cat = _CATALOG_BY_TYPE.get(inst.get("type"), {})
+        cat = catalog_by_type().get(inst.get("type"), {})
         mods.append({
             "id": inst["id"],
             "module": cat.get("module", inst.get("type")),
@@ -399,7 +430,7 @@ def _managed_block(store: dict) -> str:
     """
     lines = [CONSOLE_START + " (auto-managed — module instances from the layout editor; do not edit)"]
     for inst in store.get("instances", []):
-        cat = _CATALOG_BY_TYPE.get(inst.get("type"), {})
+        cat = catalog_by_type().get(inst.get("type"), {})
         obj = {
             "id": inst["id"],
             "module": cat.get("module", inst.get("type")),
@@ -900,7 +931,7 @@ class Supervisor:
     # ---- layout editor ------------------------------------------------ #
     @staticmethod
     def list_modules() -> dict:
-        return {"catalog": MODULE_CATALOG, "registered_ids": registered_ids(),
+        return {"catalog": full_catalog(), "registered_ids": registered_ids(),
                 "positions": MM_POSITIONS}
 
     @staticmethod

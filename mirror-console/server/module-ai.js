@@ -24,7 +24,11 @@ const SERVER_DIR = __dirname;
 const REPO_ROOT = path.resolve(SERVER_DIR, "..", "..");
 const DRAFTS_DIR = path.join(SERVER_DIR, "..", "module-drafts");
 const MODULES_DIR = path.join(REPO_ROOT, "MagicMirror", "modules");
+const CUSTOM_MODULES_PATH = path.join(SERVER_DIR, "..", "backend", "custom_modules.json");
 const MODEL = process.env.MODULE_AI_MODEL || "claude-opus-4-8";
+
+const CHAT_FILE = ".module-chat.json"; // machine transcript (console-internal)
+const CLAUDE_MD = "CLAUDE.md"; // human + agent memory; ships with the module
 
 const NAME_RE = /^MMM-[A-Za-z0-9][A-Za-z0-9-]{0,39}$/;
 
@@ -42,6 +46,52 @@ function sseSend(name, obj) {
   if (!d) return;
   const line = `data: ${JSON.stringify(obj)}\n\n`;
   for (const res of d.sse) res.write(line);
+}
+
+// ---- chat history (persisted so editing can be resumed later) ------------
+function draftDir(name) {
+  return path.join(DRAFTS_DIR, name);
+}
+
+function loadHistory(name) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(draftDir(name), CHAT_FILE), "utf8"));
+  } catch {
+    return { name, description: "", createdAt: new Date().toISOString(), messages: [] };
+  }
+}
+
+function saveHistory(name, hist) {
+  fs.writeFileSync(path.join(draftDir(name), CHAT_FILE), JSON.stringify(hist, null, 2));
+  writeClaudeMd(name, hist);
+}
+
+// Regenerate CLAUDE.md from the transcript. It is the module's design memory:
+// readable for humans AND auto-loaded by the Claude Agent SDK (claude_code
+// preset reads CLAUDE.md from cwd), so reopening a module gives the agent its
+// full history even after a backend restart dropped the in-memory session.
+function writeClaudeMd(name, hist) {
+  const lines = [
+    `# ${name}`,
+    "",
+    hist.description || "_(bez popisu)_",
+    "",
+    "> Tento modul vznikl v AI tvorbě modulů (mirror-console). Soubor udržuje",
+    "> konzole automaticky jako paměť návrhu — neupravuj ho ručně z agenta.",
+    "",
+    "## Historie konverzace",
+    "",
+  ];
+  for (const m of hist.messages || []) {
+    if (m.role === "user") {
+      lines.push(`### 🧑 ${m.ts ? new Date(m.ts).toLocaleString("cs-CZ") : ""}`.trimEnd());
+      lines.push("", m.text.trim(), "");
+    } else if (m.role === "assistant") {
+      lines.push("**Claude:**", "", (m.text || "").trim() || "_(jen úpravy souborů)_", "");
+      if (m.files && m.files.length) lines.push(`_Upravené soubory: ${m.files.join(", ")}_`, "");
+    }
+  }
+  fs.writeFileSync(path.join(draftDir(name), CLAUDE_MD), lines.join("\n"));
 }
 
 // Normalise "Weather Plus" / "weather-plus" / "MMM-WeatherPlus" -> MMM-WeatherPlus.
@@ -194,7 +244,7 @@ REFERENCE — read these for the exact house style:
 - ${REPO_ROOT}/CLAUDE.md  (see the "Module file conventions" section)
 - ${REPO_ROOT}/MagicMirror/modules/MMM-Spending/  (a complete exemplar — mirror its structure, including its demo.html scenario pattern)
 
-Work only inside the current working directory; edit the scaffold files in place. Keep chat replies short — the user is talking to you in a small side panel.`;
+Work only inside the current working directory; edit the scaffold files in place. Do NOT touch CLAUDE.md or .module-chat.json — the console manages those as the conversation record. Keep chat replies short — the user is talking to you in a small side panel.`;
 }
 
 // ---- agent turn ----------------------------------------------------------
@@ -220,17 +270,21 @@ async function runAgent(name, userMessage) {
   };
 
   let touched = false;
+  let assistantText = "";
+  const files = new Set();
   try {
     for await (const msg of query({ prompt: userMessage, options })) {
       if (msg.session_id) d.sessionId = msg.session_id;
       if (msg.type === "assistant") {
         for (const block of msg.message?.content || []) {
           if (block.type === "text" && block.text) {
+            assistantText += block.text;
             sseSend(name, { type: "text", text: block.text });
           } else if (block.type === "tool_use") {
-            touched = true;
-            const f = block.input?.file_path || block.input?.path || "";
-            sseSend(name, { type: "tool", tool: block.name, file: path.basename(f || "") });
+            const f = path.basename(block.input?.file_path || block.input?.path || "");
+            if (f) files.add(f);
+            if (block.name === "Write" || block.name === "Edit") touched = true;
+            sseSend(name, { type: "tool", tool: block.name, file: f });
           }
         }
       } else if (msg.type === "result" && msg.subtype && msg.subtype !== "success") {
@@ -241,8 +295,41 @@ async function runAgent(name, userMessage) {
     sseSend(name, { type: "error", text: `Chyba agenta: ${e.message}` });
   }
 
+  // Persist this turn so the conversation can be reopened later.
+  const hist = loadHistory(name);
+  hist.messages.push({ role: "user", text: userMessage, ts: Date.now() });
+  hist.messages.push({ role: "assistant", text: assistantText, files: [...files], ts: Date.now() });
+  try {
+    saveHistory(name, hist);
+  } catch (e) {
+    sseSend(name, { type: "error", text: `Historie se neuložila: ${e.message}` });
+  }
+
   if (touched) d.rev += 1;
   sseSend(name, { type: "done", rev: d.rev, touched });
+}
+
+// ---- catalog registration (shared with the Python supervisor) ------------
+// The supervisor merges custom_modules.json into MODULE_CATALOG at request
+// time, so a finalized module shows up in the layout editor with no restart.
+// AI modules have no required config fields (empty config is valid).
+function registerCatalog(name, description) {
+  let list = [];
+  try {
+    list = JSON.parse(fs.readFileSync(CUSTOM_MODULES_PATH, "utf8"));
+    if (!Array.isArray(list)) list = [];
+  } catch {
+    /* missing/invalid -> start fresh */
+  }
+  const label = `${name.replace(/^MMM-/, "")} (AI)`;
+  const entry = { type: name, module: name, label, fields: [], ai: true, description };
+  const i = list.findIndex((c) => c && c.type === name);
+  if (i >= 0) list[i] = entry;
+  else list.push(entry);
+  fs.mkdirSync(path.dirname(CUSTOM_MODULES_PATH), { recursive: true });
+  const tmp = CUSTOM_MODULES_PATH + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+  fs.renameSync(tmp, CUSTOM_MODULES_PATH); // atomic: avoid torn reads in supervisor
 }
 
 // ---- finalize: install onto the running mirror ---------------------------
@@ -262,8 +349,12 @@ async function finalize(name, overwrite) {
 
   fs.cpSync(src, dest, {
     recursive: true,
-    filter: (s) => !s.split(path.sep).includes("node_modules"),
+    filter: (s) => !s.split(path.sep).includes("node_modules") && path.basename(s) !== CHAT_FILE,
   });
+
+  // Make the module placeable in the layout editor (Profily → Rozložení).
+  const description = loadHistory(name).description || "";
+  registerCatalog(name, description);
 
   const steps = [];
   let deps = {};
@@ -291,7 +382,8 @@ function mountModuleAI(app, express) {
     const names = fs.existsSync(DRAFTS_DIR)
       ? fs.readdirSync(DRAFTS_DIR).filter((n) => fs.statSync(path.join(DRAFTS_DIR, n)).isDirectory())
       : [];
-    res.json({ drafts: names });
+    const drafts = names.map((n) => ({ name: n, description: loadHistory(n).description || "" }));
+    res.json({ drafts });
   });
 
   app.post("/api/modules/draft", (req, res) => {
@@ -305,10 +397,27 @@ function mountModuleAI(app, express) {
       const p = path.join(dir, fname);
       if (!fs.existsSync(p)) fs.writeFileSync(p, content);
     }
+    const existing = loadHistory(name);
+    const hist = {
+      name,
+      description: description || existing.description || "",
+      createdAt: existing.createdAt || new Date().toISOString(),
+      messages: existing.messages || [],
+    };
+    saveHistory(name, hist);
     const d = draftState(name);
     d.sessionId = null;
     d.rev += 1;
     res.json({ ok: true, name, rev: d.rev });
+  });
+
+  // Reopen a draft: its description + full chat transcript for the UI.
+  app.get("/api/modules/draft", (req, res) => {
+    const name = normaliseName(req.query?.name);
+    if (!name || !fs.existsSync(draftDir(name)))
+      return res.status(404).json({ error: "draft neexistuje" });
+    const hist = loadHistory(name);
+    res.json({ name, description: hist.description, messages: hist.messages, rev: draftState(name).rev });
   });
 
   // SSE stream of agent output for one draft.
@@ -353,4 +462,15 @@ function mountModuleAI(app, express) {
   });
 }
 
-module.exports = { mountModuleAI, scaffold, normaliseName };
+module.exports = {
+  mountModuleAI,
+  scaffold,
+  normaliseName,
+  // exported for tests:
+  loadHistory,
+  saveHistory,
+  writeClaudeMd,
+  registerCatalog,
+  CUSTOM_MODULES_PATH,
+  DRAFTS_DIR,
+};

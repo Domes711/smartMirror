@@ -98,10 +98,17 @@ Requirements on the Pi:
   `api.anthropic.com` (mind the network policy).
 - Model defaults to `claude-opus-4-8`; override with `MODULE_AI_MODEL`.
 
-The chat keeps context across turns by resuming the agent's session id (held in
-memory — a backend restart starts a fresh conversation; the draft files on disk
-survive). Finalize does **not** register the module in the layout editor's
-catalog yet — after install, add it to a page via `config.js` manually.
+The conversation is persisted per draft so you can come back and keep editing:
+each turn is written to `<draft>/.module-chat.json` (machine transcript the UI
+replays) and to `<draft>/CLAUDE.md` (human-readable + auto-loaded by the agent
+as project memory, so a reopened module has its full history even after a
+backend restart dropped the in-memory session). Step 1 lists existing drafts to
+reopen. CLAUDE.md ships with the module; `.module-chat.json` does not.
+
+Finalize also **registers the module in the layout editor**: it appends an entry
+to `backend/custom_modules.json` (per-Pi, gitignored), which the supervisor
+merges into `MODULE_CATALOG` at request time — so the new module is immediately
+placeable in **Profily → Rozložení** (with empty config, no required fields).
 
 ## Layout editor (Profily → Rozložení)
 

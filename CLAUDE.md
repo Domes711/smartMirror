@@ -53,12 +53,17 @@ plus our own modules, the camera/radar daemons, and the `mirror-console` web app
   Face detect / Test obličejů / Test gest), **Profily** (enroll faces + per-
   profile **Rozložení** layout editor → generates `pages.js` +
   `console-modules.js`), **Radar** (live map + on/off), **MQTT** (publish test
-  messages + bus monitor). Backend `supervisor.py` is the single camera
+  messages + bus monitor), **Moduly (AI)** (build a new MagicMirror module by
+  chatting with Claude — runs on the Pi via the Claude Agent SDK, edits a
+  scaffolded draft with a live `demo.html` iframe preview, then installs it onto
+  the mirror and registers it in the layout catalog; see `module-ai.js` +
+  `mirror-console/README.md`). Backend `supervisor.py` is the single camera
   arbiter; `setup.sh` installs it as `mirror-console-backend`/`-web` systemd units.
 
 Deploy is **git pull**: the user pushes to git, then `git pull` on the Pi.
 Per-Pi runtime state (`radar_config.json`, `layout_store.json`,
-`console-modules.js`, `vendor/`, `fonts/`, `node_modules/`) is gitignored.
+`console-modules.js`, `mirror-console/backend/custom_modules.json`,
+`mirror-console/module-drafts/`, `vendor/`, `fonts/`, `node_modules/`) is gitignored.
 
 ## Architecture: how the mirror decides what to show
 

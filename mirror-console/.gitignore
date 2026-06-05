@@ -2,6 +2,7 @@ node_modules/
 web/dist/
 module-drafts/
 server/.env
+backend/custom_modules.json
 *.state
 __pycache__/
 *.pyc
