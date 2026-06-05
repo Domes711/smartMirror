@@ -5,7 +5,7 @@
 // (camera MJPEG stream, SSE bus, supervisor + /api proxy). Those must always
 // hit the network or the console would show stale/dead data.
 
-const CACHE = "mirror-console-v1";
+const CACHE = "mirror-console-v2";
 
 // Endpoints served by the Express proxy / Python supervisor / MQTT bridge.
 // The SW must stay out of their way (no caching, no interception).
@@ -21,6 +21,9 @@ const BYPASS = [
   "/radar",
   "/modules",
   "/layout",
+  "/store",
+  "/module-draft",
+  "/module-installed",
   "/api/",
 ];
 
