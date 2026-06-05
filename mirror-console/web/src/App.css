@@ -75,6 +75,31 @@
   color: #04222e;
 }
 
+/* gear toggle for developer mode */
+.tab.gear {
+  font-size: 1rem;
+  line-height: 1;
+  padding: 7px 12px;
+}
+.tab.gear.active {
+  background: var(--warn);
+  color: #2a1c00;
+}
+
+/* small "dev" badge next to the title while in developer mode */
+.dev-tag {
+  margin-left: 8px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--warn);
+  background: rgba(251, 191, 36, 0.14);
+  padding: 2px 7px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
 /* ---- panel ---- */
 .panel {
   flex: 1;
@@ -1046,6 +1071,9 @@
   }
   .tab {
     flex: 1;
+  }
+  .tab.gear {
+    flex: 0 0 auto;
   }
   .seg {
     flex-direction: row;
