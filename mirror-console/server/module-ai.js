@@ -26,6 +26,18 @@ const MODULES_DIR = path.join(REPO_ROOT, "MagicMirror", "modules");
 const CUSTOM_MODULES_PATH = path.join(SERVER_DIR, "..", "backend", "custom_modules.json");
 const MODEL = process.env.MODULE_AI_MODEL || "claude-opus-4-8";
 
+// The Claude Agent SDK spawns its bundled CLI with the literal command "node".
+// Under the systemd service the PATH usually lacks the nvm node dir, so that
+// spawn fails with `spawn node ENOENT`. Use the exact node binary already
+// running this server (absolute path, no PATH lookup) and also make `node`
+// resolvable for any child processes the CLI itself spawns.
+const NODE_BIN = process.execPath;
+{
+  const dir = path.dirname(NODE_BIN || "");
+  const parts = (process.env.PATH || "").split(path.delimiter);
+  if (dir && !parts.includes(dir)) process.env.PATH = dir + path.delimiter + (process.env.PATH || "");
+}
+
 const CHAT_FILE = ".module-chat.json"; // machine transcript (console-internal)
 const CLAUDE_MD = "CLAUDE.md"; // human + agent memory; lives next to the module
 
@@ -288,6 +300,7 @@ async function runAgent(scope, name, prompt, { adopt = false } = {}) {
   const options = {
     cwd,
     model: MODEL,
+    executable: NODE_BIN, // spawn the SDK CLI with this node (avoids `spawn node ENOENT`)
     // Non-interactive + file-only: "dontAsk" auto-approves the pre-approved
     // allowedTools and silently denies everything else (no Bash, no prompt that
     // would hang headless), keeping the agent scoped to the module's files.
