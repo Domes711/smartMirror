@@ -64,6 +64,16 @@ mode is persisted to `backend/mode.state` and restored on boot (default
   - **MQTT** — buttons that publish every message the mirror uses (presence
     `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
     plus a live monitor of the bus.
+  - **Moduly (AI)** — build a brand-new MagicMirror module by chatting with
+    Claude. Krok 1: name + description → scaffolds a standard 6-file module
+    draft under `module-drafts/<name>/` (gitignored). Krok 2: a chat where
+    **Claude runs on the Pi** (via the Claude Agent SDK — the Claude Code engine
+    as a library) and edits the draft files in place; a side button reveals a
+    live `<iframe>` preview of the module's `demo.html` that reloads after each
+    change. **Nainstalovat na zrcadlo** copies the draft into
+    `MagicMirror/modules/`, runs `npm install` if it has deps, and
+    `pm2 restart MagicMirror`. The agent is constrained to file tools inside the
+    draft dir (no Bash). See *AI module builder* below for setup requirements.
 
 Enrollment endpoints (on the supervisor, proxied by Node): `POST /capture`
 (`{name}`), `GET /dataset?name=`, `DELETE /dataset?name=&file=`,
@@ -71,6 +81,34 @@ Enrollment endpoints (on the supervisor, proxied by Node): `POST /capture`
 RGB→BGR convention as `camera/capture_photos.py` so they stay consistent with
 the existing dataset and encoder.
 - `systemd/` — autostart units. `sudoers.d/` — lets `admin` toggle `face_reco`.
+
+## AI module builder (Moduly → AI)
+
+Endpoints (Express, in `server/module-ai.js`): `POST /api/modules/draft`
+(`{name, description}` → scaffold), `GET /api/modules/chat/stream?name=` (SSE of
+agent output), `POST /api/modules/chat` (`{name, message}` → one agent turn),
+`GET /module-draft/<name>/…` (static — the preview iframe), `POST
+/api/modules/finalize` (`{name, overwrite?}` → install + restart).
+
+Requirements on the Pi:
+
+- `npm install` in `server/` pulls in `@anthropic-ai/claude-agent-sdk`.
+- `ANTHROPIC_API_KEY` must be set in the backend's environment (add it to the
+  `mirror-console-web` systemd unit / shell), plus outbound HTTPS to
+  `api.anthropic.com` (mind the network policy).
+- Model defaults to `claude-opus-4-8`; override with `MODULE_AI_MODEL`.
+
+The conversation is persisted per draft so you can come back and keep editing:
+each turn is written to `<draft>/.module-chat.json` (machine transcript the UI
+replays) and to `<draft>/CLAUDE.md` (human-readable + auto-loaded by the agent
+as project memory, so a reopened module has its full history even after a
+backend restart dropped the in-memory session). Step 1 lists existing drafts to
+reopen. CLAUDE.md ships with the module; `.module-chat.json` does not.
+
+Finalize also **registers the module in the layout editor**: it appends an entry
+to `backend/custom_modules.json` (per-Pi, gitignored), which the supervisor
+merges into `MODULE_CATALOG` at request time — so the new module is immediately
+placeable in **Profily → Rozložení** (with empty config, no required fields).
 
 ## Layout editor (Profily → Rozložení)
 

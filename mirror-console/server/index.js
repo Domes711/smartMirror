@@ -10,6 +10,7 @@ const path = require("path");
 const express = require("express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const mqtt = require("mqtt");
+const { mountModuleAI } = require("./module-ai");
 
 const PORT = parseInt(process.env.PORT || "8000", 10);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -87,6 +88,9 @@ app.post("/api/mqtt/publish", (req, res) => {
     res.json({ ok: true, topic, payload: msg });
   });
 });
+
+// --- AI module builder (chat with Claude to scaffold new modules) --------
+mountModuleAI(app, express);
 
 // Server-Sent Events: live feed of all smartmirror/# traffic.
 app.get("/api/mqtt/stream", (req, res) => {

@@ -243,10 +243,36 @@ def save_installed_modules(mods: list) -> None:
         json.dump(mods, f, indent=2)
 
 
+# Extra catalog entries for modules built by the AI module builder (per-Pi,
+# gitignored). The Node finalize step appends to this; we merge it in at request
+# time so freshly-built modules become placeable without a restart.
+CUSTOM_MODULES_PATH = os.path.join(_HERE, "custom_modules.json")
+
+
+def custom_modules() -> list:
+    try:
+        with open(CUSTOM_MODULES_PATH) as f:
+            data = json.load(f)
+        return [c for c in data if isinstance(c, dict) and c.get("type")]
+    except FileNotFoundError:
+        return []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("custom_modules.json load failed: %s", exc)
+        return []
+
+
 def effective_catalog() -> list:
-    """Built-in catalog + modules installed from the store (so they are placeable
-    in the layout editor and accepted by validate_store)."""
-    return MODULE_CATALOG + load_installed_modules()
+    """Built-in catalog + Module-Store-installed modules + AI-built modules, so
+    all are placeable in the layout editor and accepted by validate_store.
+    Later sources win on a type clash."""
+    by_type = {c["type"]: c for c in MODULE_CATALOG}
+    for c in load_installed_modules() + custom_modules():
+        if not isinstance(c, dict) or not c.get("type"):
+            continue
+        c.setdefault("fields", [])
+        c.setdefault("module", c["type"])
+        by_type[c["type"]] = c
+    return list(by_type.values())
 
 
 def catalog_by_type() -> dict:
