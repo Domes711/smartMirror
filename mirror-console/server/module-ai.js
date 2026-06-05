@@ -1,20 +1,19 @@
-// AI module builder for the mirror console.
+// AI module builder + editor for the mirror console.
 //
-// Lets the user create a brand-new MagicMirror² module by chatting with Claude.
+// Two flows, same chat+preview machinery, distinguished by `scope`:
+//   - "draft"     — build a brand-new module in module-drafts/<name>, then
+//                   finalize() installs it into MagicMirror/modules/.
+//   - "installed" — edit an already-installed module in place inside
+//                   MagicMirror/modules/<name> (the Module Store "Upravit"
+//                   button). On open we ensure a demo.html (for the live
+//                   preview) and a CLAUDE.md (purpose + chat history) exist.
+//
 // Claude runs ON the Pi via the Claude Agent SDK (the Claude Code engine as a
-// library): it edits a scaffolded draft module in place; the browser shows a
-// live preview by loading the module's demo.html in an <iframe>.
-//
-// Flow:
-//   POST /api/modules/draft      {name, description}  -> scaffold a draft
-//   GET  /api/modules/chat/stream?name=NAME           -> SSE: agent output
-//   POST /api/modules/chat       {name, message}      -> run one agent turn
-//   GET  /module-draft/<name>/demo.html               -> live preview (static)
-//   POST /api/modules/finalize   {name}               -> install onto the mirror
+// library) with file-only tools constrained to the module's directory. The
+// browser shows a live preview by loading the module's demo.html in an iframe.
 //
 // Requires ANTHROPIC_API_KEY in the environment and outbound HTTPS to
-// api.anthropic.com. The agent is constrained to file tools inside the draft
-// directory (no Bash) so it can only touch the module it is building.
+// api.anthropic.com.
 
 const path = require("path");
 const fs = require("fs");
@@ -28,70 +27,69 @@ const CUSTOM_MODULES_PATH = path.join(SERVER_DIR, "..", "backend", "custom_modul
 const MODEL = process.env.MODULE_AI_MODEL || "claude-opus-4-8";
 
 const CHAT_FILE = ".module-chat.json"; // machine transcript (console-internal)
-const CLAUDE_MD = "CLAUDE.md"; // human + agent memory; ships with the module
+const CLAUDE_MD = "CLAUDE.md"; // human + agent memory; lives next to the module
 
 const NAME_RE = /^MMM-[A-Za-z0-9][A-Za-z0-9-]{0,39}$/;
 
-// In-memory per-draft state. Lost on restart — drafts on disk survive, but the
-// chat session id does not, so a restart starts a fresh conversation.
-const drafts = new Map(); // name -> { sse:Set, sessionId, rev, busy }
-
-function draftState(name) {
-  if (!drafts.has(name)) drafts.set(name, { sse: new Set(), sessionId: null, rev: 1, busy: false });
-  return drafts.get(name);
+// ---- scope-aware directory + session state -------------------------------
+function dirFor(scope, name) {
+  return path.join(scope === "installed" ? MODULES_DIR : DRAFTS_DIR, name);
 }
 
-function sseSend(name, obj) {
-  const d = drafts.get(name);
-  if (!d) return;
+// In-memory per-session state, keyed by scope/name. Lost on restart — files on
+// disk survive, but the chat session id does not, so a restart starts a fresh
+// agent conversation (CLAUDE.md still gives it the history).
+const sessions = new Map(); // "scope/name" -> { sse:Set, sessionId, rev, busy }
+
+function sessionState(scope, name) {
+  const key = `${scope}/${name}`;
+  if (!sessions.has(key)) sessions.set(key, { sse: new Set(), sessionId: null, rev: 1, busy: false });
+  return sessions.get(key);
+}
+
+function sseSend(scope, name, obj) {
+  const s = sessions.get(`${scope}/${name}`);
+  if (!s) return;
   const line = `data: ${JSON.stringify(obj)}\n\n`;
-  for (const res of d.sse) res.write(line);
+  for (const res of s.sse) res.write(line);
 }
 
 // ---- chat history (persisted so editing can be resumed later) ------------
-function draftDir(name) {
-  return path.join(DRAFTS_DIR, name);
-}
-
-function loadHistory(name) {
+function loadHistory(scope, name) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(draftDir(name), CHAT_FILE), "utf8"));
+    return JSON.parse(fs.readFileSync(path.join(dirFor(scope, name), CHAT_FILE), "utf8"));
   } catch {
-    return { name, description: "", createdAt: new Date().toISOString(), messages: [] };
+    return { name, scope, description: "", prepared: false, createdAt: new Date().toISOString(), messages: [] };
   }
 }
 
-function saveHistory(name, hist) {
-  fs.writeFileSync(path.join(draftDir(name), CHAT_FILE), JSON.stringify(hist, null, 2));
-  writeClaudeMd(name, hist);
+function saveHistory(scope, name, hist) {
+  fs.writeFileSync(path.join(dirFor(scope, name), CHAT_FILE), JSON.stringify(hist, null, 2));
+  writeClaudeMd(scope, name, hist);
 }
 
 // Regenerate CLAUDE.md from the transcript. It is the module's design memory:
 // readable for humans AND auto-loaded by the Claude Agent SDK (claude_code
 // preset reads CLAUDE.md from cwd), so reopening a module gives the agent its
 // full history even after a backend restart dropped the in-memory session.
-function writeClaudeMd(name, hist) {
-  const lines = [
-    `# ${name}`,
-    "",
-    hist.description || "_(bez popisu)_",
-    "",
-    "> Tento modul vznikl v AI tvorbě modulů (mirror-console). Soubor udržuje",
-    "> konzole automaticky jako paměť návrhu — neupravuj ho ručně z agenta.",
-    "",
-    "## Historie konverzace",
-    "",
-  ];
+function writeClaudeMd(scope, name, hist) {
+  const note =
+    scope === "installed"
+      ? "> Tento modul upravuješ přes AI úpravu modulů (mirror-console). Konzole zde\n> udržuje popis a historii konverzace — neupravuj tento soubor ručně z agenta."
+      : "> Tento modul vznikl v AI tvorbě modulů (mirror-console). Soubor udržuje\n> konzole automaticky jako paměť návrhu — neupravuj ho ručně z agenta.";
+  const lines = [`# ${name}`, "", "## O modulu", "", hist.description || "_(zatím bez popisu)_", "", note, "", "## Historie konverzace", ""];
   for (const m of hist.messages || []) {
     if (m.role === "user") {
       lines.push(`### 🧑 ${m.ts ? new Date(m.ts).toLocaleString("cs-CZ") : ""}`.trimEnd());
-      lines.push("", m.text.trim(), "");
+      lines.push("", (m.text || "").trim(), "");
     } else if (m.role === "assistant") {
       lines.push("**Claude:**", "", (m.text || "").trim() || "_(jen úpravy souborů)_", "");
       if (m.files && m.files.length) lines.push(`_Upravené soubory: ${m.files.join(", ")}_`, "");
+    } else if (m.role === "sys") {
+      lines.push(`_${(m.text || "").trim()}_`, "");
     }
   }
-  fs.writeFileSync(path.join(draftDir(name), CLAUDE_MD), lines.join("\n"));
+  fs.writeFileSync(path.join(dirFor(scope, name), CLAUDE_MD), lines.join("\n"));
 }
 
 // Normalise "Weather Plus" / "weather-plus" / "MMM-WeatherPlus" -> MMM-WeatherPlus.
@@ -105,10 +103,9 @@ function normaliseName(raw) {
   return NAME_RE.test(s) ? s : null;
 }
 
-// ---- scaffold ------------------------------------------------------------
+// ---- scaffold (new modules) ----------------------------------------------
 // A standard 6-file MagicMirror module so the agent always starts from the
-// house structure instead of inventing one. The class suffix (mmfoo-style) is
-// derived from the name.
+// house structure instead of inventing one.
 function scaffold(name, description) {
   const cls = name.toLowerCase().replace(/[^a-z0-9]/g, "");
   return {
@@ -125,7 +122,6 @@ Module.register("${name}", {
   start() {
     Log.info("[${name}] started");
     this.viewModel = null;
-    // this.sendSocketNotification("${name.toUpperCase().replace(/-/g, "_")}_INIT", this.config);
   },
 
   socketNotificationReceived(notification, payload) {
@@ -174,48 +170,7 @@ module.exports = NodeHelper.create({
       null,
       2
     ) + "\n",
-    "demo.html": `<!DOCTYPE html>
-<html lang="cs">
-<head>
-  <meta charset="utf-8" />
-  <title>${name} · demo</title>
-  <link rel="stylesheet" href="./${name}.css" />
-  <style>
-    html, body { background:#000; color:#fff; font-family:"Roboto Condensed",Helvetica,sans-serif; margin:0; padding:40px 50px; }
-    #mount { display:inline-block; text-align:left; }
-  </style>
-</head>
-<body>
-  <div id="mount"></div>
-  <script>
-    // Stub the MagicMirror runtime so the module file can register & render standalone.
-    window.Log = console;
-    window.Module = { _def: null, register: function (n, d) { this._def = d; } };
-    window.MM = { sendNotification: function () {} };
-  </script>
-  <script src="./${name}.js"></script>
-  <script>
-    const def = window.Module._def;
-    const mountEl = document.getElementById("mount");
-    const mod = Object.assign({}, def);
-    mod.config = Object.assign({}, def.defaults || {});
-    mod.identifier = "demo";
-    mod.name = "${name}";
-    mod.file = function (f) { return f; };
-    mod.translate = function (k) { return k; };
-    mod.sendSocketNotification = function () {};
-    mod.sendNotification = function () {};
-    mod.updateDom = function () {
-      const el = this.getDom();
-      mountEl.innerHTML = "";
-      if (el) mountEl.appendChild(el);
-    };
-    if (typeof mod.start === "function") { try { mod.start(); } catch (e) { console.warn(e); } }
-    mod.updateDom();
-  </script>
-</body>
-</html>
-`,
+    "demo.html": genericDemoHtml(name, `${name}.js`),
     "README.md": `# ${name}
 
 ${description || "A MagicMirror² module."}
@@ -229,90 +184,169 @@ Copy this folder into \`MagicMirror/modules/\`, then add it to \`config.js\`.
   };
 }
 
-function systemPromptAppend(name) {
+// A standalone preview harness. Stubs the MagicMirror runtime, loads the
+// module's main JS, builds it via getDom() and mounts it. Used as the scaffold
+// default AND as the baseline demo.html when adopting an existing module (the
+// adopt agent turn then improves it with realistic sample data).
+function genericDemoHtml(name, mainFile) {
+  return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <title>${name} · demo</title>
+  <link rel="stylesheet" href="./${name}.css" />
+  <style>
+    html, body { background:#000; color:#fff; font-family:"Roboto Condensed",Helvetica,sans-serif; margin:0; padding:40px 50px; }
+    #mount { display:inline-block; text-align:left; }
+  </style>
+</head>
+<body>
+  <div id="mount"></div>
+  <script>
+    // Stub the MagicMirror runtime so the module renders standalone.
+    window.Log = console;
+    window.Module = { _def: null, register: function (n, d) { this._def = d; } };
+    window.MM = { sendNotification: function () {} };
+  </script>
+  <script src="./${mainFile}"></script>
+  <script>
+    const def = window.Module._def || {};
+    const mountEl = document.getElementById("mount");
+    const mod = Object.assign({}, def);
+    mod.config = Object.assign({}, def.defaults || {});
+    mod.identifier = "demo";
+    mod.name = ${JSON.stringify(name)};
+    mod.data = { classes: "" };
+    mod.file = function (f) { return f; };
+    mod.translate = function (k) { return k; };
+    mod.sendSocketNotification = function () {};
+    mod.sendNotification = function () {};
+    mod.updateDom = function () {
+      try {
+        const el = this.getDom();
+        mountEl.innerHTML = "";
+        if (el) mountEl.appendChild(el);
+      } catch (e) {
+        mountEl.textContent = "(náhled: " + e.message + ")";
+      }
+    };
+    try { if (typeof mod.start === "function") mod.start(); } catch (e) {}
+    mod.updateDom();
+  </script>
+</body>
+</html>
+`;
+}
+
+// ---- system prompts ------------------------------------------------------
+function systemPromptAppend(scope, name) {
+  const ref = `REFERENCE — read these for the exact house style:
+- ${REPO_ROOT}/CLAUDE.md  (see the "Module file conventions" section)
+- ${REPO_ROOT}/MagicMirror/modules/MMM-Spending/  (a complete exemplar — mirror its structure, including its demo.html scenario pattern)`;
+  const common = `- demo.html MUST always stay a WORKING standalone preview — it stubs window.Module/window.Log, loads ${name}.js, calls getDom() and mounts it. This is the live preview the user is watching, so after EVERY change keep demo.html reflecting the current module. If the module shows real data, drive demo.html with hard-coded SAMPLE data (mimic what node_helper sends via socketNotificationReceived) so it renders without any backend.
+- CSS classes stay namespaced. Do heavy work (API calls, secrets, file IO) in node_helper.js, never in the frontend.
+Work only inside the current working directory; edit files in place. Do NOT touch CLAUDE.md or .module-chat.json — the console manages those as the conversation record. Keep chat replies short — the user is talking to you in a small side panel.`;
+
+  if (scope === "installed") {
+    return `You are EDITING an existing, already-installed MagicMirror² module named "${name}" in a smart-mirror project. Its files are in the working directory. Make the change the user asks for while keeping the module working.
+
+${common}
+
+${ref}`;
+  }
   return `You are building a MagicMirror² module for a smart-mirror project. The working directory already contains a scaffolded module named "${name}".
 
 HARD RULES — every module MUST follow these house conventions:
 - Module name is "${name}" (MMM- prefix). Keep all files named accordingly.
-- Files: ${name}.js (frontend via Module.register), ${name}.css (unique class prefix), node_helper.js (ONLY backend work — network/file/subprocess; delete it if the module needs no backend), package.json ("private": true, "main": "${name}.js"), demo.html, README.md.
+- Files: ${name}.js (frontend via Module.register), ${name}.css (unique class prefix), node_helper.js (ONLY backend work — delete if unused), package.json ("private": true, "main": "${name}.js"), demo.html, README.md.
 - Frontend uses Module.register("${name}", { defaults, start, getStyles, getDom, socketNotificationReceived }). getStyles() returns ["${name}.css"].
-- CSS: namespace every class. Light text on a dark/transparent background (mirror style).
-- demo.html MUST always stay a WORKING standalone preview — it stubs window.Module/window.Log, loads ${name}.js, calls getDom() and mounts it. This is the live preview the user is watching, so after EVERY change make sure demo.html reflects the current module. If the module shows real data, drive demo.html with hard-coded sample scenarios (it must render without any backend).
-- Do all heavy work (API calls, secrets, file IO) in node_helper.js, never in the frontend; communicate via sendSocketNotification / socketNotificationReceived.
+${common}
 
-REFERENCE — read these for the exact house style:
-- ${REPO_ROOT}/CLAUDE.md  (see the "Module file conventions" section)
-- ${REPO_ROOT}/MagicMirror/modules/MMM-Spending/  (a complete exemplar — mirror its structure, including its demo.html scenario pattern)
-
-Work only inside the current working directory; edit the scaffold files in place. Do NOT touch CLAUDE.md or .module-chat.json — the console manages those as the conversation record. Keep chat replies short — the user is talking to you in a small side panel.`;
+${ref}`;
 }
 
+// The internal instruction for adopting an existing module: read it, make a
+// working demo.html, and describe what it does (the reply becomes the summary).
+const ADOPT_PROMPT = `Adopt this existing module for visual editing:
+1. Read the module's files to understand what it does and what data it renders.
+2. Create or repair demo.html so the module renders standalone in a browser preview with REALISTIC sample data (stub window.Module/window.Log/window.MM, load the main JS, build via getDom(), and feed sample data the way node_helper would via socketNotificationReceived). Model it on the MMM-Spending demo.html.
+3. Reply with ONE short paragraph (2–3 sentences) describing what this module does and what the preview now shows. Do not change the module's real behavior in this step — only add/repair demo.html.`;
+
 // ---- agent turn ----------------------------------------------------------
-async function runAgent(name, userMessage) {
-  const d = draftState(name);
-  const cwd = path.join(DRAFTS_DIR, name);
+async function runAgent(scope, name, prompt, { adopt = false } = {}) {
+  const s = sessionState(scope, name);
+  const cwd = dirFor(scope, name);
   let query;
   try {
     ({ query } = await import("@anthropic-ai/claude-agent-sdk"));
-  } catch (e) {
-    sseSend(name, { type: "error", text: "Claude Agent SDK není nainstalované na Pi (npm i @anthropic-ai/claude-agent-sdk)." });
-    sseSend(name, { type: "done", rev: d.rev, touched: false });
+  } catch {
+    sseSend(scope, name, { type: "error", text: "Claude Agent SDK není nainstalované na Pi (npm i @anthropic-ai/claude-agent-sdk)." });
+    sseSend(scope, name, { type: "done", rev: s.rev, touched: false });
     return;
   }
 
   const options = {
     cwd,
     model: MODEL,
-    permissionMode: "bypassPermissions",
+    // Non-interactive + file-only: "dontAsk" auto-approves the pre-approved
+    // allowedTools and silently denies everything else (no Bash, no prompt that
+    // would hang headless), keeping the agent scoped to the module's files.
+    permissionMode: "dontAsk",
     allowedTools: ["Read", "Write", "Edit", "Glob", "Grep"],
-    systemPrompt: { type: "preset", preset: "claude_code", append: systemPromptAppend(name) },
-    ...(d.sessionId ? { resume: d.sessionId } : {}),
+    systemPrompt: { type: "preset", preset: "claude_code", append: systemPromptAppend(scope, name) },
+    ...(s.sessionId ? { resume: s.sessionId } : {}),
   };
 
   let touched = false;
   let assistantText = "";
   const files = new Set();
   try {
-    for await (const msg of query({ prompt: userMessage, options })) {
-      if (msg.session_id) d.sessionId = msg.session_id;
+    for await (const msg of query({ prompt, options })) {
+      if (msg.session_id) s.sessionId = msg.session_id;
       if (msg.type === "assistant") {
         for (const block of msg.message?.content || []) {
           if (block.type === "text" && block.text) {
             assistantText += block.text;
-            sseSend(name, { type: "text", text: block.text });
+            sseSend(scope, name, { type: "text", text: block.text });
           } else if (block.type === "tool_use") {
             const f = path.basename(block.input?.file_path || block.input?.path || "");
             if (f) files.add(f);
             if (block.name === "Write" || block.name === "Edit") touched = true;
-            sseSend(name, { type: "tool", tool: block.name, file: f });
+            sseSend(scope, name, { type: "tool", tool: block.name, file: f });
           }
         }
       } else if (msg.type === "result" && msg.subtype && msg.subtype !== "success") {
-        sseSend(name, { type: "error", text: `Agent skončil: ${msg.subtype}` });
+        sseSend(scope, name, { type: "error", text: `Agent skončil: ${msg.subtype}` });
       }
     }
   } catch (e) {
-    sseSend(name, { type: "error", text: `Chyba agenta: ${e.message}` });
+    sseSend(scope, name, { type: "error", text: `Chyba agenta: ${e.message}` });
   }
 
   // Persist this turn so the conversation can be reopened later.
-  const hist = loadHistory(name);
-  hist.messages.push({ role: "user", text: userMessage, ts: Date.now() });
-  hist.messages.push({ role: "assistant", text: assistantText, files: [...files], ts: Date.now() });
+  const hist = loadHistory(scope, name);
+  if (adopt) {
+    if (assistantText.trim()) hist.description = assistantText.trim();
+    hist.prepared = true;
+    hist.messages.push({ role: "sys", text: "Modul načten k úpravám.", ts: Date.now() });
+    hist.messages.push({ role: "assistant", text: assistantText, files: [...files], ts: Date.now() });
+  } else {
+    hist.messages.push({ role: "user", text: prompt, ts: Date.now() });
+    hist.messages.push({ role: "assistant", text: assistantText, files: [...files], ts: Date.now() });
+  }
   try {
-    saveHistory(name, hist);
+    saveHistory(scope, name, hist);
   } catch (e) {
-    sseSend(name, { type: "error", text: `Historie se neuložila: ${e.message}` });
+    sseSend(scope, name, { type: "error", text: `Historie se neuložila: ${e.message}` });
   }
 
-  if (touched) d.rev += 1;
-  sseSend(name, { type: "done", rev: d.rev, touched });
+  if (touched) s.rev += 1;
+  sseSend(scope, name, { type: "done", rev: s.rev, touched });
 }
 
 // ---- catalog registration (shared with the Python supervisor) ------------
-// The supervisor merges custom_modules.json into MODULE_CATALOG at request
-// time, so a finalized module shows up in the layout editor with no restart.
-// AI modules have no required config fields (empty config is valid).
+// The supervisor merges custom_modules.json into its catalog at request time,
+// so a finalized module shows up in the layout editor with no restart.
 function registerCatalog(name, description) {
   let list = [];
   try {
@@ -332,7 +366,7 @@ function registerCatalog(name, description) {
   fs.renameSync(tmp, CUSTOM_MODULES_PATH); // atomic: avoid torn reads in supervisor
 }
 
-// ---- finalize: install onto the running mirror ---------------------------
+// ---- shell helpers -------------------------------------------------------
 function runCmd(cmd, args, opts) {
   return new Promise((resolve) => {
     execFile(cmd, args, { ...opts, timeout: 180000 }, (err, stdout, stderr) => {
@@ -353,8 +387,7 @@ async function finalize(name, overwrite) {
   });
 
   // Make the module placeable in the layout editor (Profily → Rozložení).
-  const description = loadHistory(name).description || "";
-  registerCatalog(name, description);
+  registerCatalog(name, loadHistory("draft", name).description || "");
 
   const steps = [];
   let deps = {};
@@ -375,14 +408,18 @@ async function finalize(name, overwrite) {
 function mountModuleAI(app, express) {
   fs.mkdirSync(DRAFTS_DIR, { recursive: true });
 
-  // Live preview of a draft module (iframe loads demo.html from here).
+  // Live preview (iframe loads <name>/demo.html from the right tree).
   app.use("/module-draft", express.static(DRAFTS_DIR));
+  app.use("/module-installed", express.static(MODULES_DIR));
+
+  // scope from query/body; "draft" unless explicitly "installed".
+  const scopeOf = (v) => (v === "installed" ? "installed" : "draft");
 
   app.get("/api/modules/list", (_req, res) => {
     const names = fs.existsSync(DRAFTS_DIR)
       ? fs.readdirSync(DRAFTS_DIR).filter((n) => fs.statSync(path.join(DRAFTS_DIR, n)).isDirectory())
       : [];
-    const drafts = names.map((n) => ({ name: n, description: loadHistory(n).description || "" }));
+    const drafts = names.map((n) => ({ name: n, description: loadHistory("draft", n).description || "" }));
     res.json({ drafts });
   });
 
@@ -392,61 +429,125 @@ function mountModuleAI(app, express) {
     const description = String(req.body?.description || "").slice(0, 2000);
     const dir = path.join(DRAFTS_DIR, name);
     fs.mkdirSync(dir, { recursive: true });
-    const files = scaffold(name, description);
-    for (const [fname, content] of Object.entries(files)) {
+    for (const [fname, content] of Object.entries(scaffold(name, description))) {
       const p = path.join(dir, fname);
       if (!fs.existsSync(p)) fs.writeFileSync(p, content);
     }
-    const existing = loadHistory(name);
-    const hist = {
+    const existing = loadHistory("draft", name);
+    saveHistory("draft", name, {
       name,
+      scope: "draft",
       description: description || existing.description || "",
+      prepared: existing.prepared || false,
       createdAt: existing.createdAt || new Date().toISOString(),
       messages: existing.messages || [],
-    };
-    saveHistory(name, hist);
-    const d = draftState(name);
-    d.sessionId = null;
-    d.rev += 1;
-    res.json({ ok: true, name, rev: d.rev });
+    });
+    const s = sessionState("draft", name);
+    s.sessionId = null;
+    s.rev += 1;
+    res.json({ ok: true, name, rev: s.rev });
   });
 
-  // Reopen a draft: its description + full chat transcript for the UI.
+  // Open an installed module for editing: ensure demo.html (preview) + history.
+  app.post("/api/modules/edit/open", (req, res) => {
+    const name = normaliseName(req.body?.name);
+    const dir = name && path.join(MODULES_DIR, name);
+    if (!name || !dir || !fs.existsSync(dir))
+      return res.status(404).json({ error: "modul není nainstalovaný" });
+    // baseline demo.html so the preview iframe has something to load
+    const demo = path.join(dir, "demo.html");
+    if (!fs.existsSync(demo)) {
+      let main = `${name}.js`;
+      try {
+        main = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).main || main;
+      } catch {
+        /* ignore */
+      }
+      fs.writeFileSync(demo, genericDemoHtml(name, main));
+    }
+    const hist = loadHistory("installed", name);
+    if (!fs.existsSync(path.join(dir, CHAT_FILE))) saveHistory("installed", name, hist);
+    sessionState("installed", name).rev += 1;
+    res.json({ ok: true, name, prepared: !!hist.prepared, messages: hist.messages, description: hist.description });
+  });
+
+  // Run the one-time adopt turn (read module, fix demo.html, describe it).
+  app.post("/api/modules/edit/prepare", async (req, res) => {
+    const name = normaliseName(req.body?.name);
+    if (!name || !fs.existsSync(path.join(MODULES_DIR, name)))
+      return res.status(404).json({ error: "modul není nainstalovaný" });
+    const s = sessionState("installed", name);
+    if (s.busy) return res.status(409).json({ error: "agent zrovna pracuje" });
+    if (loadHistory("installed", name).prepared) return res.json({ ok: true, alreadyPrepared: true });
+    s.busy = true;
+    res.json({ ok: true });
+    try {
+      await runAgent("installed", name, ADOPT_PROMPT, { adopt: true });
+    } finally {
+      s.busy = false;
+    }
+  });
+
+  // Apply in-place edits to the running mirror.
+  app.post("/api/modules/edit/restart", async (_req, res) => {
+    const r = await runCmd("pm2", ["restart", "MagicMirror"]);
+    res.status(r.ok ? 200 : 500).json(r);
+  });
+
+  // Session info (description + transcript) for either scope.
+  app.get("/api/modules/session", (req, res) => {
+    const scope = scopeOf(req.query?.scope);
+    const name = normaliseName(req.query?.name);
+    if (!name || !fs.existsSync(dirFor(scope, name)))
+      return res.status(404).json({ error: "neexistuje" });
+    const hist = loadHistory(scope, name);
+    res.json({
+      name,
+      scope,
+      description: hist.description,
+      prepared: !!hist.prepared,
+      messages: hist.messages,
+      rev: sessionState(scope, name).rev,
+    });
+  });
+  // Back-compat alias used by the new-module wizard.
   app.get("/api/modules/draft", (req, res) => {
     const name = normaliseName(req.query?.name);
-    if (!name || !fs.existsSync(draftDir(name)))
+    if (!name || !fs.existsSync(dirFor("draft", name)))
       return res.status(404).json({ error: "draft neexistuje" });
-    const hist = loadHistory(name);
-    res.json({ name, description: hist.description, messages: hist.messages, rev: draftState(name).rev });
+    const hist = loadHistory("draft", name);
+    res.json({ name, description: hist.description, messages: hist.messages, rev: sessionState("draft", name).rev });
   });
 
-  // SSE stream of agent output for one draft.
+  // SSE stream of agent output for one session.
   app.get("/api/modules/chat/stream", (req, res) => {
+    const scope = scopeOf(req.query?.scope);
     const name = normaliseName(req.query?.name);
     if (!name) return res.status(400).end();
     res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
     if (res.flushHeaders) res.flushHeaders();
-    const d = draftState(name);
-    res.write(`data: ${JSON.stringify({ type: "connected", rev: d.rev })}\n\n`);
-    d.sse.add(res);
-    req.on("close", () => d.sse.delete(res));
+    const s = sessionState(scope, name);
+    res.write(`data: ${JSON.stringify({ type: "connected", rev: s.rev })}\n\n`);
+    s.sse.add(res);
+    req.on("close", () => s.sse.delete(res));
   });
 
   // Run one agent turn. Output streams over the SSE channel above.
   app.post("/api/modules/chat", async (req, res) => {
+    const scope = scopeOf(req.body?.scope);
     const name = normaliseName(req.body?.name);
     const message = String(req.body?.message || "").trim();
-    if (!name || !fs.existsSync(path.join(DRAFTS_DIR, name)))
-      return res.status(400).json({ error: "draft neexistuje" });
+    if (!name || !fs.existsSync(dirFor(scope, name)))
+      return res.status(400).json({ error: "modul neexistuje" });
     if (!message) return res.status(400).json({ error: "prázdná zpráva" });
-    const d = draftState(name);
-    if (d.busy) return res.status(409).json({ error: "agent zrovna pracuje" });
-    d.busy = true;
+    const s = sessionState(scope, name);
+    if (s.busy) return res.status(409).json({ error: "agent zrovna pracuje" });
+    s.busy = true;
     res.json({ ok: true });
     try {
-      await runAgent(name, message);
+      await runAgent(scope, name, message);
     } finally {
-      d.busy = false;
+      s.busy = false;
     }
   });
 
@@ -455,7 +556,7 @@ function mountModuleAI(app, express) {
     if (!name) return res.status(400).json({ error: "neplatné jméno" });
     try {
       const result = await finalize(name, !!req.body?.overwrite);
-      res.status(result.ok ? 200 : (result.exists ? 409 : 400)).json(result);
+      res.status(result.ok ? 200 : result.exists ? 409 : 400).json(result);
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -465,6 +566,7 @@ function mountModuleAI(app, express) {
 module.exports = {
   mountModuleAI,
   scaffold,
+  genericDemoHtml,
   normaliseName,
   // exported for tests:
   loadHistory,
@@ -473,4 +575,5 @@ module.exports = {
   registerCatalog,
   CUSTOM_MODULES_PATH,
   DRAFTS_DIR,
+  MODULES_DIR,
 };

@@ -107,8 +107,28 @@ reopen. CLAUDE.md ships with the module; `.module-chat.json` does not.
 
 Finalize also **registers the module in the layout editor**: it appends an entry
 to `backend/custom_modules.json` (per-Pi, gitignored), which the supervisor
-merges into `MODULE_CATALOG` at request time — so the new module is immediately
+merges into its catalog at request time — so the new module is immediately
 placeable in **Profily → Rozložení** (with empty config, no required fields).
+
+### Editing an installed module (Obchod modulů → Upravit)
+
+The same chat + live-preview editor (`ModuleEditor.jsx`) also edits an
+**already-installed** module in place. In the Module Store detail, an installed
+module shows an **Upravit** button next to Odinstalovat; it opens the editor
+with `scope=installed`, operating directly on `MagicMirror/modules/<name>`.
+
+On first open the backend ensures a `demo.html` exists (a generic preview
+harness) and runs a one-time **adopt** turn: Claude reads the module, repairs
+`demo.html` to render realistic sample data, and writes a short description —
+which is stored, along with the ongoing chat, in the module's `CLAUDE.md`
+(purpose + history) and `.module-chat.json`. **Restartovat zrcadlo** applies the
+in-place edits to the running mirror (`pm2 restart`).
+
+Endpoints add a `scope` (`draft` | `installed`) to the chat/session/stream
+calls, plus: `POST /api/modules/edit/open`, `POST /api/modules/edit/prepare`
+(adopt turn), `POST /api/modules/edit/restart`, and `GET
+/module-installed/<name>/…` (preview static). The agent is still file-only and
+constrained to the module's own directory.
 
 ## Layout editor (Profily → Rozložení)
 
