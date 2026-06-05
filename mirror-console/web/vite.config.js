@@ -19,6 +19,9 @@ export default defineConfig({
       "/photo": BACKEND,
       "/profiles": BACKEND,
       "/radar": BACKEND,
+      "/modules": BACKEND,
+      "/layout": BACKEND,
+      "/store": BACKEND,
       // /api/* is handled by the Express server, not the Python supervisor.
       "/api": process.env.WEB_SERVER || "http://127.0.0.1:8000",
     },

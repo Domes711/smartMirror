@@ -3,6 +3,7 @@ import "./App.css";
 import CameraPanel from "./CameraPanel.jsx";
 import MqttPanel from "./MqttPanel.jsx";
 import ProfilesPanel from "./ProfilesPanel.jsx";
+import ModuleStorePanel from "./ModuleStorePanel.jsx";
 import RadarPanel from "./RadarPanel.jsx";
 import PinModal from "./PinModal.jsx";
 
@@ -11,7 +12,10 @@ const DEV_PIN = import.meta.env.VITE_DEV_PIN || "1234";
 
 // User-facing tabs vs. developer-only tabs. The gear toggles between the two
 // sections; entering the developer section is PIN-gated.
-const USER_TABS = [{ id: "profiles", label: "Profily" }];
+const USER_TABS = [
+  { id: "profiles", label: "Profily" },
+  { id: "store", label: "Obchod modulů" },
+];
 const DEV_TABS = [
   { id: "camera", label: "Kamera" },
   { id: "radar", label: "Radar" },
@@ -68,6 +72,7 @@ export default function App() {
       </header>
 
       {tab === "profiles" && <ProfilesPanel />}
+      {tab === "store" && <ModuleStorePanel />}
       {tab === "camera" && <CameraPanel />}
       {tab === "radar" && <RadarPanel />}
       {tab === "mqtt" && <MqttPanel />}

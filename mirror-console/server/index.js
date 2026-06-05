@@ -65,7 +65,8 @@ app.use(
       p.startsWith("/profiles") ||
       p === "/radar" ||
       p === "/modules" ||
-      p.startsWith("/layout"),
+      p.startsWith("/layout") ||
+      p.startsWith("/store"),
   })
 );
 

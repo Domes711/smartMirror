@@ -157,11 +157,27 @@ MAGICMIRROR_DIR = os.environ.get(
     "MAGICMIRROR_DIR",
     os.path.normpath(os.path.join(_HERE, "..", "..", "MagicMirror")),
 )
-PAGES_PATH = os.path.join(MAGICMIRROR_DIR, "modules", "MMM-Profile", "pages.js")
+MODULES_DIR = os.path.join(MAGICMIRROR_DIR, "modules")
+PAGES_PATH = os.path.join(MODULES_DIR, "MMM-Profile", "pages.js")
 CONSOLE_MODULES_PATH = os.path.join(MAGICMIRROR_DIR, "config", "console-modules.js")
 CONFIG_JS_PATH = os.path.join(MAGICMIRROR_DIR, "config", "config.js")
 LAYOUT_STORE_PATH = os.path.join(_HERE, "layout_store.json")
+# Per-Pi catalog of modules installed from the Module Store (gitignored). Merged
+# into the effective catalog so installed community modules flow through the same
+# layout-editor / config-injection machinery as the built-in catalog entries.
+INSTALLED_MODULES_PATH = os.path.join(_HERE, "installed_modules.json")
 PM2_APP = os.environ.get("PM2_APP", "MagicMirror")
+
+# Module Store: community catalog + image host (MagicMirror 3rd-party modules).
+STORE_CATALOG_URL = os.environ.get(
+    "STORE_CATALOG_URL", "https://modules.magicmirror.builders/data/modules.json")
+STORE_IMAGE_BASE = os.environ.get(
+    "STORE_IMAGE_BASE", "https://modules.magicmirror.builders/images/")
+_STORE_TTL = 1800  # seconds to cache the fetched community catalog
+# A module directory/name we are willing to clone + place on disk.
+_MODULE_NAME_RE = re.compile(r"^MMM-[A-Za-z0-9_.-]{1,60}$")
+# Dirs under modules/ that are not third-party (built-ins live in default/).
+_NON_MODULE_DIRS = {"default", "node_modules", ".git"}
 
 MM_POSITIONS = [
     "top_bar", "top_left", "top_center", "top_right",
@@ -209,7 +225,32 @@ MODULE_CATALOG = [
         {"key": "lat", "label": "Lat", "required": True},
         {"key": "lon", "label": "Lon", "required": True}]},
 ]
-_CATALOG_BY_TYPE = {c["type"]: c for c in MODULE_CATALOG}
+def load_installed_modules() -> list:
+    """Per-Pi catalog of Module-Store-installed modules (see INSTALLED_MODULES_PATH)."""
+    try:
+        with open(INSTALLED_MODULES_PATH) as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("installed_modules load failed: %s", exc)
+        return []
+
+
+def save_installed_modules(mods: list) -> None:
+    with open(INSTALLED_MODULES_PATH, "w") as f:
+        json.dump(mods, f, indent=2)
+
+
+def effective_catalog() -> list:
+    """Built-in catalog + modules installed from the store (so they are placeable
+    in the layout editor and accepted by validate_store)."""
+    return MODULE_CATALOG + load_installed_modules()
+
+
+def catalog_by_type() -> dict:
+    return {c["type"]: c for c in effective_catalog()}
 
 DEFAULT_STORE = {
     "globalLayout": [],
@@ -321,6 +362,7 @@ def validate_store(store: dict):
     """Return an error string, or None if the store is valid."""
     if not isinstance(store, dict):
         return "store must be an object"
+    by_type = catalog_by_type()
     seen_ids = set()
     for inst in store.get("instances", []):
         iid = inst.get("id")
@@ -330,7 +372,7 @@ def validate_store(store: dict):
         if iid in seen_ids:
             return f"duplicate instance id: {iid}"
         seen_ids.add(iid)
-        cat = _CATALOG_BY_TYPE.get(mtype)
+        cat = by_type.get(mtype)
         if not cat:
             return f"unknown module type: {mtype}"
         for fld in cat["fields"]:
@@ -358,8 +400,9 @@ def _pages_object(store: dict) -> dict:
 
 def _console_modules_array(store: dict) -> list:
     mods = []
+    by_type = catalog_by_type()
     for inst in store.get("instances", []):
-        cat = _CATALOG_BY_TYPE.get(inst.get("type"), {})
+        cat = by_type.get(inst.get("type"), {})
         mods.append({
             "id": inst["id"],
             "module": cat.get("module", inst.get("type")),
@@ -398,8 +441,9 @@ def _managed_block(store: dict) -> str:
     config.js — so a spread returned [] and modules never loaded.
     """
     lines = [CONSOLE_START + " (auto-managed — module instances from the layout editor; do not edit)"]
+    by_type = catalog_by_type()
     for inst in store.get("instances", []):
-        cat = _CATALOG_BY_TYPE.get(inst.get("type"), {})
+        cat = by_type.get(inst.get("type"), {})
         obj = {
             "id": inst["id"],
             "module": cat.get("module", inst.get("type")),
@@ -464,6 +508,235 @@ def generate_files(store: dict) -> None:
         f.write(pages_js)
     inject_managed_modules(store)
     log.info("generated pages.js + injected modules into config.js")
+
+
+# --------------------------------------------------------------------------- #
+# Module Store: browse the MagicMirror 3rd-party catalog, install / uninstall
+# --------------------------------------------------------------------------- #
+_store_cache = {"ts": 0.0, "data": None}
+_install_lock = threading.Lock()
+_install_jobs = {}  # module id -> {phase, percent, done, ok, error, name}
+
+
+def _fetch_community_catalog() -> list:
+    """Download (and cache) the community module catalog JSON."""
+    now = time.time()
+    cached = _store_cache["data"]
+    if cached is not None and now - _store_cache["ts"] < _STORE_TTL:
+        return cached
+    import urllib.request
+    req = urllib.request.Request(
+        STORE_CATALOG_URL, headers={"User-Agent": "mirror-console"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    if isinstance(data, dict):  # catalog is {"modules": [...]}
+        data = data.get("modules", [])
+    if not isinstance(data, list):
+        data = []
+    _store_cache["data"] = data
+    _store_cache["ts"] = now
+    return data
+
+
+def _community_entry(e: dict) -> dict:
+    name = e.get("name") or ""
+    img = e.get("image")
+    return {
+        "id": e.get("id") or name,
+        "name": name,
+        "url": e.get("url") or "",
+        "description": e.get("description") or "",
+        "category": e.get("category") or "",
+        "maintainer": e.get("maintainer") or "",
+        "stars": e.get("stars"),
+        "image": (STORE_IMAGE_BASE + urllib.parse.quote(img)) if img else None,
+    }
+
+
+def _installed_dirs() -> set:
+    try:
+        return {d for d in os.listdir(MODULES_DIR)
+                if os.path.isdir(os.path.join(MODULES_DIR, d))}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _readme_short(module_dir: str) -> str:
+    """First meaningful prose line of a module's README (for the own-module card)."""
+    for fn in ("README.md", "readme.md", "Readme.md"):
+        p = os.path.join(module_dir, fn)
+        if not os.path.isfile(p):
+            continue
+        try:
+            with open(p, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    s = line.strip()
+                    if s and not s.startswith(("#", "!", "[", "<", "-", "=", "`")):
+                        return s[:240]
+        except Exception:  # noqa: BLE001
+            pass
+        break
+    return ""
+
+
+def _own_entry(d: str) -> dict:
+    return {
+        "id": d, "name": d, "url": "",
+        "description": _readme_short(os.path.join(MODULES_DIR, d)),
+        "category": "Moje", "maintainer": "", "stars": None,
+        "image": None, "installed": True, "own": True,
+    }
+
+
+def store_catalog() -> dict:
+    """Two lists: `community` (the internet catalog, each flagged `installed`) and
+    `own` (local module dirs not published in the community catalog)."""
+    try:
+        community_raw = _fetch_community_catalog()
+        err = None
+    except Exception as exc:  # noqa: BLE001
+        community_raw, err = [], str(exc)
+    dirs = _installed_dirs()
+    community, community_names = [], set()
+    for e in community_raw:
+        ce = _community_entry(e)
+        if not ce["name"]:
+            continue
+        community_names.add(ce["name"])
+        ce["installed"] = ce["name"] in dirs
+        community.append(ce)
+    own = [_own_entry(d) for d in sorted(dirs)
+           if d.startswith("MMM-")
+           and d not in community_names
+           and d not in _NON_MODULE_DIRS]
+    return {"community": community, "own": own, "error": err}
+
+
+def _raw_readme_urls(repo_url: str):
+    """(candidate raw README URLs, raw base for relative images) for a repo URL."""
+    u = (repo_url or "").rstrip("/").removesuffix(".git")
+    if "github.com" in u:
+        base = u.replace("github.com", "raw.githubusercontent.com")
+        return ([f"{base}/{ref}/README.md" for ref in ("HEAD", "master", "main")],
+                f"{base}/HEAD/")
+    if "gitlab.com" in u:
+        return ([f"{u}/-/raw/{ref}/README.md" for ref in ("HEAD", "master", "main")],
+                f"{u}/-/raw/HEAD/")
+    return [], ""
+
+
+def store_readme(mid: str, url: str = "") -> dict:
+    """README markdown for a module. Local file for own modules, GitHub/GitLab
+    raw for community ones. `baseUrl` lets the UI resolve relative image paths."""
+    safe = (mid or "").split("/")[-1]
+    if "/" not in (mid or "") and _MODULE_NAME_RE.match(safe):
+        local = os.path.join(MODULES_DIR, safe)
+        if os.path.isdir(local):
+            for fn in ("README.md", "readme.md", "Readme.md"):
+                p = os.path.join(local, fn)
+                if os.path.isfile(p):
+                    with open(p, encoding="utf-8", errors="replace") as f:
+                        return {"markdown": f.read(), "baseUrl": ""}
+            return {"markdown": "", "baseUrl": ""}
+    import urllib.request
+    urls, base = _raw_readme_urls(url)
+    for u in urls:
+        try:
+            req = urllib.request.Request(u, headers={"User-Agent": "mirror-console"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return {"markdown": r.read().decode("utf-8", "replace"), "baseUrl": base}
+        except Exception:  # noqa: BLE001
+            continue
+    return {"markdown": "", "baseUrl": base}
+
+
+def _lookup_community(mid: str):
+    for e in _fetch_community_catalog():
+        if (e.get("id") or e.get("name")) == mid:
+            return e
+    return None
+
+
+def _set_job(mid: str, **kw) -> None:
+    with _install_lock:
+        _install_jobs.setdefault(mid, {}).update(kw)
+
+
+def _unique_instance_id(name: str, store: dict) -> str:
+    base = name.lower()
+    taken = set(registered_ids()) | {i.get("id") for i in store.get("instances", [])}
+    if base not in taken:
+        return base
+    n = 2
+    while f"{base}-{n}" in taken:
+        n += 1
+    return f"{base}-{n}"
+
+
+def _register_installed(name: str) -> None:
+    """Record an installed module in the catalog, add a bare instance + a
+    globalLayout slot so it shows after restart, then regenerate the files.
+    Configuration / placement is refined later in the layout editor."""
+    mods = load_installed_modules()
+    if not any(m.get("type") == name for m in mods):
+        mods.append({"type": name, "module": name, "label": name, "fields": []})
+        save_installed_modules(mods)
+    store = load_store()
+    insts = store.setdefault("instances", [])
+    if not any(i.get("type") == name for i in insts):
+        iid = _unique_instance_id(name, store)
+        insts.append({"id": iid, "type": name, "values": {}})
+        gl = store.setdefault("globalLayout", [])
+        if not any(g.get("id") == iid for g in gl):
+            gl.append({"id": iid, "position": "top_center"})
+        save_store(store)
+    generate_files(store)
+
+
+def _npm_install(cwd: str) -> tuple:
+    cmd = (
+        'export NVM_DIR="$HOME/.nvm"; '
+        '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1; '
+        'NPM="${NPM_BIN:-$(command -v npm || ls -t "$NVM_DIR"/versions/node/*/bin/npm 2>/dev/null | head -1)}"; '
+        '[ -n "$NPM" ] || { echo "npm not found"; exit 127; }; '
+        '"$NPM" install --omit=dev --no-audit --no-fund'
+    )
+    res = subprocess.run(["bash", "-lc", cmd], cwd=cwd, capture_output=True,
+                         text=True, timeout=900, stdin=subprocess.DEVNULL)
+    return res.returncode, ((res.stdout or "") + (res.stderr or ""))
+
+
+def _install_worker(mid: str, url: str, name: str, dest: str) -> None:
+    import shutil
+    try:
+        _set_job(mid, phase="cloning", percent=10)
+        r = subprocess.run(["git", "clone", "--depth", "1", url, dest],
+                           capture_output=True, text=True, timeout=300,
+                           stdin=subprocess.DEVNULL)
+        if r.returncode != 0:
+            raise RuntimeError("git clone selhal: " + (r.stderr or "")[-400:])
+        _set_job(mid, phase="cloned", percent=40)
+        if os.path.isfile(os.path.join(dest, "package.json")):
+            _set_job(mid, phase="npm", percent=50)
+            rc, out = _npm_install(dest)
+            if rc != 0:
+                raise RuntimeError("npm install selhal: " + out[-400:])
+        _set_job(mid, phase="config", percent=88)
+        _register_installed(name)
+        _set_job(mid, phase="restarting", percent=94)
+        res = Supervisor._pm2_restart()
+        if not res.get("ok"):
+            raise RuntimeError("restart selhal: " + res.get("output", ""))
+        _set_job(mid, phase="done", percent=100, done=True, ok=True)
+        log.info("installed module %s", name)
+    except Exception as exc:  # noqa: BLE001
+        try:
+            if os.path.isdir(dest):
+                shutil.rmtree(dest)
+        except Exception:  # noqa: BLE001
+            pass
+        _set_job(mid, phase="error", percent=100, done=True, ok=False, error=str(exc))
+        log.warning("install %s failed: %s", name, exc)
 
 
 # --------------------------------------------------------------------------- #
@@ -900,7 +1173,7 @@ class Supervisor:
     # ---- layout editor ------------------------------------------------ #
     @staticmethod
     def list_modules() -> dict:
-        return {"catalog": MODULE_CATALOG, "registered_ids": registered_ids(),
+        return {"catalog": effective_catalog(), "registered_ids": registered_ids(),
                 "positions": MM_POSITIONS}
 
     @staticmethod
@@ -964,6 +1237,77 @@ class Supervisor:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "output": str(exc)}
 
+    # ---- module store ------------------------------------------------- #
+    @staticmethod
+    def store_catalog() -> dict:
+        return store_catalog()
+
+    @staticmethod
+    def store_readme(mid: str, url: str = "") -> dict:
+        return store_readme(mid, url)
+
+    @staticmethod
+    def install_status(mid: str) -> dict:
+        with _install_lock:
+            job = _install_jobs.get(mid)
+            return dict(job) if job else {"phase": "idle", "percent": 0, "done": False}
+
+    @staticmethod
+    def install_module(mid: str) -> dict:
+        """Validate against the trusted catalog, then clone + install on a
+        background thread (poll /store/install/status for progress)."""
+        entry = _lookup_community(mid)
+        if not entry:
+            raise ValueError("modul není v katalogu")
+        name = entry.get("name") or ""
+        url = entry.get("url") or ""
+        if not _MODULE_NAME_RE.match(name):
+            raise ValueError(f"neplatné jméno modulu: {name}")
+        if not (url.startswith("https://github.com/")
+                or url.startswith("https://gitlab.com/")):
+            raise ValueError("nepodporovaný zdroj (jen github/gitlab https)")
+        dest = os.path.join(MODULES_DIR, name)
+        if os.path.exists(dest):
+            raise RuntimeError("modul už je nainstalovaný")
+        with _install_lock:
+            cur = _install_jobs.get(mid)
+            if cur and not cur.get("done", True):
+                raise RuntimeError("instalace už běží")
+            _install_jobs[mid] = {"phase": "starting", "percent": 2, "done": False,
+                                  "ok": False, "error": None, "name": name}
+        threading.Thread(target=_install_worker, args=(mid, url, name, dest),
+                         daemon=True).start()
+        return {"ok": True, "started": True, "name": name}
+
+    @staticmethod
+    def uninstall_module(name: str) -> dict:
+        """Remove the module dir, its instances, every layout reference, and its
+        catalog entry, then regenerate the files and restart the mirror."""
+        if not _MODULE_NAME_RE.match(name or ""):
+            raise ValueError("neplatné jméno modulu")
+        import shutil
+        dest = os.path.join(MODULES_DIR, name)
+        if os.path.isdir(dest):
+            shutil.rmtree(dest)
+        save_installed_modules(
+            [m for m in load_installed_modules() if m.get("type") != name])
+        store = load_store()
+        removed = {i["id"] for i in store.get("instances", [])
+                   if i.get("type") == name and i.get("id")}
+        store["instances"] = [i for i in store.get("instances", [])
+                              if i.get("type") != name]
+        store["globalLayout"] = [g for g in store.get("globalLayout", [])
+                                 if g.get("id") not in removed]
+        for wins in store.get("windows", {}).values():
+            for w in (wins or {}).values():
+                w["layout"] = [e for e in w.get("layout", [])
+                               if e.get("id") not in removed]
+        save_store(store)
+        generate_files(store)
+        res = Supervisor._pm2_restart()
+        return {"ok": res.get("ok", False), "removed": name,
+                "output": res.get("output", "")}
+
 
 # --------------------------------------------------------------------------- #
 # HTTP server
@@ -1014,6 +1358,13 @@ def make_handler(sup: Supervisor):
                 self._json(200, sup.list_modules())
             elif path == "/layout":
                 self._json(200, sup.get_layout())
+            elif path == "/store/catalog":
+                self._json(200, sup.store_catalog())
+            elif path == "/store/readme":
+                q = self._query()
+                self._json(200, sup.store_readme(q.get("id", ""), q.get("url", "")))
+            elif path == "/store/install/status":
+                self._json(200, sup.install_status(self._query().get("id", "")))
             else:
                 self._json(404, {"error": "not found"})
 
@@ -1045,6 +1396,10 @@ def make_handler(sup: Supervisor):
                     self._json(200, sup.set_radar(bool(self._body().get("active"))))
                 elif path == "/layout/apply":
                     self._json(200, sup.apply_layout())
+                elif path == "/store/install":
+                    self._json(200, sup.install_module(self._body().get("id", "")))
+                elif path == "/store/uninstall":
+                    self._json(200, sup.uninstall_module(self._body().get("name", "")))
                 else:
                     self._json(404, {"error": "not found"})
             except ValueError as exc:

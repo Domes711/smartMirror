@@ -11,6 +11,7 @@ ld2450/radar_config.json
 
 # Per-Pi console-generated layout state / modules (not source)
 mirror-console/backend/layout_store.json
+mirror-console/backend/installed_modules.json
 MagicMirror/config/console-modules.js
 MagicMirror/modules/MMM-Profile/pages.js
 
