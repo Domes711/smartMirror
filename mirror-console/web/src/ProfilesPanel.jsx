@@ -108,10 +108,6 @@ export default function ProfilesPanel() {
           ))}
         </div>
       )}
-
-      <p className="profiles-note">
-        Klikni na profil pro detail. Brzy: rozložení modulů a časová okna.
-      </p>
     </div>
   );
 }
