@@ -7,7 +7,7 @@ import LayoutTab from "./LayoutTab.jsx";
 // all training thumbnails (enlarge + delete), add more photos (modal → capture
 // session → retrain), retrain, and remove the whole profile.
 export default function ProfileDetail({ name, onBack }) {
-  const [tab, setTab] = useState("photos");
+  const [tab, setTab] = useState("layout");
   const [photos, setPhotos] = useState([]);
   const [detail, setDetail] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -114,11 +114,11 @@ export default function ProfileDetail({ name, onBack }) {
       </div>
 
       <div className="tabs subtabs">
-        <button className={"tab" + (tab === "photos" ? " active" : "")} onClick={() => setTab("photos")}>
-          Fotky
-        </button>
         <button className={"tab" + (tab === "layout" ? " active" : "")} onClick={() => setTab("layout")}>
           Rozložení
+        </button>
+        <button className={"tab" + (tab === "photos" ? " active" : "")} onClick={() => setTab("photos")}>
+          Fotky
         </button>
       </div>
 
