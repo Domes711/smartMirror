@@ -53,7 +53,10 @@ export default function ProfilesPanel() {
 
   return (
     <div className="panel">
-      <div className="panel-head">
+      <div className="store-topbar">
+        <button className="pill pill-btn" onClick={() => setAdding(true)}>
+          ＋ Přidat profil
+        </button>
         {error ? (
           <span className="pill pill-bad">● {error}</span>
         ) : (
@@ -61,12 +64,6 @@ export default function ProfilesPanel() {
             {profiles === null ? "● načítám…" : `● ${profiles.length} profilů`}
           </span>
         )}
-      </div>
-
-      <div className="panel-actions">
-        <button className="mqtt-btn k-ok" onClick={() => setAdding(true)}>
-          ＋ Přidat profil
-        </button>
       </div>
 
       {profiles && profiles.length === 0 ? (
