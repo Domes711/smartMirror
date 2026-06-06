@@ -140,38 +140,35 @@ export default function ModuleDetail({ module: m, onBack }) {
       <Gallery images={images} />
 
       <div className="store-detail-actions">
-        {installed ? (
-          <>
-            <button className="mqtt-btn k-ok store-install-btn" onClick={() => setEditing(true)}>
-              Upravit
+        <div className="store-detail-btns">
+          {installed ? (
+            <>
+              <button className="mqtt-btn k-ok store-install-btn" onClick={() => setEditing(true)}>
+                Upravit
+              </button>
+              <button className="mqtt-btn k-bad store-install-btn" onClick={uninstall}>
+                Odinstalovat
+              </button>
+            </>
+          ) : (
+            <button
+              className="mqtt-btn k-ok store-install-btn"
+              onClick={startInstall}
+              disabled={installing}
+            >
+              {installing ? (
+                <>
+                  <span className="store-progress-fill" style={{ width: `${percent}%` }} />
+                  <span className="store-progress-label">{phaseLabel} {percent}%</span>
+                </>
+              ) : (
+                "Instalovat"
+              )}
             </button>
-            <button className="mqtt-btn k-bad store-install-btn" onClick={uninstall}>
-              Odinstalovat
-            </button>
-          </>
-        ) : (
-          <button
-            className="mqtt-btn k-ok store-install-btn"
-            onClick={startInstall}
-            disabled={installing}
-          >
-            {installing ? (
-              <>
-                <span
-                  className="store-progress-fill"
-                  style={{ width: `${percent}%` }}
-                />
-                <span className="store-progress-label">
-                  {phaseLabel} {percent}%
-                </span>
-              </>
-            ) : (
-              "Instalovat"
-            )}
-          </button>
-        )}
+          )}
+        </div>
         {m.url && (
-          <a className="mqtt-btn compact" href={m.url} target="_blank" rel="noreferrer">
+          <a className="mqtt-btn compact store-source-btn" href={m.url} target="_blank" rel="noreferrer">
             Zdroj ↗
           </a>
         )}
