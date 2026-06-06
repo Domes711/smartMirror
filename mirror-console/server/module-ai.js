@@ -476,7 +476,7 @@ async function runAgent(scope, name, prompt, { adopt = false } = {}) {
     "--verbose",
     "--model", MODEL,
     "--permission-mode", "dontAsk",
-    "--allowedTools", "Read,Write,Edit,Glob,Grep",
+    "--allowedTools", "Read,Write,Edit,Glob,Grep,WebFetch,WebSearch",
     "--append-system-prompt", systemPromptAppend(scope, name),
   ];
   if (s.sessionId) args.push("--resume", s.sessionId);

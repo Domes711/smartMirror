@@ -16,11 +16,6 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  /* Stay visible (Profily / Obchod tabs) while the page scrolls. */
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  background: var(--bg);
 }
 
 .topbar h1 {
@@ -111,19 +106,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-/* Lock the app to the viewport (used by the store list view) so the page
-   itself doesn't scroll — only the inner list container does. */
-.app-locked {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-  /* let the list run to the very bottom edge — no leftover gap below it */
-  padding-bottom: 0;
-}
-.app-locked .panel {
-  min-height: 0;
 }
 .panel-head {
   display: flex;
@@ -294,22 +276,6 @@
 .wizard-head strong {
   font-size: 1rem;
 }
-/* Profile detail header: keep ← Profily / name / Odebrat on ONE stable row so it
-   never reflows ("rozhazuje") while editing a time window's layout. The name
-   truncates instead of wrapping. */
-.profile-head {
-  flex-wrap: nowrap;
-}
-.profile-head > strong {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.profile-head .detail-head-actions {
-  flex: none;
-}
 .steps {
   margin-left: auto;
   display: flex;
@@ -336,37 +302,8 @@
 .detail-head-actions {
   margin-left: auto;
 }
-/* Sub-navigation (Rozložení / Fotky / Nastavení in the profile detail).
-   Deliberately NOT the rounded pill style of the main nav — a flat underline
-   tab bar so primary vs. secondary navigation read differently. */
-.subnav {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--border);
-}
-.subnav-item {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 9px 14px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px; /* sit the underline on the container border */
-  transition: color 0.15s, border-color 0.15s;
-}
-.subnav-item:hover {
-  color: var(--text);
-}
-.subnav-item.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+.subtabs {
+  align-self: flex-start;
 }
 .detail-foot {
   gap: 10px;
@@ -938,13 +875,6 @@
 .cal {
   position: relative;
 }
-/* empty time is clickable to add a one-hour window */
-.cal-clickable {
-  cursor: pointer;
-}
-.cal-clickable .cal-event {
-  cursor: pointer;
-}
 .cal-line {
   position: absolute;
   left: 0;
@@ -1114,6 +1044,13 @@
   gap: 10px;
 }
 
+/* ---- footer ---- */
+.footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 /* ---- mobile ---- */
 @media (max-width: 560px) {
   .topbar h1 {
@@ -1177,60 +1114,44 @@
   align-items: center;
   gap: 8px;
 }
-/* Sticky store controls: status pill + tab switcher + search/create row.
-   Pins directly below the (also sticky) topbar so only the module list
-   scrolls. --topbar-h is published by App from the live topbar height. */
-.store-head {
-  position: sticky;
-  top: var(--topbar-h, 56px);
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: var(--bg);
-  /* cover the .app gap above so list rows don't peek between topbar and here */
-  padding-bottom: 8px;
-  margin-bottom: -4px;
+/* store-specific tab bar — full width, compact */
+.store-tabs {
+  width: 100%;
+  border-radius: 12px;
+  padding: 3px;
+  gap: 3px;
 }
-.store-head .panel-actions {
-  margin: 0;
-}
-/* Top row of the store header: create button (left) + status pill (right). */
-.store-topbar {
+.store-tab {
+  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
-/* Create-module button sized exactly like the .pill it sits next to. */
-.pill-btn {
-  appearance: none;
-  border: none;
-  cursor: pointer;
-  color: #04222e;
-  background: var(--accent);
+.store-tab-icon {
+  font-size: 0.95rem;
+  line-height: 1;
 }
-.pill-btn:hover {
-  background: #7dd3fc;
-}
-
-/* store-specific tab bar — full width, compact */
 .store-tab-label {
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .store-tab-count {
   font-size: 0.65rem;
   font-weight: 700;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255,255,255,0.08);
   border-radius: 999px;
   padding: 1px 5px;
   min-width: 18px;
   text-align: center;
 }
-.subnav-item.active .store-tab-count {
-  color: var(--accent);
-  background: rgba(56, 189, 248, 0.16);
+.store-tab.active .store-tab-count {
+  color: #04222e;
+  background: rgba(4, 34, 46, 0.2);
 }
 .store-count {
   font-size: 0.72rem;
@@ -1239,40 +1160,6 @@
   background: var(--surface-2);
   border-radius: 999px;
   padding: 2px 8px;
-}
-/* The only scrolling region on the store list / module detail: fills the space
-   below the pinned header and scrolls internally while the page stays fixed.
-   Runs all the way to the bottom edge with a white scroll indicator. */
-.store-scroll,
-.detail-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  /* keep clear of the home-indicator / screen edge but no dead space above it */
-  padding-bottom: env(safe-area-inset-bottom);
-  scrollbar-width: thin;
-  scrollbar-color: #fff transparent;
-  /* reserve the scrollbar so toggling it never changes content width — stops the
-     aspect-ratio mirror grid from oscillating and shaking the whole view */
-  scrollbar-gutter: stable;
-}
-.detail-scroll {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.store-scroll::-webkit-scrollbar,
-.detail-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-.store-scroll::-webkit-scrollbar-thumb,
-.detail-scroll::-webkit-scrollbar-thumb {
-  background: #fff;
-  border-radius: 999px;
-}
-.store-scroll::-webkit-scrollbar-track,
-.detail-scroll::-webkit-scrollbar-track {
-  background: transparent;
 }
 .store-list {
   display: flex;
@@ -1534,54 +1421,10 @@
 }
 
 .mc-panel {
-  /* Pin the editor to the whole screen below the topbar so the chat fills the
-     viewport and the input always sits at the very bottom (not mid-screen).
-     --topbar-h is the live topbar height published by App. */
-  position: fixed;
-  top: var(--topbar-h, 56px);
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: 14px;
-  padding: 16px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
-  box-sizing: border-box;
-  background: var(--bg);
-}
-
-/* ---- module builder header ---- */
-.mc-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.mc-back {
-  flex: none;
-}
-.mc-head-title {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-width: 0;
-  gap: 1px;
-}
-.mc-head-title strong {
-  font-size: 1rem;
-  line-height: 1.15;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mc-head-sub {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--accent);
+  min-height: 0;
 }
 
 .mc-chat {
@@ -1594,228 +1437,85 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   overflow-y: auto;
   min-height: 0;
-  padding: 16px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
 }
 .mc-msg {
-  position: relative;
-  max-width: 88%;
-  padding: 9px 13px;
-  border-radius: 14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  max-width: 85%;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 0.9rem;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.6;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 .mc-user {
   align-self: flex-end;
-  background: var(--accent);
-  color: #04222e;
-  font-weight: 500;
-  border-bottom-right-radius: 4px;
+  background: linear-gradient(135deg, rgba(120, 180, 255, 0.25), rgba(100, 150, 255, 0.2));
+  border: 1px solid rgba(120, 180, 255, 0.3);
 }
 .mc-assistant {
   align-self: flex-start;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-bottom-left-radius: 4px;
-}
-.mc-msg-role {
-  display: block;
-  font-size: 0.66rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--accent);
-  margin-bottom: 3px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 .mc-sys {
   align-self: center;
-  max-width: 100%;
-  text-align: center;
-  font-size: 0.74rem;
-  color: var(--muted);
+  color: #9aa4b2;
+  font-size: 12px;
   background: none;
-  padding: 0;
-  border-radius: 999px;
+  padding: 2px 6px;
 }
-.mc-sys-tool {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  padding: 3px 10px;
-}
-.mc-sys-error {
-  color: var(--bad);
-}
-
-/* typing indicator while the agent works */
-.mc-typing {
-  align-self: flex-start;
-  display: inline-flex;
-  gap: 4px;
-  padding: 12px 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  border-bottom-left-radius: 4px;
-}
-.mc-typing span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--muted);
-  animation: mc-bounce 1s infinite ease-in-out;
-}
-.mc-typing span:nth-child(2) { animation-delay: 0.15s; }
-.mc-typing span:nth-child(3) { animation-delay: 0.3s; }
-@keyframes mc-bounce {
-  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
-  30% { opacity: 1; transform: translateY(-3px); }
-}
-
-/* empty / greeting hero */
-.mc-hero {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 12px;
-  padding: 24px;
-}
-.mc-hero-icon {
-  width: 64px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  border-radius: 18px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-.mc-hero-text {
-  margin: 0;
-  font-size: 1rem;
-  color: var(--text);
-  max-width: 34ch;
-  line-height: 1.45;
-}
-.mc-hero-hint {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--muted);
-  max-width: 32ch;
-}
-
-/* composer */
 .mc-input {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  margin-top: 10px;
   align-items: flex-end;
-  padding: 12px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
 }
 .mc-input textarea {
   flex: 1;
   box-sizing: border-box;
   resize: none;
   font: inherit;
-  color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
-  max-height: 140px;
-  line-height: 1.4;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px 10px;
 }
-.mc-input textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.mc-send {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: var(--accent);
-  color: #04222e;
-  font-size: 1rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: filter 0.15s, transform 0.05s;
-}
-.mc-send:hover:not(:disabled) { filter: brightness(1.1); }
-.mc-send:active:not(:disabled) { transform: scale(0.92); }
-.mc-send:disabled { opacity: 0.4; cursor: default; }
 
 /* Floating preview bubble (Messenger-style) */
-/* Header toggles for the live view / state controls windows. */
-.mc-toggle {
-  font-size: 1rem;
-  line-height: 1;
-}
-.mc-toggle.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(56, 189, 248, 0.14);
-}
-
-/* Floating controls window — state switcher; the live view reacts. */
-.mc-controls-float {
+.mc-bubble {
   position: fixed;
-  top: calc(var(--topbar-h, 56px) + 84px);
-  left: 24px;
-  width: min(240px, calc(100vw - 48px));
-  max-height: 50dvh;
-  overflow-y: auto;
+  bottom: 24px;
+  right: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.4rem;
+  border: none;
+  cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 14px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  z-index: 199;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 200;
+  transition: transform 0.15s, background 0.15s;
 }
-.mc-controls-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--muted);
-}
-.mc-controls-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.mc-controls-list .mqtt-btn { width: 100%; }
-.mc-controls-empty {
-  font-size: 0.82rem;
-  color: var(--muted);
-  line-height: 1.4;
-}
+.mc-bubble:hover { transform: scale(1.1); }
+.mc-bubble.mc-bubble-open { background: var(--surface-2); color: var(--text); }
 
 /* Floating preview panel */
 .mc-preview-float {
   position: fixed;
-  top: calc(var(--topbar-h, 56px) + 84px);
-  right: 24px;
-  width: min(420px, calc(100vw - 48px));
-  height: min(340px, 45dvh);
+  bottom: 88px;
+  right: 16px;
+  width: min(420px, calc(100vw - 32px));
+  height: min(340px, 50dvh);
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
@@ -1861,69 +1561,3 @@
   color: #9aa4b2;
   font-weight: 400;
 }
-
-/* ---- toast notifications (top-right, colour-coded) ---- */
-.toast-host {
-  position: fixed;
-  top: max(12px, env(safe-area-inset-top));
-  right: 12px;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(360px, calc(100vw - 24px));
-  pointer-events: none;
-}
-.toast {
-  pointer-events: auto;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--muted);
-  border-radius: 10px;
-  padding: 10px 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  color: var(--text);
-  font-size: 0.85rem;
-  line-height: 1.35;
-  cursor: pointer;
-  animation: toast-in 0.18s ease-out;
-}
-@keyframes toast-in {
-  from { opacity: 0; transform: translateX(14px); }
-  to { opacity: 1; transform: none; }
-}
-.toast-success { border-left-color: var(--ok); }
-.toast-error { border-left-color: var(--bad); }
-.toast-warning { border-left-color: var(--warn); }
-.toast-info { border-left-color: var(--accent); }
-.toast-icon {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-.toast-success .toast-icon { color: #04222e; background: var(--ok); }
-.toast-error .toast-icon { color: #2a0606; background: var(--bad); }
-.toast-warning .toast-icon { color: #2a1c00; background: var(--warn); }
-.toast-info .toast-icon { color: #04222e; background: var(--accent); }
-.toast-msg { flex: 1; word-break: break-word; }
-.toast-close {
-  flex: none;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.8rem;
-  line-height: 1;
-  padding: 0 2px;
-}
-.toast-close:hover { color: var(--text); }
