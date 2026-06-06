@@ -1425,6 +1425,13 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  /* Break out of the 880px centered .app column so the chat spans the whole
+     screen instead of sitting as a narrow column in the middle. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding: 0 16px;
+  box-sizing: border-box;
 }
 
 .mc-chat {
