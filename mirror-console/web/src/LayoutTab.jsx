@@ -147,6 +147,30 @@ export default function LayoutTab({ profile }) {
     setSelected(key);
   };
 
+  // Click on empty calendar time → add a one-hour window there and jump straight
+  // into its layout editor.
+  const addHourWindow = (hour) => {
+    const h = Math.max(0, Math.min(23, hour));
+    const label = `${String(h).padStart(2, "0")}:00–${String(h + 1).padStart(2, "0")}:00`;
+    const st = clone(store);
+    st.windows = st.windows || {};
+    st.windows[profile] = st.windows[profile] || {};
+    let key = `okno-${String(h).padStart(2, "0")}`;
+    for (let n = 2; st.windows[profile][key]; n += 1) key = `okno-${String(h).padStart(2, "0")}-${n}`;
+    st.windows[profile][key] = {
+      from: cronFromTime(`${h}:0`), to: cronFromTime(`${h + 1}:0`),
+      label, layout: [],
+    };
+    persist(st);
+    setSelected(key);
+  };
+
+  const onCalendarClick = (e) => {
+    if (e.target.closest(".cal-event")) return; // existing window handles its own click
+    const rect = e.currentTarget.getBoundingClientRect();
+    addHourWindow(Math.floor((e.clientY - rect.top) / HOUR_PX));
+  };
+
   const deleteWindow = (name) => {
     if (!window.confirm(`Smazat okno „${name}"?`)) return;
     const st = clone(store);
@@ -240,7 +264,7 @@ export default function LayoutTab({ profile }) {
       </div>
 
       <div className="cal-scroll">
-        <div className="cal" style={{ height: 24 * HOUR_PX }}>
+        <div className="cal cal-clickable" style={{ height: 24 * HOUR_PX }} onClick={onCalendarClick}>
           {Array.from({ length: 25 }, (_, h) => (
             <div key={h} className="cal-line" style={{ top: h * HOUR_PX }}>
               <span className="cal-label">{String(h).padStart(2, "0")}:00</span>
@@ -263,7 +287,7 @@ export default function LayoutTab({ profile }) {
         </div>
       </div>
       {entries.length === 0 && (
-        <div className="monitor-empty">Žádná časová okna — přidej první tlačítkem nahoře.</div>
+        <div className="monitor-empty">Žádná časová okna — klikni do kalendáře na prázdný čas nebo použij tlačítko nahoře.</div>
       )}
 
       {showWindowModal && (

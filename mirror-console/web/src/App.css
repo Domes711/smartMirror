@@ -901,6 +901,13 @@
 .cal {
   position: relative;
 }
+/* empty time is clickable to add a one-hour window */
+.cal-clickable {
+  cursor: pointer;
+}
+.cal-clickable .cal-event {
+  cursor: pointer;
+}
 .cal-line {
   position: absolute;
   left: 0;
