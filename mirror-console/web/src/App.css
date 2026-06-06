@@ -112,6 +112,17 @@
   flex-direction: column;
   gap: 16px;
 }
+
+/* Lock the app to the viewport (used by the store list view) so the page
+   itself doesn't scroll — only the inner list container does. */
+.app-locked {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.app-locked .panel {
+  min-height: 0;
+}
 .panel-head {
   display: flex;
   justify-content: flex-end;
@@ -1184,6 +1195,15 @@
   background: var(--surface-2);
   border-radius: 999px;
   padding: 2px 8px;
+}
+/* The only scrolling region on the store list view: fills the space below the
+   pinned controls and scrolls internally while the page stays fixed. */
+.store-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* keep the last card clear of the viewport edge */
+  padding-bottom: 4px;
 }
 .store-list {
   display: flex;
