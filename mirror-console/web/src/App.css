@@ -16,6 +16,11 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  /* Stay visible (Profily / Obchod tabs) while the page scrolls. */
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--bg);
 }
 
 .topbar h1 {
@@ -1114,6 +1119,25 @@
   align-items: center;
   gap: 8px;
 }
+/* Sticky store controls: status pill + tab switcher + search/create row.
+   Pins directly below the (also sticky) topbar so only the module list
+   scrolls. --topbar-h is published by App from the live topbar height. */
+.store-head {
+  position: sticky;
+  top: var(--topbar-h, 56px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg);
+  /* cover the .app gap above so list rows don't peek between topbar and here */
+  padding-bottom: 8px;
+  margin-bottom: -4px;
+}
+.store-head .panel-actions {
+  margin: 0;
+}
+
 /* store-specific tab bar — full width, compact */
 .store-tabs {
   width: 100%;

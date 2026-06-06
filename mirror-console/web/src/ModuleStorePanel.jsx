@@ -83,30 +83,53 @@ export default function ModuleStorePanel() {
 
   return (
     <div className="panel">
-      <div className="panel-head">
-        {error
-          ? <span className="pill pill-bad">● {error}</span>
-          : <span className="pill">{loading ? "● načítám katalog…" : `● ${counts.browse} dostupných`}</span>}
-      </div>
+      {/* Pinned controls: status pill + tab switcher + per-tab action row.
+          Stays put while only the module list below scrolls. */}
+      <div className="store-head">
+        <div className="panel-head">
+          {error
+            ? <span className="pill pill-bad">● {error}</span>
+            : <span className="pill">{loading ? "● načítám katalog…" : `● ${counts.browse} dostupných`}</span>}
+        </div>
 
-      {data?.error && (
-        <p className="store-note store-warn">
-          Internetový katalog se nepodařilo načíst: {data.error}
-        </p>
-      )}
+        {data?.error && (
+          <p className="store-note store-warn">
+            Internetový katalog se nepodařilo načíst: {data.error}
+          </p>
+        )}
 
-      <div className="tabs store-tabs">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            className={"tab store-tab" + (tab === t.id ? " active" : "")}
-            onClick={() => switchTab(t.id)}
-          >
-            <span className="store-tab-icon">{t.icon}</span>
-            <span className="store-tab-label">{t.label}</span>
-            {!loading && <span className="store-tab-count">{counts[t.id]}</span>}
-          </button>
-        ))}
+        <div className="tabs store-tabs">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              className={"tab store-tab" + (tab === t.id ? " active" : "")}
+              onClick={() => switchTab(t.id)}
+            >
+              <span className="store-tab-icon">{t.icon}</span>
+              <span className="store-tab-label">{t.label}</span>
+              {!loading && <span className="store-tab-count">{counts[t.id]}</span>}
+            </button>
+          ))}
+        </div>
+
+        {!loading && tab === "own" && (
+          <div className="panel-actions">
+            <button className="mqtt-btn k-ok" onClick={() => setCreating(true)}>
+              ＋ Vytvořit modul
+            </button>
+          </div>
+        )}
+        {!loading && tab === "browse" && (
+          <div className="panel-actions">
+            <input
+              className="store-search"
+              type="search"
+              placeholder="Hledat modul…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -117,39 +140,21 @@ export default function ModuleStorePanel() {
       ) : (
         <>
           {tab === "own" && (
-            <>
-              <div className="panel-actions">
-                <button className="mqtt-btn k-ok" onClick={() => setCreating(true)}>
-                  ＋ Vytvořit modul
-                </button>
-              </div>
-              <ModuleList
-                modules={own}
-                empty="Zatím žádné vlastní moduly."
-                onPick={handlePick}
-              />
-            </>
+            <ModuleList
+              modules={own}
+              empty="Zatím žádné vlastní moduly."
+              onPick={handlePick}
+            />
           )}
           {tab === "installed" && (
             <ModuleList modules={installed} empty="Žádné nainstalované moduly." onPick={handlePick} />
           )}
           {tab === "browse" && (
-            <>
-              <div className="panel-actions">
-                <input
-                  className="store-search"
-                  type="search"
-                  placeholder="Hledat modul…"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                />
-              </div>
-              <ModuleList
-                modules={browse}
-                empty={q ? "Nic nenalezeno." : "Začni psát pro vyhledání…"}
-                onPick={handlePick}
-              />
-            </>
+            <ModuleList
+              modules={browse}
+              empty={q ? "Nic nenalezeno." : "Začni psát pro vyhledání…"}
+              onPick={handlePick}
+            />
           )}
         </>
       )}
