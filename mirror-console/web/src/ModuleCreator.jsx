@@ -7,6 +7,7 @@ import ModuleEditor from "./ModuleEditor.jsx";
 // to install the finished module onto the mirror.
 export default function ModuleCreator({ onBack } = {}) {
   const [step, setStep] = useState(1);
+  const [mode, setMode] = useState("new"); // step-1 subsection: "new" | "continue"
   const [name, setName] = useState("");
   const [moduleName, setModuleName] = useState(null); // server-normalised MMM-…
   const [description, setDescription] = useState("");
@@ -95,42 +96,64 @@ export default function ModuleCreator({ onBack } = {}) {
             <span className="step-dot">2 Vzhled</span>
           </div>
         </div>
-        <div className="card wizard-step">
-          <label className="field">
-            <span>Jméno modulu</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="např. Counter nebo MMM-Counter"
-              autoFocus
-            />
-          </label>
-          <label className="field">
-            <span>Popis — co má modul dělat / zobrazovat</span>
-            <textarea
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="např. Odpočet dní do nejbližší výplaty, velké číslo a popisek pod ním."
-            />
-          </label>
-          {error && <div className="hint-bad">{error}</div>}
-          <button className="mqtt-btn k-ok" disabled={!name.trim() || creating} onClick={createDraft}>
-            Vytvořit a pokračovat →
+
+        <div className="tabs creator-subtabs">
+          <button
+            className={"tab" + (mode === "new" ? " active" : "")}
+            onClick={() => setMode("new")}
+          >
+            Vytvořit nový
+          </button>
+          <button
+            className={"tab" + (mode === "continue" ? " active" : "")}
+            onClick={() => setMode("continue")}
+          >
+            Pokračovat na rozpracovaném
+            {existingDrafts.length > 0 && ` (${existingDrafts.length})`}
           </button>
         </div>
 
-        {existingDrafts.length > 0 && (
+        {mode === "new" && (
           <div className="card wizard-step">
-            <h3>Pokračovat v rozpracovaném</h3>
-            <div className="mc-draftlist">
-              {existingDrafts.map((d) => (
-                <button key={d.name} className="mqtt-btn mc-draft" onClick={() => openExisting(d.name)}>
-                  <strong>{d.name}</strong>
-                  {d.description && <span className="mc-draft-desc">{d.description}</span>}
-                </button>
-              ))}
-            </div>
+            <label className="field">
+              <span>Jméno modulu</span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="např. Counter nebo MMM-Counter"
+                autoFocus
+              />
+            </label>
+            <label className="field">
+              <span>Popis — co má modul dělat / zobrazovat</span>
+              <textarea
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="např. Odpočet dní do nejbližší výplaty, velké číslo a popisek pod ním."
+              />
+            </label>
+            {error && <div className="hint-bad">{error}</div>}
+            <button className="mqtt-btn k-ok" disabled={!name.trim() || creating} onClick={createDraft}>
+              Vytvořit a pokračovat →
+            </button>
+          </div>
+        )}
+
+        {mode === "continue" && (
+          <div className="card wizard-step">
+            {existingDrafts.length > 0 ? (
+              <div className="mc-draftlist">
+                {existingDrafts.map((d) => (
+                  <button key={d.name} className="mqtt-btn mc-draft" onClick={() => openExisting(d.name)}>
+                    <strong>{d.name}</strong>
+                    {d.description && <span className="mc-draft-desc">{d.description}</span>}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="store-note">Žádné rozpracované moduly.</p>
+            )}
           </div>
         )}
       </div>

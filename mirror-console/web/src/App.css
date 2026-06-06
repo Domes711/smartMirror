@@ -317,6 +317,14 @@
   gap: 12px;
   padding: 18px;
 }
+/* New-module step-1 subsection switcher: Vytvořit nový / Pokračovat na rozpracovaném */
+.creator-subtabs {
+  width: 100%;
+}
+.creator-subtabs .tab {
+  flex: 1;
+  text-align: center;
+}
 .detail-head-actions {
   margin-left: auto;
 }
