@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import ModuleDetail from "./ModuleDetail.jsx";
 import ModuleCreator from "./ModuleCreator.jsx";
 
@@ -17,8 +17,22 @@ export default function ModuleStorePanel() {
   const [creating, setCreating] = useState(false);
 
   // Scroll restoration: save position before entering detail, restore after back.
+  // Only the list scrolls (the page is locked to the viewport), so we track the
+  // list container's scrollTop rather than the window.
   const savedScroll   = useRef(0);
   const shouldRestore = useRef(false);
+  const listRef       = useRef(null);
+
+  // Lock the page to the viewport while showing the scrollable list, so only the
+  // list scrolls and the topbar + store controls stay put. The detail / creator
+  // subviews (early returns below) keep the normal full-page scroll.
+  useLayoutEffect(() => {
+    const app = document.querySelector(".app");
+    if (!app) return;
+    const listMode = !selected && !creating;
+    app.classList.toggle("app-locked", listMode);
+    return () => app.classList.remove("app-locked");
+  }, [selected, creating]);
 
   const load = useCallback(async () => {
     try {
@@ -39,14 +53,16 @@ export default function ModuleStorePanel() {
   useEffect(() => {
     if (shouldRestore.current && data !== null) {
       shouldRestore.current = false;
-      requestAnimationFrame(() => window.scrollTo(0, savedScroll.current));
+      requestAnimationFrame(() => {
+        if (listRef.current) listRef.current.scrollTop = savedScroll.current;
+      });
     }
   }, [data]);
 
   const switchTab = (id) => { setTab(id); setQuery(""); };
 
   const handlePick = (m) => {
-    savedScroll.current = window.scrollY;
+    savedScroll.current = listRef.current?.scrollTop || 0;
     setSelected(m);
   };
 
@@ -138,7 +154,7 @@ export default function ModuleStorePanel() {
           <h2>Načítám…</h2>
         </div>
       ) : (
-        <>
+        <div className="store-scroll" ref={listRef}>
           {tab === "own" && (
             <ModuleList
               modules={own}
@@ -156,7 +172,7 @@ export default function ModuleStorePanel() {
               onPick={handlePick}
             />
           )}
-        </>
+        </div>
       )}
     </div>
   );
