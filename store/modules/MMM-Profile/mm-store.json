@@ -1,0 +1,29 @@
+{
+  "name": {
+    "en": "Profile",
+    "cs": "Profil"
+  },
+  "description": {
+    "en": "Presence-driven profile manager: Face ID animation plus per-user, time-of-day page layouts. Configured from the Layout editor.",
+    "cs": "Správce profilů řízený přítomností: animace Face ID a rozvržení stránek podle uživatele a denní doby. Konfiguruje se v editoru Rozložení."
+  },
+  "screenshots": [
+    "screenshots/normal.png",
+    "screenshots/empty.png"
+  ],
+  "scope": "global",
+  "tags": ["profile", "presence", "face-id", "manager"],
+  "wizard": [
+    {
+      "key": "defaultUser",
+      "label": { "en": "Default user", "cs": "Výchozí uživatel" },
+      "type": "text",
+      "required": false,
+      "default": "default",
+      "help": {
+        "en": "Profile key shown before face recognition finishes and for unknown users.",
+        "cs": "Klíč profilu zobrazený před dokončením rozpoznání a pro neznámé uživatele."
+      }
+    }
+  ]
+}

@@ -1,16 +1,21 @@
 import { useMemo, useState } from "react";
+import StoreWizard, { wizardMissing } from "./StoreWizard.jsx";
 
-// Pick a module type from the catalog, fill its required fields, confirm.
-// Confirm is blocked until every required field is filled. Returns
-// { type, values } to the parent, which creates the instance + placement.
+// Pick a module type from the catalog, fill its required config, confirm.
+// Prefers the curated typed `wizard` (from store/modules/<name>/mm-store.json)
+// and falls back to the legacy `fields`. Confirm is blocked until every
+// required field is filled. Returns { type, values } to the parent.
 export default function ModulePickModal({ catalog, position, onCancel, onConfirm }) {
   const [type, setType] = useState(null);
   const [values, setValues] = useState({});
 
   const entry = useMemo(() => catalog.find((c) => c.type === type), [catalog, type]);
-  const missing = entry
-    ? entry.fields.some((f) => f.required && !String(values[f.key] || "").trim())
-    : true;
+  const wizard = entry?.wizard;
+  const missing = !entry
+    ? true
+    : wizard
+      ? wizardMissing(wizard, values)
+      : entry.fields.some((f) => f.required && !String(values[f.key] || "").trim());
 
   const set = (k, v) => setValues((s) => ({ ...s, [k]: v }));
 
@@ -36,7 +41,9 @@ export default function ModulePickModal({ catalog, position, onCancel, onConfirm
               <strong>{entry.label}</strong>
               <button className="mqtt-btn compact" onClick={() => setType(null)}>← Jiný modul</button>
             </div>
-            {entry.fields.length === 0 ? (
+            {wizard ? (
+              <StoreWizard wizard={wizard} values={values} onChange={set} />
+            ) : entry.fields.length === 0 ? (
               <p className="hint-ok">Tento modul nevyžaduje žádné nastavení.</p>
             ) : (
               entry.fields.map((f) => (

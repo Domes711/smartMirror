@@ -1,5 +1,28 @@
 # Store — plán implementace
 
+## Stav (2026-06-06)
+
+Hotovo v repu (ověřeno: `vite build` projde, backend smoke-test prošel):
+
+- **Fáze 1-A — metadata:** `store/modules/<MMM-*>/mm-store.json` pro všech 7
+  vlastních modulů (cs/en název + popis, typovaný `wizard` s reálnými config
+  klíči, `scope`, `tags`). Screenshoty a chybějící `demo.html` se generují
+  **na Pi** (Playwright) — viz `store/README.md`.
+- **Fáze 2 — backend:** `STORE_MODULES_DIR`, `_load_local_meta`, `_pick_lang`,
+  `_localize_wizard`, `_apply_local_meta`; `store_catalog(lang)` merguje
+  metadata, `/store/catalog?lang=` + `/modules?lang=` lokalizují, static route
+  `/store-assets` (Express + vite proxy).
+- **Fáze 3 — frontend:** `lang.js` (`mirrorLanguage()`), katalog/editor fetchují
+  `?lang=`, galerie v detailu vede screenshoty, nová `StoreWizard.jsx`
+  (typovaná pole text/password/number/select/toggle/url + help) napojená do
+  `ModulePickModal` (preferuje `wizard`, fallback na legacy `fields`).
+
+Zbývá (běží na Pi / dávkově):
+
+- [ ] Fáze 1-A: vygenerovat screenshoty + chybějící `demo.html`
+      (MMM-GoogleCalendar; MMM-Lunch-Menu v repu zatím není)
+- [ ] Fáze 1-B: dávkové `mm-store.json` pro ~1 400 komunitních modulů
+
 ## Co děláme
 
 Vytvoříme `mm-store.json` + screenshoty pro **všechny dostupné moduly**

@@ -3,6 +3,7 @@ import MirrorGrid from "./MirrorGrid.jsx";
 import ModulePickModal from "./ModulePickModal.jsx";
 import WindowModal from "./WindowModal.jsx";
 import LoadingOverlay from "./LoadingOverlay.jsx";
+import { mirrorLanguage } from "./lang.js";
 
 const HOUR_PX = 44;
 const PREVIEW_TOPIC = "smartmirror/profile/preview";
@@ -37,7 +38,7 @@ export default function LayoutTab({ profile }) {
   useEffect(() => {
     Promise.all([
       fetch("/layout").then((r) => r.json()),
-      fetch("/modules").then((r) => r.json()),
+      fetch(`/modules?lang=${mirrorLanguage()}`).then((r) => r.json()),
     ])
       .then(([st, mods]) => {
         setStore(st);

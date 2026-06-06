@@ -166,6 +166,11 @@ LAYOUT_STORE_PATH = os.path.join(_HERE, "layout_store.json")
 # into the effective catalog so installed community modules flow through the same
 # layout-editor / config-injection machinery as the built-in catalog entries.
 INSTALLED_MODULES_PATH = os.path.join(_HERE, "installed_modules.json")
+# Curated store metadata committed to the repo: store/modules/<name>/mm-store.json
+# + screenshots/. Provides localized name/description + a typed config wizard,
+# merged into the catalog so cards show translated text and required fields.
+STORE_MODULES_DIR = os.path.normpath(
+    os.path.join(_HERE, "..", "..", "store", "modules"))
 PM2_APP = os.environ.get("PM2_APP", "MagicMirror")
 
 # Module Store: community catalog + image host (MagicMirror 3rd-party modules).
@@ -620,9 +625,103 @@ def _own_entry(d: str) -> dict:
     }
 
 
-def store_catalog() -> dict:
+# --- curated store metadata (store/modules/<name>/mm-store.json) ----------- #
+_LOCAL_META_CACHE = {}  # name -> (mtime, parsed dict | None)
+
+
+def _load_local_meta(name: str):
+    """Parsed mm-store.json for a module, or None. Cached on file mtime."""
+    if not _MODULE_NAME_RE.match(name or ""):
+        return None
+    path = os.path.join(STORE_MODULES_DIR, name, "mm-store.json")
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return None
+    cached = _LOCAL_META_CACHE.get(name)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        with open(path, encoding="utf-8") as f:
+            meta = json.load(f)
+        meta = meta if isinstance(meta, dict) else None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("mm-store.json load failed for %s: %s", name, exc)
+        meta = None
+    _LOCAL_META_CACHE[name] = (mtime, meta)
+    return meta
+
+
+def _pick_lang(val, lang: str):
+    """A {en,cs,…} dict → the chosen language (fallback en → first); str → itself."""
+    if isinstance(val, dict):
+        return val.get(lang) or val.get("en") or next(iter(val.values()), "")
+    return val if isinstance(val, str) else ""
+
+
+def _localize_wizard(wizard, lang: str) -> list:
+    """Flatten a wizard's {en,cs} label/help/option-labels to plain strings."""
+    out = []
+    for f in wizard or []:
+        if not isinstance(f, dict) or not f.get("key"):
+            continue
+        item = {
+            "key": f["key"],
+            "label": _pick_lang(f.get("label"), lang) or f["key"],
+            "type": f.get("type", "text"),
+            "required": bool(f.get("required")),
+        }
+        if f.get("help"):
+            item["help"] = _pick_lang(f.get("help"), lang)
+        if "default" in f:
+            item["default"] = f["default"]
+        if f.get("placeholder"):
+            item["placeholder"] = _pick_lang(f.get("placeholder"), lang)
+        if f.get("type") == "select":
+            item["options"] = [
+                {"value": o.get("value"),
+                 "label": _pick_lang(o.get("label"), lang) or str(o.get("value"))}
+                for o in f.get("options", []) if isinstance(o, dict)
+            ]
+        out.append(item)
+    return out
+
+
+def _store_asset_url(name: str, rel: str) -> str:
+    """Public URL for a file under store/modules/<name>/ (served at /store-assets)."""
+    rel = (rel or "").lstrip("/")
+    return f"/store-assets/{urllib.parse.quote(name)}/{urllib.parse.quote(rel)}"
+
+
+def _apply_local_meta(entry: dict, lang: str) -> dict:
+    """Overlay curated metadata (localized name/description, screenshots, wizard,
+    scope) onto a catalog entry when store/modules/<name>/mm-store.json exists."""
+    meta = _load_local_meta(entry.get("name") or "")
+    if not meta:
+        return entry
+    name = entry["name"]
+    if meta.get("name"):
+        entry["name"] = _pick_lang(meta["name"], lang) or entry["name"]
+    if meta.get("description"):
+        entry["description"] = _pick_lang(meta["description"], lang) or entry.get("description", "")
+    shots = [_store_asset_url(name, s) for s in meta.get("screenshots", [])
+             if isinstance(s, str)]
+    if shots:
+        entry["screenshots"] = shots
+        entry["image"] = shots[0]  # first screenshot becomes the card thumbnail
+    if meta.get("wizard"):
+        entry["wizard"] = _localize_wizard(meta["wizard"], lang)
+    if meta.get("scope"):
+        entry["scope"] = meta["scope"]
+    if meta.get("tags"):
+        entry["tags"] = meta["tags"]
+    return entry
+
+
+def store_catalog(lang: str = "en") -> dict:
     """Two lists: `community` (the internet catalog, each flagged `installed`) and
-    `own` (local module dirs not published in the community catalog)."""
+    `own` (local module dirs not published in the community catalog). Curated
+    metadata from store/modules/<name>/ is merged in (localized to `lang`)."""
     try:
         community_raw = _fetch_community_catalog()
         err = None
@@ -640,8 +739,8 @@ def store_catalog() -> dict:
             thumb = _local_thumb(ce["name"])
             if thumb:
                 ce["image"] = thumb
-        community.append(ce)
-    own = [_own_entry(d) for d in sorted(dirs)
+        community.append(_apply_local_meta(ce, lang))
+    own = [_apply_local_meta(_own_entry(d), lang) for d in sorted(dirs)
            if d.startswith("MMM-")
            and d not in community_names
            and d not in _NON_MODULE_DIRS]
@@ -1221,8 +1320,20 @@ class Supervisor:
 
     # ---- layout editor ------------------------------------------------ #
     @staticmethod
-    def list_modules() -> dict:
-        return {"catalog": effective_catalog(), "registered_ids": registered_ids(),
+    def list_modules(lang: str = "en") -> dict:
+        # Attach the curated typed wizard (and scope) to catalog entries that
+        # have store/modules/<type>/mm-store.json, so the layout editor can
+        # render a richer "fill config" form than the legacy `fields`.
+        catalog = effective_catalog()
+        for c in catalog:
+            meta = _load_local_meta(c.get("type") or "")
+            if not meta:
+                continue
+            if meta.get("wizard"):
+                c["wizard"] = _localize_wizard(meta["wizard"], lang)
+            if meta.get("scope"):
+                c["scope"] = meta["scope"]
+        return {"catalog": catalog, "registered_ids": registered_ids(),
                 "positions": MM_POSITIONS}
 
     @staticmethod
@@ -1288,8 +1399,8 @@ class Supervisor:
 
     # ---- module store ------------------------------------------------- #
     @staticmethod
-    def store_catalog() -> dict:
-        return store_catalog()
+    def store_catalog(lang: str = "en") -> dict:
+        return store_catalog(lang)
 
     @staticmethod
     def store_readme(mid: str, url: str = "") -> dict:
@@ -1404,11 +1515,11 @@ def make_handler(sup: Supervisor):
             elif path == "/radar":
                 self._json(200, sup.radar_status())
             elif path == "/modules":
-                self._json(200, sup.list_modules())
+                self._json(200, sup.list_modules(self._query().get("lang", "en")))
             elif path == "/layout":
                 self._json(200, sup.get_layout())
             elif path == "/store/catalog":
-                self._json(200, sup.store_catalog())
+                self._json(200, sup.store_catalog(self._query().get("lang", "en")))
             elif path == "/store/readme":
                 q = self._query()
                 self._json(200, sup.store_readme(q.get("id", ""), q.get("url", "")))

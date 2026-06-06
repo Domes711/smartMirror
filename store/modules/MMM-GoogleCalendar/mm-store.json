@@ -1,0 +1,55 @@
+{
+  "name": {
+    "en": "Google Calendar",
+    "cs": "Google Kalendář"
+  },
+  "description": {
+    "en": "Shows upcoming events from one or more Google calendars with custom symbols and date formatting.",
+    "cs": "Zobrazuje nadcházející události z jednoho či více Google kalendářů s vlastními ikonami a formátem data."
+  },
+  "screenshots": [
+    "screenshots/normal.png",
+    "screenshots/empty.png"
+  ],
+  "scope": "per-user",
+  "tags": ["calendar", "google", "events"],
+  "wizard": [
+    {
+      "key": "maximumEntries",
+      "label": { "en": "Max entries", "cs": "Max. počet položek" },
+      "type": "number",
+      "required": false,
+      "default": 10,
+      "help": {
+        "en": "Maximum number of events to display.",
+        "cs": "Maximální počet zobrazených událostí."
+      }
+    },
+    {
+      "key": "timeFormat",
+      "label": { "en": "Time format", "cs": "Formát času" },
+      "type": "select",
+      "required": false,
+      "default": "relative",
+      "options": [
+        { "value": "relative", "label": { "en": "Relative (in 2 h)", "cs": "Relativní (za 2 h)" } },
+        { "value": "absolute", "label": { "en": "Absolute (14:30)", "cs": "Absolutní (14:30)" } }
+      ],
+      "help": {
+        "en": "Show event times relative to now or as a clock time.",
+        "cs": "Zobrazit čas události relativně k teď, nebo jako hodiny."
+      }
+    },
+    {
+      "key": "maxTitleLength",
+      "label": { "en": "Max title length", "cs": "Max. délka názvu" },
+      "type": "number",
+      "required": false,
+      "default": 25,
+      "help": {
+        "en": "Truncate event titles longer than this many characters.",
+        "cs": "Zkrátit názvy událostí delší než tento počet znaků."
+      }
+    }
+  ]
+}
