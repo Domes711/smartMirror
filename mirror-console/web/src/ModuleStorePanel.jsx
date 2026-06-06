@@ -23,16 +23,16 @@ export default function ModuleStorePanel() {
   const shouldRestore = useRef(false);
   const listRef       = useRef(null);
 
-  // Lock the page to the viewport while showing the scrollable list, so only the
-  // list scrolls and the topbar + store controls stay put. The detail / creator
-  // subviews (early returns below) keep the normal full-page scroll.
+  // Lock the page to the viewport for the list and the module detail, so only
+  // the inner scroll region moves while the topbar / controls / detail header
+  // stay put. The AI creator manages its own full-screen layout, so leave it
+  // with the normal page scroll.
   useLayoutEffect(() => {
     const app = document.querySelector(".app");
     if (!app) return;
-    const listMode = !selected && !creating;
-    app.classList.toggle("app-locked", listMode);
+    app.classList.toggle("app-locked", !creating);
     return () => app.classList.remove("app-locked");
-  }, [selected, creating]);
+  }, [creating]);
 
   const load = useCallback(async () => {
     try {

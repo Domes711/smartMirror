@@ -1217,10 +1217,11 @@
   border-radius: 999px;
   padding: 2px 8px;
 }
-/* The only scrolling region on the store list view: fills the space below the
-   pinned controls and scrolls internally while the page stays fixed. Runs all
-   the way to the bottom edge with a white scroll indicator. */
-.store-scroll {
+/* The only scrolling region on the store list / module detail: fills the space
+   below the pinned header and scrolls internally while the page stays fixed.
+   Runs all the way to the bottom edge with a white scroll indicator. */
+.store-scroll,
+.detail-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1229,14 +1230,22 @@
   scrollbar-width: thin;
   scrollbar-color: #fff transparent;
 }
-.store-scroll::-webkit-scrollbar {
+.detail-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.store-scroll::-webkit-scrollbar,
+.detail-scroll::-webkit-scrollbar {
   width: 8px;
 }
-.store-scroll::-webkit-scrollbar-thumb {
+.store-scroll::-webkit-scrollbar-thumb,
+.detail-scroll::-webkit-scrollbar-thumb {
   background: #fff;
   border-radius: 999px;
 }
-.store-scroll::-webkit-scrollbar-track {
+.store-scroll::-webkit-scrollbar-track,
+.detail-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 .store-list {
