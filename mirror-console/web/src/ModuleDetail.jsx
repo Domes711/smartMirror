@@ -123,6 +123,21 @@ export default function ModuleDetail({ module: m, onBack }) {
     );
   }
 
+  if (readme === null) {
+    return (
+      <div className="panel">
+        <div className="wizard-head">
+          <button className="mqtt-btn compact" onClick={onBack}>← Obchod</button>
+          <strong>{m.name}</strong>
+        </div>
+        <div className="card status-card">
+          <div className="spinner" />
+          <p style={{ color: "var(--muted)", margin: "12px 0 0", fontSize: "0.85rem" }}>Načítám…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="panel">
       <LoadingOverlay show={!!working} message={working} />

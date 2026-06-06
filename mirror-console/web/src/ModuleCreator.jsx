@@ -5,7 +5,7 @@ import ModuleEditor from "./ModuleEditor.jsx";
 // AI module builder. Step 1: name + description (scaffolds a draft) or reopen an
 // existing draft. Step 2: the shared chat + live-preview editor, plus a button
 // to install the finished module onto the mirror.
-export default function ModuleCreator() {
+export default function ModuleCreator({ onBack } = {}) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [moduleName, setModuleName] = useState(null); // server-normalised MMM-…
@@ -86,6 +86,9 @@ export default function ModuleCreator() {
       <div className="panel wizard">
         <LoadingOverlay show={creating} message="Připravuji modul…" />
         <div className="wizard-head">
+          {onBack && (
+            <button className="mqtt-btn compact" onClick={onBack}>←</button>
+          )}
           <strong>Nový modul (AI)</strong>
           <div className="steps">
             <span className="step-dot active">1 Zadání</span>

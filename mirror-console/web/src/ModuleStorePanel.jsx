@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ModuleDetail from "./ModuleDetail.jsx";
+import ModuleCreator from "./ModuleCreator.jsx";
 
 const TABS = [
   { id: "own",       icon: "🧩", label: "Moje" },
@@ -13,6 +14,7 @@ export default function ModuleStorePanel() {
   const [tab, setTab]           = useState("own");
   const [query, setQuery]       = useState("");
   const [selected, setSelected] = useState(null);
+  const [creating, setCreating] = useState(false);
 
   // Scroll restoration: save position before entering detail, restore after back.
   const savedScroll   = useRef(0);
@@ -53,6 +55,10 @@ export default function ModuleStorePanel() {
     setSelected(null);
     load();
   };
+
+  if (creating) {
+    return <ModuleCreator onBack={() => { setCreating(false); load(); }} />;
+  }
 
   if (selected) {
     return <ModuleDetail module={selected} onBack={handleBack} />;
@@ -111,7 +117,18 @@ export default function ModuleStorePanel() {
       ) : (
         <>
           {tab === "own" && (
-            <ModuleList modules={own} empty="Zatím žádné vlastní moduly." onPick={handlePick} />
+            <>
+              <div className="panel-actions">
+                <button className="mqtt-btn k-ok" onClick={() => setCreating(true)}>
+                  ＋ Vytvořit modul
+                </button>
+              </div>
+              <ModuleList
+                modules={own}
+                empty="Zatím žádné vlastní moduly."
+                onPick={handlePick}
+              />
+            </>
           )}
           {tab === "installed" && (
             <ModuleList modules={installed} empty="Žádné nainstalované moduly." onPick={handlePick} />
