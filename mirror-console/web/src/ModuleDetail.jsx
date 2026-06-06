@@ -9,7 +9,9 @@ const BADGE_RE = /shields\.io|badgen\.net|travis-ci|circleci|codecov|\.svg([?#]|
 
 export default function ModuleDetail({ module: m, onBack }) {
   const [readme, setReadme] = useState(null); // { markdown, baseUrl } | null
-  const [images, setImages] = useState(m.image ? [m.image] : []);
+  const [images, setImages] = useState(
+    m.images && m.images.length ? m.images : m.image ? [m.image] : []
+  );
   const [installed, setInstalled] = useState(!!m.installed);
 
   // install progress

@@ -17,6 +17,8 @@ const path = require("path");
 const fs = require("fs");
 const { execFile, spawn } = require("child_process");
 
+const log = console; // console.info supports the %s/%d format specifiers used below
+
 const SERVER_DIR = __dirname;
 const REPO_ROOT = path.resolve(SERVER_DIR, "..", "..");
 const DRAFTS_DIR = path.join(SERVER_DIR, "..", "module-drafts");
@@ -271,15 +273,21 @@ function genericDemoHtml(name, mainFile) {
 `;
 }
 
-// ---- post-install screenshot ---------------------------------------------
-// Takes a screenshot of demo.html and saves it as store-thumb.png in the
-// module directory. Used as the store card thumbnail. Non-fatal if playwright
-// is not available — silently skipped.
+// ---- post-install screenshots ---------------------------------------------
+// Captures TWO screenshots of the module's demo.html into the module directory
+// and uses them as the store images: store-thumb.png (compact, landscape card)
+// and store-thumb-2.png (taller, mirror-like portrait, slightly later so any
+// animation / refreshed data differs). Non-fatal if playwright is missing.
+const STORE_SHOTS = [
+  { file: "store-thumb.png", width: 480, height: 320, delay: 1200 },
+  { file: "store-thumb-2.png", width: 380, height: 600, delay: 2600 },
+];
+
 async function screenshotModule(name) {
   const dir = path.join(MODULES_DIR, name);
   const demoPath = path.join(dir, "demo.html");
   if (!fs.existsSync(demoPath)) return;
-  const thumbPath = path.join(dir, "store-thumb.png");
+  const shots = STORE_SHOTS.map((s) => ({ ...s, path: path.join(dir, s.file) }));
 
   // Locate the playwright npm package in common places (no new dep needed).
   const os = require("os");
@@ -308,22 +316,25 @@ async function screenshotModule(name) {
 
   const script = `
 const { chromium } = require(${JSON.stringify(pwPath)});
+const shots = JSON.parse(process.argv[2]);
 chromium.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] }).then(async b => {
   const p = await b.newPage();
-  await p.setViewportSize({ width: 480, height: 300 });
   await p.goto('file://' + process.argv[1], { waitUntil: 'load', timeout: 10000 });
-  await new Promise(r => setTimeout(r, 1200));
-  await p.screenshot({ path: process.argv[2] });
+  for (const sh of shots) {
+    await p.setViewportSize({ width: sh.width, height: sh.height });
+    await new Promise(r => setTimeout(r, sh.delay));
+    await p.screenshot({ path: sh.path });
+  }
   await b.close();
 }).catch(e => { process.stderr.write(String(e)); process.exit(1); });`.trim();
 
   return new Promise((resolve) => {
     const env = { ...process.env };
     if (!env.PLAYWRIGHT_BROWSERS_PATH) env.PLAYWRIGHT_BROWSERS_PATH = "/opt/pw-browsers";
-    const proc = spawn(process.execPath, ["-e", script, demoPath, thumbPath], { env });
+    const proc = spawn(process.execPath, ["-e", script, demoPath, JSON.stringify(shots)], { env });
     proc.on("close", (code) => {
-      if (code === 0) log.info("store-thumb.png created for %s", name);
-      else log.info("store-thumb skipped for %s (playwright exit %d)", name, code);
+      if (code === 0) log.info("store thumbnails created for %s", name);
+      else log.info("store thumbnails skipped for %s (playwright exit %d)", name, code);
       resolve();
     });
     proc.on("error", () => resolve()); // non-fatal
@@ -505,8 +516,6 @@ async function runAgent(scope, name, prompt, { adopt = false } = {}) {
     hist.prepared = true;
     hist.messages.push({ role: "sys", text: "Modul načten k úpravám.", ts: Date.now() });
     hist.messages.push({ role: "assistant", text: assistantText, files: [...files], ts: Date.now() });
-    // Screenshot demo.html → store-thumb.png (non-blocking, best-effort).
-    screenshotModule(name).catch(() => {});
   } else {
     hist.messages.push({ role: "user", text: prompt, ts: Date.now() });
     hist.messages.push({ role: "assistant", text: assistantText, files: [...files], ts: Date.now() });
@@ -516,6 +525,11 @@ async function runAgent(scope, name, prompt, { adopt = false } = {}) {
   } catch (e) {
     sseSend(scope, name, { type: "error", text: `Historie se neuložila: ${e.message}` });
   }
+
+  // Refresh the two store screenshots from the live demo.html whenever an
+  // installed module is adopted or edited (non-blocking, best-effort). Drafts
+  // get their screenshots at finalize time, once they live under modules/.
+  if (scope === "installed" && (adopt || touched)) screenshotModule(name).catch(() => {});
 
   if (touched) s.rev += 1;
   sseSend(scope, name, { type: "done", rev: s.rev, touched });
@@ -577,6 +591,9 @@ async function finalize(name, overwrite) {
     steps.push({ step: "npm install", ...(await runCmd("npm", ["install", "--omit=dev"], { cwd: dest })) });
   }
   steps.push({ step: "pm2 restart MagicMirror", ...(await runCmd("pm2", ["restart", "MagicMirror"])) });
+
+  // Capture the two store screenshots from the freshly installed demo.html.
+  await screenshotModule(name).catch(() => {});
 
   return { ok: true, installedTo: dest, steps };
 }

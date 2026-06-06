@@ -605,18 +605,34 @@ def _readme_short(module_dir: str) -> str:
     return ""
 
 
+# Locally generated store screenshots, in display order, produced by the AI
+# module builder/editor (server/module-ai.js).
+_THUMB_FILES = ("store-thumb.png", "store-thumb-2.png")
+
+
+def _local_thumbs(name: str) -> list:
+    """URLs of the locally generated store screenshots that actually exist."""
+    out = []
+    for fn in _THUMB_FILES:
+        if os.path.isfile(os.path.join(MODULES_DIR, name, fn)):
+            out.append(f"/module-installed/{name}/{fn}")
+    return out
+
+
 def _local_thumb(name: str):
-    """URL of the locally generated store-thumb.png, or None if it doesn't exist."""
-    p = os.path.join(MODULES_DIR, name, "store-thumb.png")
-    return f"/module-installed/{name}/store-thumb.png" if os.path.isfile(p) else None
+    """URL of the primary local screenshot, or None if none exists."""
+    thumbs = _local_thumbs(name)
+    return thumbs[0] if thumbs else None
 
 
 def _own_entry(d: str) -> dict:
+    thumbs = _local_thumbs(d)
     return {
         "id": d, "name": d, "url": "",
         "description": _readme_short(os.path.join(MODULES_DIR, d)),
         "category": "Moje", "maintainer": "", "stars": None,
-        "image": _local_thumb(d), "installed": True, "own": True,
+        "image": thumbs[0] if thumbs else None, "images": thumbs,
+        "installed": True, "own": True,
     }
 
 
@@ -637,9 +653,10 @@ def store_catalog() -> dict:
         community_names.add(ce["name"])
         ce["installed"] = ce["name"] in dirs
         if ce["installed"]:
-            thumb = _local_thumb(ce["name"])
-            if thumb:
-                ce["image"] = thumb
+            thumbs = _local_thumbs(ce["name"])
+            if thumbs:
+                ce["image"] = thumbs[0]
+                ce["images"] = thumbs
         community.append(ce)
     own = [_own_entry(d) for d in sorted(dirs)
            if d.startswith("MMM-")
