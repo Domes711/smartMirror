@@ -22,7 +22,20 @@ const REPO_ROOT = path.resolve(SERVER_DIR, "..", "..");
 const DRAFTS_DIR = path.join(SERVER_DIR, "..", "module-drafts");
 const MODULES_DIR = path.join(REPO_ROOT, "MagicMirror", "modules");
 const CUSTOM_MODULES_PATH = path.join(SERVER_DIR, "..", "backend", "custom_modules.json");
+const CONFIG_JS_PATH = path.join(REPO_ROOT, "MagicMirror", "config", "config.js");
 const MODEL = process.env.MODULE_AI_MODEL || "claude-opus-4-8";
+
+// Read the mirror's configured language (e.g. "cs", "en") from config.js.
+// Falls back to "cs" (the mirror's default locale) when the file can't be read.
+function mirrorLanguage() {
+  try {
+    const src = fs.readFileSync(CONFIG_JS_PATH, "utf8");
+    const m = src.match(/\blanguage\s*:\s*["']([^"']+)["']/);
+    return m ? m[1] : "cs";
+  } catch {
+    return "cs";
+  }
+}
 
 // Resolve the `claude` CLI binary. Under systemd the PATH usually lacks the
 // nvm node dir, so we search the nvm tree as a fallback.
@@ -258,39 +271,129 @@ function genericDemoHtml(name, mainFile) {
 `;
 }
 
+// ---- post-install screenshot ---------------------------------------------
+// Takes a screenshot of demo.html and saves it as store-thumb.png in the
+// module directory. Used as the store card thumbnail. Non-fatal if playwright
+// is not available — silently skipped.
+async function screenshotModule(name) {
+  const dir = path.join(MODULES_DIR, name);
+  const demoPath = path.join(dir, "demo.html");
+  if (!fs.existsSync(demoPath)) return;
+  const thumbPath = path.join(dir, "store-thumb.png");
+
+  // Locate the playwright npm package in common places (no new dep needed).
+  const os = require("os");
+  const nvmDir = process.env.NVM_DIR || path.join(os.homedir(), ".nvm");
+  const candidates = [
+    path.join(SERVER_DIR, "node_modules", "playwright"),
+    path.join(SERVER_DIR, "node_modules", "playwright-core"),
+    "/opt/node22/lib/node_modules/playwright",
+    "/usr/local/lib/node_modules/playwright",
+    "/usr/lib/node_modules/playwright",
+  ];
+  // Add nvm global installs (grab all, newest first via mtime sort)
+  try {
+    const { execFileSync } = require("child_process");
+    const hits = execFileSync("sh", ["-c",
+      `ls -dt "${nvmDir}/versions/node/"*/lib/node_modules/playwright 2>/dev/null`
+    ], { encoding: "utf8", timeout: 3000 }).split("\n").filter(Boolean);
+    candidates.unshift(...hits.map(h => h.trim()));
+  } catch { /* ignore */ }
+
+  const pwPath = candidates.find(p => { try { return fs.existsSync(path.join(p, "index.js")); } catch { return false; } });
+  if (!pwPath) {
+    log.info("store-thumb skipped for %s: playwright not found", name);
+    return;
+  }
+
+  const script = `
+const { chromium } = require(${JSON.stringify(pwPath)});
+chromium.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] }).then(async b => {
+  const p = await b.newPage();
+  await p.setViewportSize({ width: 480, height: 300 });
+  await p.goto('file://' + process.argv[1], { waitUntil: 'load', timeout: 10000 });
+  await new Promise(r => setTimeout(r, 1200));
+  await p.screenshot({ path: process.argv[2] });
+  await b.close();
+}).catch(e => { process.stderr.write(String(e)); process.exit(1); });`.trim();
+
+  return new Promise((resolve) => {
+    const env = { ...process.env };
+    if (!env.PLAYWRIGHT_BROWSERS_PATH) env.PLAYWRIGHT_BROWSERS_PATH = "/opt/pw-browsers";
+    const proc = spawn(process.execPath, ["-e", script, demoPath, thumbPath], { env });
+    proc.on("close", (code) => {
+      if (code === 0) log.info("store-thumb.png created for %s", name);
+      else log.info("store-thumb skipped for %s (playwright exit %d)", name, code);
+      resolve();
+    });
+    proc.on("error", () => resolve()); // non-fatal
+  });
+}
+
 // ---- system prompts ------------------------------------------------------
 function systemPromptAppend(scope, name) {
-  const ref = `REFERENCE — read these for the exact house style:
-- ${REPO_ROOT}/CLAUDE.md  (see the "Module file conventions" section)
-- ${REPO_ROOT}/MagicMirror/modules/MMM-Spending/  (a complete exemplar — mirror its structure, including its demo.html scenario pattern)`;
-  const common = `- demo.html MUST always stay a WORKING standalone preview — it stubs window.Module/window.Log, loads ${name}.js, calls getDom() and mounts it. This is the live preview the user is watching, so after EVERY change keep demo.html reflecting the current module. If the module shows real data, drive demo.html with hard-coded SAMPLE data (mimic what node_helper sends via socketNotificationReceived) so it renders without any backend.
-- CSS classes stay namespaced. Do heavy work (API calls, secrets, file IO) in node_helper.js, never in the frontend.
-Work only inside the current working directory; edit files in place. Do NOT touch CLAUDE.md or .module-chat.json — the console manages those as the conversation record. Keep chat replies short — the user is talking to you in a small side panel.`;
+  const lang = mirrorLanguage();
+  const langInstruction = `LANGUAGE: Always reply in the mirror's configured language (language code: "${lang}"). ` +
+    `If "${lang}" is "cs", write in Czech. If "en", write in English. Match the language exactly — never switch.`;
+
+  const tone = `TONE & COMMUNICATION STYLE — the person you are talking to is NOT a programmer:
+- Use plain, friendly language. No jargon, no code terms in chat replies.
+- Never explain implementation details unless explicitly asked.
+- Keep replies SHORT — 1–3 sentences max. The chat panel is small.
+- When you make a change, just say what it now does differently, not how.
+- If something needs a value from the user (API key, URL, etc.), ask for it simply: "What is your … ?"
+- Never list files you read/edited. Never mention function names, file paths, or technical steps.
+- Confirm success warmly and briefly. On error, explain what went wrong in plain words and what the user should do.`;
+
+  const ref = `TECHNICAL REFERENCE (do not mention these to the user):
+- ${REPO_ROOT}/CLAUDE.md  (module file conventions)
+- ${REPO_ROOT}/MagicMirror/modules/MMM-Spending/  (exemplar — mirror its structure + demo.html pattern)`;
+
+  const common = `TECHNICAL RULES (silent — never mention in chat):
+- demo.html MUST always stay a WORKING standalone preview: stub window.Module/window.Log/window.MM, load ${name}.js, call getDom(), mount it. Drive with hard-coded SAMPLE data when the module uses real data.
+- CSS classes stay namespaced to the module. API calls, secrets and file I/O go in node_helper.js only.
+- Work only inside the current working directory. Do NOT touch CLAUDE.md or .module-chat.json.`;
 
   if (scope === "installed") {
-    return `You are EDITING an existing, already-installed MagicMirror² module named "${name}" in a smart-mirror project. Its files are in the working directory. Make the change the user asks for while keeping the module working.
+    return `${langInstruction}
+
+${tone}
+
+You are helping a user customise an installed smart-mirror module named "${name}". Make the change they ask for while keeping the module working.
 
 ${common}
 
 ${ref}`;
   }
-  return `You are building a MagicMirror² module for a smart-mirror project. The working directory already contains a scaffolded module named "${name}".
 
-HARD RULES — every module MUST follow these house conventions:
-- Module name is "${name}" (MMM- prefix). Keep all files named accordingly.
-- Files: ${name}.js (frontend via Module.register), ${name}.css (unique class prefix), node_helper.js (ONLY backend work — delete if unused), package.json ("private": true, "main": "${name}.js"), demo.html, README.md.
-- Frontend uses Module.register("${name}", { defaults, start, getStyles, getDom, socketNotificationReceived }). getStyles() returns ["${name}.css"].
+  return `${langInstruction}
+
+${tone}
+
+You are helping a user build a new smart-mirror module named "${name}". The working directory already has scaffolded files.
+
+HARD TECHNICAL RULES:
+- Module name is "${name}". Keep all files named accordingly.
+- Required files: ${name}.js, ${name}.css, node_helper.js (delete if unused), package.json (private:true), demo.html, README.md.
+- Frontend: Module.register("${name}", { defaults, start, getStyles, getDom, socketNotificationReceived }). getStyles() → ["${name}.css"].
 ${common}
 
 ${ref}`;
 }
 
-// The internal instruction for adopting an existing module: read it, make a
-// working demo.html, and describe what it does (the reply becomes the summary).
-const ADOPT_PROMPT = `Adopt this existing module for visual editing:
-1. Read the module's files to understand what it does and what data it renders.
-2. Create or repair demo.html so the module renders standalone in a browser preview with REALISTIC sample data (stub window.Module/window.Log/window.MM, load the main JS, build via getDom(), and feed sample data the way node_helper would via socketNotificationReceived). Model it on the MMM-Spending demo.html.
-3. Reply with ONE short paragraph (2–3 sentences) describing what this module does and what the preview now shows. Do not change the module's real behavior in this step — only add/repair demo.html.`;
+// Prompt used when adopting (analysing) a freshly installed community module.
+// Runs silently after install — the user never sees the raw prompt.
+const ADOPT_PROMPT = `Analyse this installed MagicMirror module and prepare it for visual editing:
+
+1. Read ALL the module's source files to fully understand what it does, what data it shows, and what configuration it needs.
+2. Write a CLAUDE.md file in the module directory with the following sections:
+   - **What this module does** (2–3 sentences, plain language)
+   - **Key files** (one line each: filename → what it does)
+   - **Configuration** (list every config option with type and purpose)
+   - **Data flow** (how data gets from the source to the display)
+   - **Gotchas** (anything non-obvious a future editor must know)
+3. Create or repair demo.html so the module renders standalone: stub window.Module/window.Log/window.MM, load the main JS, call getDom(), feed it REALISTIC hard-coded sample data the way node_helper would via socketNotificationReceived. Model it closely on MMM-Spending/demo.html.
+4. Reply with ONE plain-language sentence describing what this module shows on the mirror. Nothing else.`;
 
 // ---- agent turn ----------------------------------------------------------
 const AUTH_HINT =
@@ -402,6 +505,8 @@ async function runAgent(scope, name, prompt, { adopt = false } = {}) {
     hist.prepared = true;
     hist.messages.push({ role: "sys", text: "Modul načten k úpravám.", ts: Date.now() });
     hist.messages.push({ role: "assistant", text: assistantText, files: [...files], ts: Date.now() });
+    // Screenshot demo.html → store-thumb.png (non-blocking, best-effort).
+    screenshotModule(name).catch(() => {});
   } else {
     hist.messages.push({ role: "user", text: prompt, ts: Date.now() });
     hist.messages.push({ role: "assistant", text: assistantText, files: [...files], ts: Date.now() });
@@ -569,6 +674,21 @@ function mountModuleAI(app, express) {
     } finally {
       s.busy = false;
     }
+  });
+
+  // Called by the install worker after a fresh community module install:
+  // runs adopt (demo.html + CLAUDE.md analysis) in the background.
+  // Returns immediately — poll /api/modules/session for prepared:true.
+  app.post("/api/modules/adopt", (req, res) => {
+    const name = normaliseName(req.body?.name);
+    if (!name || !fs.existsSync(path.join(MODULES_DIR, name)))
+      return res.status(404).json({ error: "modul není nainstalovaný" });
+    const s = sessionState("installed", name);
+    if (s.busy) return res.json({ ok: true, alreadyRunning: true });
+    if (loadHistory("installed", name).prepared) return res.json({ ok: true, alreadyPrepared: true });
+    s.busy = true;
+    res.json({ ok: true, started: true });
+    runAgent("installed", name, ADOPT_PROMPT, { adopt: true }).finally(() => { s.busy = false; });
   });
 
   // Apply in-place edits to the running mirror.

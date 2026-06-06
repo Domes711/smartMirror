@@ -605,12 +605,18 @@ def _readme_short(module_dir: str) -> str:
     return ""
 
 
+def _local_thumb(name: str):
+    """URL of the locally generated store-thumb.png, or None if it doesn't exist."""
+    p = os.path.join(MODULES_DIR, name, "store-thumb.png")
+    return f"/module-installed/{name}/store-thumb.png" if os.path.isfile(p) else None
+
+
 def _own_entry(d: str) -> dict:
     return {
         "id": d, "name": d, "url": "",
         "description": _readme_short(os.path.join(MODULES_DIR, d)),
         "category": "Moje", "maintainer": "", "stars": None,
-        "image": None, "installed": True, "own": True,
+        "image": _local_thumb(d), "installed": True, "own": True,
     }
 
 
@@ -630,6 +636,10 @@ def store_catalog() -> dict:
             continue
         community_names.add(ce["name"])
         ce["installed"] = ce["name"] in dirs
+        if ce["installed"]:
+            thumb = _local_thumb(ce["name"])
+            if thumb:
+                ce["image"] = thumb
         community.append(ce)
     own = [_own_entry(d) for d in sorted(dirs)
            if d.startswith("MMM-")
@@ -712,9 +722,6 @@ def _register_installed(name: str) -> None:
     if not any(i.get("type") == name for i in insts):
         iid = _unique_instance_id(name, store)
         insts.append({"id": iid, "type": name, "values": {}})
-        gl = store.setdefault("globalLayout", [])
-        if not any(g.get("id") == iid for g in gl):
-            gl.append({"id": iid, "position": "top_center"})
         save_store(store)
     generate_files(store)
 
@@ -753,6 +760,22 @@ def _install_worker(mid: str, url: str, name: str, dest: str) -> None:
         res = Supervisor._pm2_restart()
         if not res.get("ok"):
             raise RuntimeError("restart selhal: " + res.get("output", ""))
+        # Ask the Express server to run the adopt agent (demo.html + CLAUDE.md
+        # analysis) on the freshly installed module. Fire-and-forget — the agent
+        # runs on the background; the install is already complete.
+        _set_job(mid, phase="analysing", percent=97)
+        try:
+            import urllib.request as _req
+            _adopt_body = json.dumps({"name": name}).encode()
+            _adopt_rq = _req.Request(
+                "http://127.0.0.1:8000/api/modules/adopt",
+                data=_adopt_body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            _req.urlopen(_adopt_rq, timeout=10)
+        except Exception as _e:  # noqa: BLE001
+            log.warning("adopt trigger failed (non-fatal): %s", _e)
         _set_job(mid, phase="done", percent=100, done=True, ok=True)
         log.info("installed module %s", name)
     except Exception as exc:  # noqa: BLE001

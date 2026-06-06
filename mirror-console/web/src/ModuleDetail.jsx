@@ -220,6 +220,7 @@ const PHASE_LABELS = {
   npm: "Závislosti…",
   config: "Konfiguruji…",
   restarting: "Restart…",
+  analysing: "Analyzuji modul…",
   done: "Hotovo",
   error: "Chyba",
 };

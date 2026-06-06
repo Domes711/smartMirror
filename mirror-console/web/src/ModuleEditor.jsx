@@ -25,7 +25,7 @@ export default function ModuleEditor({
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [showPreview, setShowPreview] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
   const [rev, setRev] = useState(1);
 
   const streamRef = useRef("");
@@ -179,7 +179,7 @@ export default function ModuleEditor({
   }, [draft, busy, name, scope]);
 
   return (
-    <div className="panel">
+    <div className="panel mc-panel">
       <div className="wizard-head">
         {onBack && (
           <button className="mqtt-btn compact" onClick={onBack}>
@@ -188,61 +188,61 @@ export default function ModuleEditor({
         )}
         <strong>{title || name}</strong>
         <div className="mc-actions">
-          <button className="mqtt-btn compact" onClick={() => setShowPreview((s) => !s)}>
-            {showPreview ? "Skrýt náhled" : "Zobrazit náhled"}
-          </button>
           {actions}
         </div>
       </div>
 
       {banner && <div className="learn-msg">{banner}</div>}
 
-      <div className={"mc-split" + (showPreview ? "" : " no-preview")}>
-        <section className="card mc-chat">
-          <div className="monitor-log mc-log">
-            {messages.map((m, i) => (
-              <div key={i} className={"mc-msg mc-" + m.role}>
-                {m.text}
-              </div>
-            ))}
-            {busy && <div className="mc-msg mc-sys">… pracuji</div>}
-            <div ref={logEnd} />
-          </div>
-          <div className="mc-input">
-            <textarea
-              rows={2}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder="Napiš, co změnit… (Enter odešle, Shift+Enter nový řádek)"
-              disabled={busy}
-            />
-            <button className="mqtt-btn k-ok" disabled={busy || !draft.trim()} onClick={send}>
-              Odeslat
-            </button>
-          </div>
-        </section>
-
-        {showPreview && (
-          <section className="card mc-preview">
-            <div className="mc-preview-head">
-              <span>Živý náhled</span>
-              <code className="topic">demo.html</code>
+      <section className="card mc-chat">
+        <div className="monitor-log mc-log">
+          {messages.map((m, i) => (
+            <div key={i} className={"mc-msg mc-" + m.role}>
+              {m.text}
             </div>
-            <iframe
-              key={rev}
-              title="náhled modulu"
-              src={`${previewBase}/demo.html?v=${rev}`}
-              className="mc-frame"
-            />
-          </section>
-        )}
-      </div>
+          ))}
+          {busy && <div className="mc-msg mc-sys">… pracuji</div>}
+          <div ref={logEnd} />
+        </div>
+        <div className="mc-input">
+          <textarea
+            rows={2}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder="Napiš, co změnit… (Enter odešle, Shift+Enter nový řádek)"
+            disabled={busy}
+          />
+          <button className="mqtt-btn k-ok" disabled={busy || !draft.trim()} onClick={send}>
+            Odeslat
+          </button>
+        </div>
+      </section>
+
+      {/* Floating preview bubble */}
+      <button
+        className={"mc-bubble" + (showPreview ? " mc-bubble-open" : "")}
+        onClick={() => setShowPreview((s) => !s)}
+        title={showPreview ? "Skrýt náhled" : "Zobrazit náhled"}
+      >
+        {showPreview ? "✕" : "👁"}
+      </button>
+
+      {showPreview && (
+        <div className="mc-preview-float">
+          <iframe
+            key={rev}
+            title="náhled modulu"
+            src={`${previewBase}/demo.html?v=${rev}`}
+            className="mc-frame"
+          />
+        </div>
+      )}
     </div>
   );
 }
