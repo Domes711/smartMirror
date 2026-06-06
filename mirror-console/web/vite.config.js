@@ -26,6 +26,7 @@ export default defineConfig({
       "/api": process.env.WEB_SERVER || "http://127.0.0.1:8000",
       "/module-draft": process.env.WEB_SERVER || "http://127.0.0.1:8000",
       "/module-installed": process.env.WEB_SERVER || "http://127.0.0.1:8000",
+      "/store-assets": process.env.WEB_SERVER || "http://127.0.0.1:8000",
     },
   },
 });

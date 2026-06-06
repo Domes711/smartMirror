@@ -1,0 +1,75 @@
+{
+  "name": {
+    "en": "Reminders",
+    "cs": "Připomínky"
+  },
+  "description": {
+    "en": "iPhone Reminders surfaced from a Home Assistant todo list, with optional due dates.",
+    "cs": "Připomínky z iPhonu zobrazené přes Home Assistant todo seznam, volitelně s termíny."
+  },
+  "screenshots": [
+    "screenshots/normal.png",
+    "screenshots/empty.png"
+  ],
+  "scope": "per-user",
+  "tags": ["reminders", "todo", "home-assistant"],
+  "wizard": [
+    {
+      "key": "haUrl",
+      "label": { "en": "Home Assistant URL", "cs": "URL Home Assistant" },
+      "type": "url",
+      "required": true,
+      "help": {
+        "en": "Base URL of your Home Assistant, e.g. http://homeassistant.local:8123.",
+        "cs": "Základní adresa Home Assistant, např. http://homeassistant.local:8123."
+      }
+    },
+    {
+      "key": "haToken",
+      "label": { "en": "HA token", "cs": "HA token" },
+      "type": "password",
+      "required": true,
+      "help": {
+        "en": "Long-lived access token from your Home Assistant profile.",
+        "cs": "Dlouhodobý přístupový token z profilu v Home Assistant."
+      }
+    },
+    {
+      "key": "maxItems",
+      "label": { "en": "Max reminders", "cs": "Max. připomínek" },
+      "type": "number",
+      "required": false,
+      "default": 6,
+      "help": {
+        "en": "Maximum number of reminders to display.",
+        "cs": "Maximální počet zobrazených připomínek."
+      }
+    },
+    {
+      "key": "showDueDate",
+      "label": { "en": "Show due dates", "cs": "Zobrazit termíny" },
+      "type": "toggle",
+      "required": false,
+      "default": true,
+      "help": {
+        "en": "Show each reminder's due date when present.",
+        "cs": "Zobrazit u připomínky termín splnění, pokud existuje."
+      }
+    },
+    {
+      "key": "language",
+      "label": { "en": "Language", "cs": "Jazyk" },
+      "type": "select",
+      "required": false,
+      "default": "cs",
+      "options": [
+        { "value": "cs", "label": { "en": "Czech", "cs": "Čeština" } },
+        { "value": "en", "label": { "en": "English", "cs": "Angličtina" } }
+      ],
+      "help": {
+        "en": "Display language for dates and labels.",
+        "cs": "Jazyk zobrazení dat a popisků."
+      }
+    }
+  ]
+}

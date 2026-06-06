@@ -128,6 +128,14 @@ app.get("/api/mqtt/stream", (req, res) => {
   req.on("close", () => sseClients.delete(res));
 });
 
+// --- curated module-store assets (screenshots) ---------------------------
+// store/modules/<name>/screenshots/*.png, referenced by the catalog as
+// /store-assets/<name>/screenshots/<file>. Lives in the repo, not per-Pi.
+app.use(
+  "/store-assets",
+  express.static(path.join(__dirname, "..", "..", "store", "modules"))
+);
+
 // --- static React build + SPA fallback ----------------------------------
 app.use(express.static(DIST));
 app.get("*", (_req, res) => {

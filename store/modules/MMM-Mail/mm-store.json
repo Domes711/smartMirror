@@ -1,0 +1,59 @@
+{
+  "name": {
+    "en": "Mail",
+    "cs": "E-mail"
+  },
+  "description": {
+    "en": "Unread messages from one or more IMAP folders, with optional per-folder SLA countdown badges.",
+    "cs": "Nepřečtené zprávy z jedné či více IMAP složek, volitelně s odpočtem SLA u každé složky."
+  },
+  "screenshots": [
+    "screenshots/normal.png",
+    "screenshots/empty.png"
+  ],
+  "scope": "per-user",
+  "tags": ["mail", "email", "imap", "inbox"],
+  "wizard": [
+    {
+      "key": "host",
+      "label": { "en": "IMAP host", "cs": "IMAP server" },
+      "type": "text",
+      "required": true,
+      "help": {
+        "en": "IMAP server hostname, e.g. imap.gmail.com.",
+        "cs": "Adresa IMAP serveru, např. imap.gmail.com."
+      }
+    },
+    {
+      "key": "user",
+      "label": { "en": "E-mail address", "cs": "E-mailová adresa" },
+      "type": "text",
+      "required": true,
+      "help": {
+        "en": "Full e-mail address to log in with.",
+        "cs": "Úplná e-mailová adresa pro přihlášení."
+      }
+    },
+    {
+      "key": "pass",
+      "label": { "en": "Password", "cs": "Heslo" },
+      "type": "password",
+      "required": true,
+      "help": {
+        "en": "IMAP password (Gmail: an app-specific password).",
+        "cs": "Heslo IMAP (Gmail: heslo aplikace)."
+      }
+    },
+    {
+      "key": "subjectlength",
+      "label": { "en": "Subject length", "cs": "Délka předmětu" },
+      "type": "number",
+      "required": false,
+      "default": 50,
+      "help": {
+        "en": "Truncate subject lines longer than this many characters.",
+        "cs": "Zkrátit předmět delší než tento počet znaků."
+      }
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "name": {
+    "en": "Package Tracker",
+    "cs": "Sledování zásilek"
+  },
+  "description": {
+    "en": "Tracks parcels from a Home Assistant todo list via AfterShip and auto-completes delivered ones.",
+    "cs": "Sleduje zásilky ze seznamu Home Assistant přes AfterShip a doručené automaticky odškrtne."
+  },
+  "screenshots": [
+    "screenshots/normal.png",
+    "screenshots/empty.png"
+  ],
+  "scope": "per-user",
+  "tags": ["packages", "parcels", "aftership", "tracking"],
+  "wizard": [
+    {
+      "key": "haUrl",
+      "label": { "en": "Home Assistant URL", "cs": "URL Home Assistant" },
+      "type": "url",
+      "required": true,
+      "help": {
+        "en": "Base URL of your Home Assistant, e.g. http://homeassistant.local:8123.",
+        "cs": "Základní adresa Home Assistant, např. http://homeassistant.local:8123."
+      }
+    },
+    {
+      "key": "haToken",
+      "label": { "en": "HA token", "cs": "HA token" },
+      "type": "password",
+      "required": true,
+      "help": {
+        "en": "Long-lived access token from your Home Assistant profile.",
+        "cs": "Dlouhodobý přístupový token z profilu v Home Assistant."
+      }
+    },
+    {
+      "key": "aftershipApiKey",
+      "label": { "en": "AfterShip API key", "cs": "API klíč AfterShip" },
+      "type": "password",
+      "required": true,
+      "help": {
+        "en": "API key from your AfterShip dashboard settings.",
+        "cs": "API klíč z nastavení účtu AfterShip."
+      }
+    },
+    {
+      "key": "todoEntity",
+      "label": { "en": "Todo entity", "cs": "Todo entita" },
+      "type": "text",
+      "required": false,
+      "default": "todo.balicky",
+      "help": {
+        "en": "Home Assistant todo entity holding the tracking numbers.",
+        "cs": "Entita todo v Home Assistant s čísly zásilek."
+      }
+    },
+    {
+      "key": "language",
+      "label": { "en": "Language", "cs": "Jazyk" },
+      "type": "select",
+      "required": false,
+      "default": "cs",
+      "options": [
+        { "value": "cs", "label": { "en": "Czech", "cs": "Čeština" } },
+        { "value": "en", "label": { "en": "English", "cs": "Angličtina" } }
+      ],
+      "help": {
+        "en": "Display language for statuses and labels.",
+        "cs": "Jazyk zobrazení stavů a popisků."
+      }
+    }
+  ]
+}

@@ -9,7 +9,11 @@ const BADGE_RE = /shields\.io|badgen\.net|travis-ci|circleci|codecov|\.svg([?#]|
 
 export default function ModuleDetail({ module: m, onBack }) {
   const [readme, setReadme] = useState(null); // { markdown, baseUrl } | null
-  const [images, setImages] = useState(m.image ? [m.image] : []);
+  // Curated screenshots (own modules) lead the gallery; otherwise the catalog
+  // image. README-harvested images are appended once the README loads.
+  const [images, setImages] = useState(
+    m.screenshots?.length ? m.screenshots : m.image ? [m.image] : []
+  );
   const [installed, setInstalled] = useState(!!m.installed);
 
   // install progress

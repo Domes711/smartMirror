@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ModuleDetail from "./ModuleDetail.jsx";
 import ModuleCreator from "./ModuleCreator.jsx";
+import { mirrorLanguage } from "./lang.js";
 
 const TABS = [
   { id: "own",       icon: "🧩", label: "Moje" },
@@ -22,7 +23,7 @@ export default function ModuleStorePanel() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/store/catalog");
+      const r = await fetch(`/store/catalog?lang=${mirrorLanguage()}`);
       const b = await r.json();
       if (!r.ok) throw new Error(b.error || `catalog ${r.status}`);
       setData(b);

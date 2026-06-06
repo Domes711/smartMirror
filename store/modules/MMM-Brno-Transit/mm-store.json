@@ -1,0 +1,49 @@
+{
+  "name": {
+    "en": "Brno Transit",
+    "cs": "MHD Brno"
+  },
+  "description": {
+    "en": "Next departures from a Brno public-transit stop (trams, buses, trolleybuses) with real-time vehicle data.",
+    "cs": "Nejbližší odjezdy z brněnské zastávky MHD (tramvaje, autobusy, trolejbusy) s živými polohami vozů."
+  },
+  "screenshots": [
+    "screenshots/normal.png",
+    "screenshots/empty.png"
+  ],
+  "scope": "per-user",
+  "tags": ["transit", "brno", "mhd", "departures"],
+  "wizard": [
+    {
+      "key": "stopName",
+      "label": { "en": "Stop name", "cs": "Název zastávky" },
+      "type": "text",
+      "required": true,
+      "help": {
+        "en": "Stop name as in the GTFS feed (case-insensitive), e.g. \"Česká\".",
+        "cs": "Název zastávky podle GTFS (nezáleží na velikosti písmen), např. \"Česká\"."
+      }
+    },
+    {
+      "key": "gtfsUrl",
+      "label": { "en": "GTFS feed URL", "cs": "URL GTFS dat" },
+      "type": "url",
+      "required": true,
+      "help": {
+        "en": "Direct .zip download of the IDS JMK GTFS feed from data.brno.cz.",
+        "cs": "Přímý .zip odkaz na GTFS feed IDS JMK z data.brno.cz."
+      }
+    },
+    {
+      "key": "perLine",
+      "label": { "en": "Departures per line", "cs": "Odjezdů na linku" },
+      "type": "number",
+      "required": false,
+      "default": 2,
+      "help": {
+        "en": "How many upcoming departures to show for each line.",
+        "cs": "Kolik nejbližších odjezdů zobrazit u každé linky."
+      }
+    }
+  ]
+}

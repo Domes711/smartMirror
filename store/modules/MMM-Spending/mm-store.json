@@ -1,0 +1,65 @@
+{
+  "name": {
+    "en": "Spending",
+    "cs": "Útrata"
+  },
+  "description": {
+    "en": "Today's spending pulled from Wallet by BudgetBakers, with a count and a list of recent expenses.",
+    "cs": "Dnešní útrata z Wallet by BudgetBakers, s počtem transakcí a seznamem posledních výdajů."
+  },
+  "screenshots": [
+    "screenshots/normal.png",
+    "screenshots/empty.png"
+  ],
+  "scope": "per-user",
+  "tags": ["spending", "finance", "budget", "wallet"],
+  "wizard": [
+    {
+      "key": "apiToken",
+      "label": { "en": "Wallet API token", "cs": "API token Wallet" },
+      "type": "password",
+      "required": true,
+      "help": {
+        "en": "API token from your Wallet by BudgetBakers account settings.",
+        "cs": "API token z nastavení účtu Wallet by BudgetBakers."
+      }
+    },
+    {
+      "key": "currency",
+      "label": { "en": "Currency", "cs": "Měna" },
+      "type": "text",
+      "required": false,
+      "default": "CZK",
+      "help": {
+        "en": "Currency code shown next to amounts, e.g. CZK, EUR.",
+        "cs": "Kód měny u částek, např. CZK, EUR."
+      }
+    },
+    {
+      "key": "timezone",
+      "label": { "en": "Timezone", "cs": "Časová zóna" },
+      "type": "text",
+      "required": false,
+      "default": "Europe/Prague",
+      "help": {
+        "en": "IANA timezone used to roll over the day, e.g. Europe/Prague.",
+        "cs": "IANA časová zóna pro přechod dne, např. Europe/Prague."
+      }
+    },
+    {
+      "key": "language",
+      "label": { "en": "Language", "cs": "Jazyk" },
+      "type": "select",
+      "required": false,
+      "default": "cs",
+      "options": [
+        { "value": "cs", "label": { "en": "Czech", "cs": "Čeština" } },
+        { "value": "en", "label": { "en": "English", "cs": "Angličtina" } }
+      ],
+      "help": {
+        "en": "Display language for labels.",
+        "cs": "Jazyk zobrazení popisků."
+      }
+    }
+  ]
+}
