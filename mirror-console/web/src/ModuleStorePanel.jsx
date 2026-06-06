@@ -102,7 +102,10 @@ export default function ModuleStorePanel() {
       {/* Pinned controls: status pill + tab switcher + per-tab action row.
           Stays put while only the module list below scrolls. */}
       <div className="store-head">
-        <div className="panel-head">
+        <div className="store-topbar">
+          <button className="pill pill-btn" onClick={() => setCreating(true)}>
+            ＋ Vytvořit modul
+          </button>
           {error
             ? <span className="pill pill-bad">● {error}</span>
             : <span className="pill">{loading ? "● načítám katalog…" : `● ${counts.browse} dostupných`}</span>}
@@ -128,13 +131,6 @@ export default function ModuleStorePanel() {
           ))}
         </div>
 
-        {!loading && tab === "own" && (
-          <div className="panel-actions">
-            <button className="mqtt-btn k-ok" onClick={() => setCreating(true)}>
-              ＋ Vytvořit modul
-            </button>
-          </div>
-        )}
         {!loading && tab === "browse" && (
           <div className="panel-actions">
             <input

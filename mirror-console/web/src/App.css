@@ -1151,6 +1151,24 @@
 .store-head .panel-actions {
   margin: 0;
 }
+/* Top row of the store header: create button (left) + status pill (right). */
+.store-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* Create-module button sized exactly like the .pill it sits next to. */
+.pill-btn {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  color: #04222e;
+  background: var(--accent);
+}
+.pill-btn:hover {
+  background: #7dd3fc;
+}
 
 /* store-specific tab bar — full width, compact */
 .store-tabs {
