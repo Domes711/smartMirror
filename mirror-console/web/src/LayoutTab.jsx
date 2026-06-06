@@ -23,7 +23,7 @@ const minsFromCron = (c) => {
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
 };
 
-export default function LayoutTab({ profile }) {
+export default function LayoutTab({ profile, onWindowChange }) {
   const [store, setStore] = useState(null);
   const [catalog, setCatalog] = useState([]);
   const [registered, setRegistered] = useState([]);
@@ -69,6 +69,13 @@ export default function LayoutTab({ profile }) {
     }
   }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { reloadMirror(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tell the parent whether a window editor is open, so it can hide the
+  // Rozložení/Fotky subtabs while editing a single window's layout.
+  useEffect(() => {
+    onWindowChange?.(!!selected);
+    return () => onWindowChange?.(false);
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = useCallback(async (next) => {
     setStore(next);

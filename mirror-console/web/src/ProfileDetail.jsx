@@ -8,6 +8,7 @@ import LayoutTab from "./LayoutTab.jsx";
 // session → retrain), retrain, and remove the whole profile.
 export default function ProfileDetail({ name, onBack }) {
   const [tab, setTab] = useState("layout");
+  const [windowOpen, setWindowOpen] = useState(false); // a time-window layout editor is open
   const [photos, setPhotos] = useState([]);
   const [detail, setDetail] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -113,17 +114,19 @@ export default function ProfileDetail({ name, onBack }) {
         </div>
       </div>
 
-      <div className="tabs subtabs">
-        <button className={"tab" + (tab === "layout" ? " active" : "")} onClick={() => setTab("layout")}>
-          Rozložení
-        </button>
-        <button className={"tab" + (tab === "photos" ? " active" : "")} onClick={() => setTab("photos")}>
-          Fotky
-        </button>
-      </div>
+      {!windowOpen && (
+        <div className="tabs subtabs">
+          <button className={"tab" + (tab === "layout" ? " active" : "")} onClick={() => setTab("layout")}>
+            Rozložení
+          </button>
+          <button className={"tab" + (tab === "photos" ? " active" : "")} onClick={() => setTab("photos")}>
+            Fotky
+          </button>
+        </div>
+      )}
 
       <div className="detail-scroll">
-        {tab === "layout" && <LayoutTab profile={name} />}
+        {tab === "layout" && <LayoutTab profile={name} onWindowChange={setWindowOpen} />}
 
         {tab === "photos" && !capturing && (
           <>
