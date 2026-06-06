@@ -8,16 +8,14 @@
 //                   button). On open we ensure a demo.html (for the live
 //                   preview) and a CLAUDE.md (purpose + chat history) exist.
 //
-// Claude runs ON the Pi via the Claude Agent SDK (the Claude Code engine as a
-// library) with file-only tools constrained to the module's directory. The
-// browser shows a live preview by loading the module's demo.html in an iframe.
-//
-// Requires ANTHROPIC_API_KEY in the environment and outbound HTTPS to
-// api.anthropic.com.
+// Claude runs ON the Pi via the `claude` CLI (Claude Code) with file-only
+// tools constrained to the module's directory. Authentication is handled by
+// `claude login` on the Pi (Max subscription) — no API key needed.
+// The browser shows a live preview by loading the module's demo.html in an iframe.
 
 const path = require("path");
 const fs = require("fs");
-const { execFile } = require("child_process");
+const { execFile, spawn } = require("child_process");
 
 const SERVER_DIR = __dirname;
 const REPO_ROOT = path.resolve(SERVER_DIR, "..", "..");
@@ -26,16 +24,26 @@ const MODULES_DIR = path.join(REPO_ROOT, "MagicMirror", "modules");
 const CUSTOM_MODULES_PATH = path.join(SERVER_DIR, "..", "backend", "custom_modules.json");
 const MODEL = process.env.MODULE_AI_MODEL || "claude-opus-4-8";
 
-// The Claude Agent SDK spawns its bundled CLI with the literal command "node".
-// Under the systemd service the PATH usually lacks the nvm node dir, so that
-// spawn fails with `spawn node ENOENT`. Use the exact node binary already
-// running this server (absolute path, no PATH lookup) and also make `node`
-// resolvable for any child processes the CLI itself spawns.
-const NODE_BIN = process.execPath;
-{
-  const dir = path.dirname(NODE_BIN || "");
-  const parts = (process.env.PATH || "").split(path.delimiter);
-  if (dir && !parts.includes(dir)) process.env.PATH = dir + path.delimiter + (process.env.PATH || "");
+// Resolve the `claude` CLI binary. Under systemd the PATH usually lacks the
+// nvm node dir, so we search the nvm tree as a fallback.
+function findClaude() {
+  const fromEnv = process.env.CLAUDE_BIN;
+  if (fromEnv) return fromEnv;
+  // Already on PATH?
+  try {
+    const { execFileSync } = require("child_process");
+    return execFileSync("which", ["claude"], { encoding: "utf8", timeout: 3000 }).trim();
+  } catch { /* fall through */ }
+  // Search nvm versions
+  const nvmDir = process.env.NVM_DIR || path.join(require("os").homedir(), ".nvm");
+  const glob = path.join(nvmDir, "versions", "node", "*", "bin", "claude");
+  try {
+    const { execFileSync } = require("child_process");
+    const hits = execFileSync("ls", ["-t", glob], { encoding: "utf8", shell: true, timeout: 3000 })
+      .split("\n").filter(Boolean);
+    if (hits[0]) return hits[0].trim();
+  } catch { /* not found */ }
+  return null;
 }
 
 const CHAT_FILE = ".module-chat.json"; // machine transcript (console-internal)
@@ -285,56 +293,48 @@ const ADOPT_PROMPT = `Adopt this existing module for visual editing:
 3. Reply with ONE short paragraph (2–3 sentences) describing what this module does and what the preview now shows. Do not change the module's real behavior in this step — only add/repair demo.html.`;
 
 // ---- agent turn ----------------------------------------------------------
-// Guidance shown when the agent can't authenticate.
 const AUTH_HINT =
-  "Backend nemá platný ANTHROPIC_API_KEY. Přidej řádek `ANTHROPIC_API_KEY=sk-ant-…` " +
-  "do mirror-console/server/.env (bez uvozovek a bez `export`) a restartuj: " +
-  "`sudo systemctl restart mirror-console-web`. Ověř: `curl -s localhost:8000/api/modules/ai-status`.";
+  "Claude CLI není přihlášen. Na Pi spusť: `claude login` (přihlásíš se Max účtem).\n" +
+  "Pokud `claude` CLI ještě není nainstalované: `npm install -g @anthropic-ai/claude-code`.\n" +
+  "Ověř: `curl -s localhost:8000/api/modules/ai-status`.";
 
 const looksLikeAuthError = (s) =>
-  /invalid api key|please run \/login|authenticat|unauthor|x-api-key/i.test(String(s || ""));
-
-function hasApiKey() {
-  return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
-}
+  /invalid api key|please run \/login|authenticat|unauthor|x-api-key|credit balance|billing/i.test(String(s || ""));
 
 async function runAgent(scope, name, prompt, { adopt = false } = {}) {
   const s = sessionState(scope, name);
   const cwd = dirFor(scope, name);
 
-  if (!hasApiKey()) {
+  const claudeBin = findClaude();
+  if (!claudeBin) {
     sseSend(scope, name, { type: "error", text: AUTH_HINT });
     sseSend(scope, name, { type: "done", rev: s.rev, touched: false });
     return;
   }
 
-  let query;
-  try {
-    ({ query } = await import("@anthropic-ai/claude-agent-sdk"));
-  } catch {
-    sseSend(scope, name, { type: "error", text: "Claude Agent SDK není nainstalované na Pi (npm i @anthropic-ai/claude-agent-sdk)." });
-    sseSend(scope, name, { type: "done", rev: s.rev, touched: false });
-    return;
-  }
-
-  const options = {
-    cwd,
-    model: MODEL,
-    executable: NODE_BIN, // spawn the SDK CLI with this node (avoids `spawn node ENOENT`)
-    // Non-interactive + file-only: "dontAsk" auto-approves the pre-approved
-    // allowedTools and silently denies everything else (no Bash, no prompt that
-    // would hang headless), keeping the agent scoped to the module's files.
-    permissionMode: "dontAsk",
-    allowedTools: ["Read", "Write", "Edit", "Glob", "Grep"],
-    systemPrompt: { type: "preset", preset: "claude_code", append: systemPromptAppend(scope, name) },
-    ...(s.sessionId ? { resume: s.sessionId } : {}),
-  };
+  // Build CLI args — equivalent to the former SDK options object.
+  const args = [
+    "--print", prompt,
+    "--output-format", "stream-json",
+    "--model", MODEL,
+    "--permission-mode", "dontAsk",
+    "--allowedTools", "Read,Write,Edit,Glob,Grep",
+    "--append-system-prompt", systemPromptAppend(scope, name),
+  ];
+  if (s.sessionId) args.push("--resume", s.sessionId);
 
   let touched = false;
   let assistantText = "";
   const files = new Set();
-  try {
-    for await (const msg of query({ prompt, options })) {
+
+  await new Promise((resolve) => {
+    const proc = spawn(claudeBin, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    let buf = "";
+
+    const handleLine = (line) => {
+      if (!line.trim()) return;
+      let msg;
+      try { msg = JSON.parse(line); } catch { return; }
       if (msg.session_id) s.sessionId = msg.session_id;
       if (msg.type === "assistant") {
         for (const block of msg.message?.content || []) {
@@ -348,20 +348,51 @@ async function runAgent(scope, name, prompt, { adopt = false } = {}) {
             sseSend(scope, name, { type: "tool", tool: block.name, file: f });
           }
         }
-      } else if (msg.type === "result" && msg.subtype && msg.subtype !== "success") {
-        const detail = msg.result || msg.error || msg.subtype;
+      } else if (msg.type === "result") {
+        if (msg.session_id) s.sessionId = msg.session_id;
+        if (msg.subtype && msg.subtype !== "success") {
+          const detail = msg.result || msg.error || msg.subtype;
+          sseSend(scope, name, {
+            type: "error",
+            text: looksLikeAuthError(detail) ? AUTH_HINT : `Agent skončil: ${detail}`,
+          });
+        }
+      }
+    };
+
+    proc.stdout.on("data", (chunk) => {
+      buf += chunk.toString();
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      lines.forEach(handleLine);
+    });
+
+    proc.stderr.on("data", (chunk) => {
+      const text = chunk.toString().trim();
+      if (text) sseSend(scope, name, { type: "tool", tool: "log", file: text.slice(0, 120) });
+    });
+
+    proc.on("close", (code) => {
+      if (buf.trim()) handleLine(buf);
+      if (code !== 0 && !assistantText) {
         sseSend(scope, name, {
           type: "error",
-          text: looksLikeAuthError(detail) ? AUTH_HINT : `Agent skončil: ${detail}`,
+          text: looksLikeAuthError(buf + assistantText)
+            ? AUTH_HINT
+            : `Claude CLI skončil s kódem ${code}. Zkontroluj: journalctl -u mirror-console-web -n 30`,
         });
       }
-    }
-  } catch (e) {
-    sseSend(scope, name, {
-      type: "error",
-      text: looksLikeAuthError(e.message) ? AUTH_HINT : `Chyba agenta: ${e.message}`,
+      resolve();
     });
-  }
+
+    proc.on("error", (e) => {
+      sseSend(scope, name, {
+        type: "error",
+        text: looksLikeAuthError(e.message) ? AUTH_HINT : `Chyba spuštění: ${e.message}`,
+      });
+      resolve();
+    });
+  });
 
   // Persist this turn so the conversation can be reopened later.
   const hist = loadHistory(scope, name);
@@ -452,10 +483,15 @@ function mountModuleAI(app, express) {
   app.use("/module-draft", express.static(DRAFTS_DIR));
   app.use("/module-installed", express.static(MODULES_DIR));
 
-  // Diagnostics: does the backend see an API key + which node will spawn the CLI.
-  // Never returns the key itself, only whether one is present.
+  // Diagnostics: is claude CLI available + which model will be used.
   app.get("/api/modules/ai-status", (_req, res) => {
-    res.json({ hasApiKey: hasApiKey(), keySource: process.env.ANTHROPIC_API_KEY ? "ANTHROPIC_API_KEY" : process.env.ANTHROPIC_AUTH_TOKEN ? "ANTHROPIC_AUTH_TOKEN" : null, model: MODEL, node: NODE_BIN });
+    const { execFileSync } = require("child_process");
+    const claudeBin = findClaude();
+    let claudeVersion = null;
+    try {
+      if (claudeBin) claudeVersion = execFileSync(claudeBin, ["--version"], { timeout: 5000, encoding: "utf8" }).trim();
+    } catch { /* CLI found but --version failed */ }
+    res.json({ claudeCli: !!claudeBin, claudeVersion, claudeBin, model: MODEL });
   });
 
   // scope from query/body; "draft" unless explicitly "installed".
