@@ -152,54 +152,56 @@ export default function ModuleDetail({ module: m, onBack }) {
         </div>
       </div>
 
-      <Gallery images={images} />
+      <div className="detail-scroll">
+        <Gallery images={images} />
 
-      <div className="store-detail-actions">
-        <div className="store-detail-btns">
-          {installed ? (
-            <>
-              <button className="mqtt-btn k-ok store-install-btn" onClick={() => setEditing(true)}>
-                Upravit
+        <div className="store-detail-actions">
+          <div className="store-detail-btns">
+            {installed ? (
+              <>
+                <button className="mqtt-btn k-ok store-install-btn" onClick={() => setEditing(true)}>
+                  Upravit
+                </button>
+                <button className="mqtt-btn k-bad store-install-btn" onClick={uninstall}>
+                  Odinstalovat
+                </button>
+              </>
+            ) : (
+              <button
+                className="mqtt-btn k-ok store-install-btn"
+                onClick={startInstall}
+                disabled={installing}
+              >
+                {installing ? (
+                  <>
+                    <span className="store-progress-fill" style={{ width: `${percent}%` }} />
+                    <span className="store-progress-label">{phaseLabel} {percent}%</span>
+                  </>
+                ) : (
+                  "Instalovat"
+                )}
               </button>
-              <button className="mqtt-btn k-bad store-install-btn" onClick={uninstall}>
-                Odinstalovat
-              </button>
-            </>
-          ) : (
-            <button
-              className="mqtt-btn k-ok store-install-btn"
-              onClick={startInstall}
-              disabled={installing}
-            >
-              {installing ? (
-                <>
-                  <span className="store-progress-fill" style={{ width: `${percent}%` }} />
-                  <span className="store-progress-label">{phaseLabel} {percent}%</span>
-                </>
-              ) : (
-                "Instalovat"
-              )}
-            </button>
+            )}
+          </div>
+          {m.url && (
+            <a className="mqtt-btn compact store-source-btn" href={m.url} target="_blank" rel="noreferrer">
+              Zdroj ↗
+            </a>
           )}
         </div>
-        {m.url && (
-          <a className="mqtt-btn compact store-source-btn" href={m.url} target="_blank" rel="noreferrer">
-            Zdroj ↗
-          </a>
+
+        {error && <p className="store-note store-warn">⚠ {error}</p>}
+
+        {readme === null ? (
+          <p className="store-note">Načítám popis…</p>
+        ) : readme.markdown ? (
+          <div className="store-readme">
+            <Markdown source={readme.markdown} />
+          </div>
+        ) : (
+          <p className="store-note">{m.description || "Popis není k dispozici."}</p>
         )}
       </div>
-
-      {error && <p className="store-note store-warn">⚠ {error}</p>}
-
-      {readme === null ? (
-        <p className="store-note">Načítám popis…</p>
-      ) : readme.markdown ? (
-        <div className="store-readme">
-          <Markdown source={readme.markdown} />
-        </div>
-      ) : (
-        <p className="store-note">{m.description || "Popis není k dispozici."}</p>
-      )}
     </div>
   );
 }
