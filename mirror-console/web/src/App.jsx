@@ -100,8 +100,6 @@ export default function App() {
       {tab === "mqtt" && <MqttPanel />}
       {tab === "modules" && <ModuleCreator />}
 
-      <footer className="footer">smart mirror · konzole</footer>
-
       {askPin && (
         <PinModal
           pin={DEV_PIN}
