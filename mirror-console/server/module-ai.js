@@ -316,6 +316,7 @@ async function runAgent(scope, name, prompt, { adopt = false } = {}) {
   const args = [
     "--print", prompt,
     "--output-format", "stream-json",
+    "--verbose",
     "--model", MODEL,
     "--permission-mode", "dontAsk",
     "--allowedTools", "Read,Write,Edit,Glob,Grep",
