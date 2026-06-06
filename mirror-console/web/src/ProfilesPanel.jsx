@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import ProfileWizard from "./ProfileWizard.jsx";
 import ProfileDetail from "./ProfileDetail.jsx";
 
@@ -26,6 +26,17 @@ export default function ProfilesPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Lock the page to the viewport on the profile detail so its header (← Profily
+  // / name / Odebrat profil) stays fixed and only the content below scrolls —
+  // same behaviour as the module detail. The add-profile wizard keeps normal
+  // page scroll.
+  useLayoutEffect(() => {
+    const app = document.querySelector(".app");
+    if (!app) return;
+    app.classList.toggle("app-locked", !!detailName && !adding);
+    return () => app.classList.remove("app-locked");
+  }, [detailName, adding]);
 
   if (adding) {
     return (
