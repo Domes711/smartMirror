@@ -122,52 +122,54 @@ export default function ProfileDetail({ name, onBack }) {
         </button>
       </div>
 
-      {tab === "layout" && <LayoutTab profile={name} />}
+      <div className="detail-scroll">
+        {tab === "layout" && <LayoutTab profile={name} />}
 
-      {tab === "photos" && !capturing && (
-        <>
-          <div className="thumbs">
-            {photos.length === 0 ? (
-              <div className="monitor-empty">Žádné fotky.</div>
-            ) : (
-              photos.map((f) => (
-                <button key={f} className="thumb" onClick={() => setDetail(f)}>
-                  <img src={photoUrl(f)} alt={f} />
-                </button>
-              ))
-            )}
-          </div>
+        {tab === "photos" && !capturing && (
+          <>
+            <div className="thumbs">
+              {photos.length === 0 ? (
+                <div className="monitor-empty">Žádné fotky.</div>
+              ) : (
+                photos.map((f) => (
+                  <button key={f} className="thumb" onClick={() => setDetail(f)}>
+                    <img src={photoUrl(f)} alt={f} />
+                  </button>
+                ))
+              )}
+            </div>
 
-          <div className="panel-actions detail-foot">
-            <button className="mqtt-btn k-ok" onClick={() => setAskCount(true)}>
-              ＋ Přidat další fotky
-            </button>
-            <button className="mqtt-btn" disabled={photos.length === 0} onClick={retrain}>
-              Přetrénovat
-            </button>
-          </div>
-          {error && <div className="learn-msg">{error}</div>}
-        </>
-      )}
+            <div className="panel-actions detail-foot">
+              <button className="mqtt-btn k-ok" onClick={() => setAskCount(true)}>
+                ＋ Přidat další fotky
+              </button>
+              <button className="mqtt-btn" disabled={photos.length === 0} onClick={retrain}>
+                Přetrénovat
+              </button>
+            </div>
+            {error && <div className="learn-msg">{error}</div>}
+          </>
+        )}
 
-      {tab === "photos" && capturing && (
-        <>
-          <FaceCaptureSession
-            name={name}
-            target={photos.length + addCount}
-            onPhotosChange={(p) => setSessionCount(p.length)}
-          />
-          <div className="panel-actions detail-foot">
-            <button className="mqtt-btn compact" onClick={() => { setCapturing(false); loadPhotos(); }}>
-              Zrušit (bez tréninku)
-            </button>
-            <button className="mqtt-btn k-ok" disabled={sessionCount === 0} onClick={finishAdding}>
-              Přidat a přetrénovat
-            </button>
-          </div>
-          {error && <div className="learn-msg">{error}</div>}
-        </>
-      )}
+        {tab === "photos" && capturing && (
+          <>
+            <FaceCaptureSession
+              name={name}
+              target={photos.length + addCount}
+              onPhotosChange={(p) => setSessionCount(p.length)}
+            />
+            <div className="panel-actions detail-foot">
+              <button className="mqtt-btn compact" onClick={() => { setCapturing(false); loadPhotos(); }}>
+                Zrušit (bez tréninku)
+              </button>
+              <button className="mqtt-btn k-ok" disabled={sessionCount === 0} onClick={finishAdding}>
+                Přidat a přetrénovat
+              </button>
+            </div>
+            {error && <div className="learn-msg">{error}</div>}
+          </>
+        )}
+      </div>
 
       {/* static photo detail (view mode) */}
       {detail && !capturing && (
