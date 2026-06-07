@@ -103,15 +103,10 @@ export default function ProfileDetail({ name, onBack }) {
       <LoadingOverlay show={!!working} message={working} />
 
       <div className="wizard-head profile-head">
-        <button className="mqtt-btn compact" onClick={onBack}>
+        <button className="pill pill-btn" onClick={onBack}>
           ← Profily
         </button>
         <strong>{name}</strong>
-        <div className="detail-head-actions">
-          <button className="mqtt-btn k-bad compact" onClick={removeProfile}>
-            Odebrat profil
-          </button>
-        </div>
       </div>
 
       {!windowOpen && (
@@ -122,11 +117,23 @@ export default function ProfileDetail({ name, onBack }) {
           <button className={"tab" + (tab === "photos" ? " active" : "")} onClick={() => setTab("photos")}>
             Fotky
           </button>
+          <button className={"tab" + (tab === "settings" ? " active" : "")} onClick={() => setTab("settings")}>
+            Nastavení
+          </button>
         </div>
       )}
 
       <div className="detail-scroll">
         {tab === "layout" && <LayoutTab profile={name} onWindowChange={setWindowOpen} />}
+
+        {tab === "settings" && (
+          <div className="card wizard-step">
+            <button className="mqtt-btn k-bad" onClick={removeProfile}>
+              Odebrat profil
+            </button>
+            {error && <div className="learn-msg">{error}</div>}
+          </div>
+        )}
 
         {tab === "photos" && !capturing && (
           <>
