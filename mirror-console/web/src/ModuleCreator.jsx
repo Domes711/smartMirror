@@ -108,7 +108,7 @@ export default function ModuleCreator({ onBack } = {}) {
             className={"subnav-item" + (mode === "continue" ? " active" : "")}
             onClick={() => setMode("continue")}
           >
-            Pokračovat na rozpracovaném
+            Rozpracované
             {existingDrafts.length > 0 && ` (${existingDrafts.length})`}
           </button>
         </div>
