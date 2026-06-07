@@ -83,6 +83,14 @@ export default function ModuleEditor({
     });
   }, []);
 
+  // Closing the live view also closes the controls (they have nothing to drive).
+  const togglePreview = useCallback(() => {
+    setShowPreview((p) => {
+      if (p) setShowControls(false);
+      return !p;
+    });
+  }, []);
+
   const triggerPrepare = useCallback(async () => {
     if (prepareStarted.current) return;
     prepareStarted.current = true;
@@ -210,35 +218,78 @@ export default function ModuleEditor({
     }
   }, [draft, busy, name, scope]);
 
+  const started = busy || messages.some((m) => m.role === "user" || m.role === "assistant");
+  const sysClass = (text) =>
+    "mc-msg mc-sys" +
+    (text?.startsWith("⚠") ? " mc-sys-error" : text?.startsWith("✎") ? " mc-sys-tool" : "");
+
   return (
     <div className="panel mc-panel">
-      <div className="wizard-head">
+      <header className="mc-head">
         {onBack && (
-          <button className="mqtt-btn compact" onClick={onBack}>
+          <button className="pill pill-btn mc-back" onClick={onBack} title="Zpět">
             ←
           </button>
         )}
-        <strong>{title || name}</strong>
+        <div className="mc-head-title">
+          <strong>{title || name}</strong>
+          <span className="mc-head-sub">{scope === "installed" ? "Úprava modulu" : "Tvorba modulu"}</span>
+        </div>
         <div className="mc-actions">
+          <button
+            className={"mqtt-btn compact mc-toggle" + (showControls ? " active" : "")}
+            onClick={toggleControls}
+            title="Ovládání stavů"
+          >
+            🎛
+          </button>
+          <button
+            className={"mqtt-btn compact mc-toggle" + (showPreview ? " active" : "")}
+            onClick={togglePreview}
+            title="Náhled modulu"
+          >
+            👁
+          </button>
           {actions}
         </div>
-      </div>
+      </header>
 
       {banner && <div className="learn-msg">{banner}</div>}
 
       <section className="card mc-chat">
-        <div className="monitor-log mc-log">
-          {messages.map((m, i) => (
-            <div key={i} className={"mc-msg mc-" + m.role}>
-              {m.text}
-            </div>
-          ))}
-          {busy && <div className="mc-msg mc-sys">… pracuji</div>}
-          <div ref={logEnd} />
-        </div>
+        {started ? (
+          <div className="mc-log">
+            {messages.map((m, i) =>
+              m.role === "sys" ? (
+                <div key={i} className={sysClass(m.text)}>
+                  {m.text}
+                </div>
+              ) : (
+                <div key={i} className={"mc-msg mc-" + m.role}>
+                  {m.role === "assistant" && <span className="mc-msg-role">Claude</span>}
+                  {m.text}
+                </div>
+              )
+            )}
+            {busy && (
+              <div className="mc-typing" aria-label="pracuji">
+                <span />
+                <span />
+                <span />
+              </div>
+            )}
+            <div ref={logEnd} />
+          </div>
+        ) : (
+          <div className="mc-hero">
+            <div className="mc-hero-icon">🧩</div>
+            <p className="mc-hero-text">{greeting || `Modul ${name} připraven.`}</p>
+            <p className="mc-hero-hint">Napiš dole, co má modul zobrazovat a jak má vypadat.</p>
+          </div>
+        )}
         <div className="mc-input">
           <textarea
-            rows={2}
+            rows={1}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -250,29 +301,11 @@ export default function ModuleEditor({
             placeholder="Napiš, co změnit… (Enter odešle, Shift+Enter nový řádek)"
             disabled={busy}
           />
-          <button className="mqtt-btn k-ok" disabled={busy || !draft.trim()} onClick={send}>
-            Odeslat
+          <button className="mc-send" disabled={busy || !draft.trim()} onClick={send} title="Odeslat">
+            ➤
           </button>
         </div>
       </section>
-
-      {/* Floating control bubble — opens the states panel (also shows the view) */}
-      <button
-        className={"mc-bubble mc-bubble-ctrl" + (showControls ? " mc-bubble-open" : "")}
-        onClick={toggleControls}
-        title={showControls ? "Skrýt ovládání" : "Ovládání stavů"}
-      >
-        {showControls ? "✕" : "🎛"}
-      </button>
-
-      {/* Floating preview bubble */}
-      <button
-        className={"mc-bubble" + (showPreview ? " mc-bubble-open" : "")}
-        onClick={() => setShowPreview((s) => !s)}
-        title={showPreview ? "Skrýt náhled" : "Zobrazit náhled"}
-      >
-        {showPreview ? "✕" : "👁"}
-      </button>
 
       {/* Live view — reacts to the control panel */}
       {(showPreview || showControls) && (
