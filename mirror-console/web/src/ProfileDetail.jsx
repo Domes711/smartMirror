@@ -110,14 +110,14 @@ export default function ProfileDetail({ name, onBack }) {
       </div>
 
       {!windowOpen && (
-        <div className="tabs subtabs">
-          <button className={"tab" + (tab === "layout" ? " active" : "")} onClick={() => setTab("layout")}>
+        <div className="subnav">
+          <button className={"subnav-item" + (tab === "layout" ? " active" : "")} onClick={() => setTab("layout")}>
             Rozložení
           </button>
-          <button className={"tab" + (tab === "photos" ? " active" : "")} onClick={() => setTab("photos")}>
+          <button className={"subnav-item" + (tab === "photos" ? " active" : "")} onClick={() => setTab("photos")}>
             Fotky
           </button>
-          <button className={"tab" + (tab === "settings" ? " active" : "")} onClick={() => setTab("settings")}>
+          <button className={"subnav-item" + (tab === "settings" ? " active" : "")} onClick={() => setTab("settings")}>
             Nastavení
           </button>
         </div>
