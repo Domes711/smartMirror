@@ -117,11 +117,11 @@ export default function ModuleStorePanel() {
           </p>
         )}
 
-        <div className="tabs store-tabs">
+        <div className="subnav store-subnav">
           {TABS.map(t => (
             <button
               key={t.id}
-              className={"tab store-tab" + (tab === t.id ? " active" : "")}
+              className={"subnav-item" + (tab === t.id ? " active" : "")}
               onClick={() => switchTab(t.id)}
             >
               <span className="store-tab-icon">{t.icon}</span>
