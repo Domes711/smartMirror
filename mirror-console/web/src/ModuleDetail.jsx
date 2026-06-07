@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import LoadingOverlay from "./LoadingOverlay.jsx";
 import Markdown from "./Markdown.jsx";
 import ModuleEditor from "./ModuleEditor.jsx";
+import { useToast } from "./Toast.jsx";
 
 // App-store style module detail: image gallery on top, an install / uninstall
 // button (with live % during install), and the README rendered below.
@@ -18,10 +19,10 @@ export default function ModuleDetail({ module: m, onBack }) {
   const [installing, setInstalling] = useState(false);
   const [percent, setPercent] = useState(0);
   const [phase, setPhase] = useState("");
-  const [error, setError] = useState(null);
   const [working, setWorking] = useState(null); // overlay message
   const [editing, setEditing] = useState(false);
   const poll = useRef(null);
+  const toast = useToast();
 
   // Load README + harvest extra gallery images from it.
   useEffect(() => {
@@ -47,7 +48,6 @@ export default function ModuleDetail({ module: m, onBack }) {
   }, [m.id, m.url]);
 
   const startInstall = useCallback(async () => {
-    setError(null);
     setInstalling(true);
     setPercent(2);
     setPhase("starting");
@@ -61,7 +61,7 @@ export default function ModuleDetail({ module: m, onBack }) {
       if (!r.ok) throw new Error(b.error || `install ${r.status}`);
     } catch (e) {
       setInstalling(false);
-      setError(e.message);
+      toast.error(`Instalace selhala: ${e.message}`);
       return;
     }
     poll.current = setInterval(async () => {
@@ -76,21 +76,21 @@ export default function ModuleDetail({ module: m, onBack }) {
           if (s.ok) {
             setInstalled(true);
             setWorking("Restartuji zrcadlo…");
+            toast.success(`${m.name} nainstalován.`);
             setTimeout(() => onBack(), 1500);
           } else {
-            setError(s.error || "Instalace selhala");
+            toast.error(s.error || "Instalace selhala");
           }
         }
       } catch {
         /* keep polling */
       }
     }, 1000);
-  }, [m.id, onBack]);
+  }, [m.id, m.name, onBack, toast]);
 
   const uninstall = useCallback(async () => {
     if (!window.confirm(`Odinstalovat ${m.name}? Modul se smaže ze složky a z configu.`))
       return;
-    setError(null);
     setWorking("Odinstalovávám + restartuji…");
     try {
       const r = await fetch("/store/uninstall", {
@@ -101,12 +101,13 @@ export default function ModuleDetail({ module: m, onBack }) {
       const b = await r.json();
       if (!r.ok) throw new Error(b.error || `uninstall ${r.status}`);
       setInstalled(false);
+      toast.success(`${m.name} odinstalován.`);
       setTimeout(() => onBack(), 800);
     } catch (e) {
       setWorking(null);
-      setError(e.message);
+      toast.error(`Odinstalace selhala: ${e.message}`);
     }
-  }, [m.name, onBack]);
+  }, [m.name, onBack, toast]);
 
   const phaseLabel = PHASE_LABELS[phase] || "Instaluji…";
 
@@ -191,8 +192,6 @@ export default function ModuleDetail({ module: m, onBack }) {
             </a>
           )}
         </div>
-
-        {error && <p className="store-note store-warn">⚠ {error}</p>}
 
         {readme === null ? (
           <p className="store-note">Načítám popis…</p>

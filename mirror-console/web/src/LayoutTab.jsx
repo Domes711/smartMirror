@@ -3,6 +3,7 @@ import MirrorGrid from "./MirrorGrid.jsx";
 import ModulePickModal from "./ModulePickModal.jsx";
 import WindowModal from "./WindowModal.jsx";
 import LoadingOverlay from "./LoadingOverlay.jsx";
+import { useToast } from "./Toast.jsx";
 
 const HOUR_PX = 44;
 const PREVIEW_TOPIC = "smartmirror/profile/preview";
@@ -33,6 +34,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
   const [showWindowModal, setShowWindowModal] = useState(false);
   const [status, setStatus] = useState(null);
   const [applying, setApplying] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     Promise.all([
@@ -44,8 +46,8 @@ export default function LayoutTab({ profile, onWindowChange }) {
         setCatalog(mods.catalog || []);
         setRegistered(mods.registered_ids || []);
       })
-      .catch(() => setStatus("Nepodařilo se načíst layout."));
-  }, []);
+      .catch(() => toast.error("Nepodařilo se načíst layout."));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const windows = useMemo(
     () => (store && store.windows && store.windows[profile]) || {},
@@ -89,9 +91,10 @@ export default function LayoutTab({ profile, onWindowChange }) {
       if (!r.ok) throw new Error(b.error || `uložení ${r.status}`);
       setStatus("saved");
     } catch (e) {
-      setStatus(`Chyba uložení: ${e.message}`);
+      setStatus(null);
+      toast.error(`Chyba uložení: ${e.message}`);
     }
-  }, []);
+  }, [toast]);
 
   const apply = useCallback(async (msg, layoutAfter) => {
     setApplying(true);
@@ -110,13 +113,14 @@ export default function LayoutTab({ profile, onWindowChange }) {
           previewLayout(layoutAfter);
         }
       }
-      setStatus(b.ok ? (msg || (b.restarted ? "Aplikováno (restart zrcadla)." : "Aplikováno (živě).")) : `Selhalo: ${b.output || ""}`);
+      if (b.ok) toast.success(msg || (b.restarted ? "Aplikováno (restart zrcadla)." : "Aplikováno (živě)."));
+      else toast.error(`Selhalo: ${b.output || ""}`);
     } catch (e) {
-      setStatus(`Chyba: ${e.message}`);
+      toast.error(`Chyba: ${e.message}`);
     } finally {
       setApplying(false);
     }
-  }, [reloadMirror, previewLayout]);
+  }, [reloadMirror, previewLayout, toast]);
 
   const idLabel = useCallback((id) => {
     const inst = (store?.instances || []).find((i) => i.id === id);
