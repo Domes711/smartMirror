@@ -3,9 +3,9 @@ import ModuleDetail from "./ModuleDetail.jsx";
 import ModuleCreator from "./ModuleCreator.jsx";
 
 const TABS = [
-  { id: "own",       icon: "🧩", label: "Moje" },
-  { id: "installed", icon: "✅", label: "Instalované" },
-  { id: "browse",    icon: "🔍", label: "Prohledat" },
+  { id: "own",       label: "Moje" },
+  { id: "installed", label: "Instalované" },
+  { id: "browse",    label: "Prohledat" },
 ];
 
 export default function ModuleStorePanel() {
@@ -124,7 +124,6 @@ export default function ModuleStorePanel() {
               className={"subnav-item" + (tab === t.id ? " active" : "")}
               onClick={() => switchTab(t.id)}
             >
-              <span className="store-tab-icon">{t.icon}</span>
               <span className="store-tab-label">{t.label}</span>
               {!loading && <span className="store-tab-count">{counts[t.id]}</span>}
             </button>

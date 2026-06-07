@@ -1215,10 +1215,6 @@
 }
 
 /* store-specific tab bar — full width, compact */
-.store-tab-icon {
-  font-size: 0.95rem;
-  line-height: 1;
-}
 .store-tab-label {
   font-weight: 600;
 }
