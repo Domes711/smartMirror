@@ -97,15 +97,15 @@ export default function ModuleCreator({ onBack } = {}) {
           </div>
         </div>
 
-        <div className="tabs creator-subtabs">
+        <div className="subnav creator-subnav">
           <button
-            className={"tab" + (mode === "new" ? " active" : "")}
+            className={"subnav-item" + (mode === "new" ? " active" : "")}
             onClick={() => setMode("new")}
           >
             Vytvořit nový
           </button>
           <button
-            className={"tab" + (mode === "continue" ? " active" : "")}
+            className={"subnav-item" + (mode === "continue" ? " active" : "")}
             onClick={() => setMode("continue")}
           >
             Pokračovat na rozpracovaném
