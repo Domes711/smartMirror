@@ -1631,6 +1631,45 @@
 }
 .mc-bubble:hover { transform: scale(1.1); }
 .mc-bubble.mc-bubble-open { background: var(--surface-2); color: var(--text); }
+/* Control bubble sits to the left of the preview bubble (same row). */
+.mc-bubble-ctrl { right: 86px; }
+
+/* Floating controls window — state switcher; the live view (right) reacts. */
+.mc-controls-float {
+  position: fixed;
+  bottom: 88px;
+  left: 16px;
+  width: min(240px, calc(100vw - 32px));
+  max-height: 50dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  z-index: 199;
+}
+.mc-controls-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.mc-controls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mc-controls-list .mqtt-btn { width: 100%; }
+.mc-controls-empty {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
 
 /* Floating preview panel */
 .mc-preview-float {

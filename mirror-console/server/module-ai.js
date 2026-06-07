@@ -248,7 +248,6 @@ function genericDemoHtml(name, mainFile) {
     const def = window.Module._def || {};
     const mountEl = document.getElementById("mount");
     const mod = Object.assign({}, def);
-    mod.config = Object.assign({}, def.defaults || {});
     mod.identifier = "demo";
     mod.name = ${JSON.stringify(name)};
     mod.data = { classes: "" };
@@ -265,8 +264,48 @@ function genericDemoHtml(name, mainFile) {
         mountEl.textContent = "(náhled: " + e.message + ")";
       }
     };
-    try { if (typeof mod.start === "function") mod.start(); } catch (e) {}
-    mod.updateDom();
+
+    // ── Demo states ──────────────────────────────────────────────────────
+    // Fill this with the module's meaningful states. Each apply(mod) feeds the
+    // module realistic SAMPLE data the way node_helper would (e.g.
+    // mod.socketNotificationReceived(...) or setting mod fields) before it
+    // re-renders. The mirror-console control panel lists these states and lets
+    // you switch between them while the live preview reacts. KEEP the postMessage
+    // wiring below intact — just populate DEMO_STATES with good states.
+    window.DEMO_STATES = window.DEMO_STATES || [
+      { id: "default", label: "Výchozí", apply: function () {} },
+    ];
+
+    function applyDemoState(id) {
+      const list = window.DEMO_STATES || [];
+      const st = list.find(function (s) { return s.id === id; }) || list[0] || { apply: function () {} };
+      mod.config = Object.assign({}, def.defaults || {});
+      try { if (typeof mod.start === "function") mod.start(); } catch (e) {}
+      try { st.apply && st.apply(mod); } catch (e) {}
+      mod.updateDom();
+    }
+
+    function announceDemoStates() {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            source: "mirror-demo",
+            type: "states",
+            states: (window.DEMO_STATES || []).map(function (s) { return { id: s.id, label: s.label || s.id }; }),
+          }, "*");
+        }
+      } catch (e) {}
+    }
+
+    window.addEventListener("message", function (ev) {
+      const d = ev.data || {};
+      if (d.source !== "mirror-console") return;
+      if (d.type === "set-state") applyDemoState(d.id);
+      else if (d.type === "get-states") announceDemoStates();
+    });
+
+    applyDemoState((window.DEMO_STATES[0] || {}).id);
+    announceDemoStates();
   </script>
 </body>
 </html>
@@ -361,7 +400,9 @@ function systemPromptAppend(scope, name) {
 - ${REPO_ROOT}/MagicMirror/modules/MMM-Spending/  (exemplar — mirror its structure + demo.html pattern)`;
 
   const common = `TECHNICAL RULES (silent — never mention in chat):
+- NO INTERACTION: the mirror is a DISPLAY ONLY, mounted behind glass with NO touch screen, keyboard or pointer. The module must NEVER contain clickable or interactive elements the user would have to operate — no buttons, links, navigation, tabs, menus, form inputs, toggles or anything expecting a click/tap/hover. It only DISPLAYS information. Any state must change by itself from data, time or configuration — never from a user action. (This rule is about the module shown on the mirror, NOT about demo.html.)
 - demo.html MUST always stay a WORKING standalone preview: stub window.Module/window.Log/window.MM, load ${name}.js, call getDom(), mount it. Drive with hard-coded SAMPLE data when the module uses real data.
+- demo.html STATES: populate window.DEMO_STATES = [{ id, label, apply(mod){…} }] with every meaningful state of the module (e.g. loading, empty, normal, error, long/edge values). Each apply(mod) feeds realistic sample data as node_helper would (mod.socketNotificationReceived(...) or set fields) then the harness re-renders. The console control panel lists these states and the live preview reacts — keep the existing DEMO_STATES + postMessage wiring in demo.html intact.
 - CSS classes stay namespaced to the module. API calls, secrets and file I/O go in node_helper.js only.
 - Work only inside the current working directory. Do NOT touch CLAUDE.md or .module-chat.json.`;
 
@@ -403,8 +444,10 @@ const ADOPT_PROMPT = `Analyse this installed MagicMirror module and prepare it f
    - **Configuration** (list every config option with type and purpose)
    - **Data flow** (how data gets from the source to the display)
    - **Gotchas** (anything non-obvious a future editor must know)
-3. Create or repair demo.html so the module renders standalone: stub window.Module/window.Log/window.MM, load the main JS, call getDom(), feed it REALISTIC hard-coded sample data the way node_helper would via socketNotificationReceived. Model it closely on MMM-Spending/demo.html.
-4. Reply with ONE plain-language sentence describing what this module shows on the mirror. Nothing else.`;
+3. Create or repair demo.html so the module renders standalone: stub window.Module/window.Log/window.MM, load the main JS, call getDom(), feed it REALISTIC hard-coded sample data the way node_helper would via socketNotificationReceived. Model it closely on MMM-Spending/demo.html. Also define window.DEMO_STATES = [{ id, label, apply(mod){…} }] covering the module's meaningful states (loading, empty, normal, error, edge values) and keep the postMessage wiring (set-state / get-states / "states" announce) so the console control panel can switch states while the preview reacts.
+4. Reply with ONE plain-language sentence describing what this module shows on the mirror. Nothing else.
+
+Note: the mirror is a display only with NO touch input — modules must never include clickable/interactive elements; they only display information.`;
 
 // ---- agent turn ----------------------------------------------------------
 const AUTH_HINT =
