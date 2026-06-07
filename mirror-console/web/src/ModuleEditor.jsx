@@ -26,10 +26,14 @@ export default function ModuleEditor({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showControls, setShowControls] = useState(false);
+  const [demoStates, setDemoStates] = useState([]); // [{id,label}] declared by demo.html
+  const [activeState, setActiveState] = useState(null);
   const [rev, setRev] = useState(1);
 
   const streamRef = useRef("");
   const logEnd = useRef(null);
+  const frameRef = useRef(null);
   const pendingPrepare = useRef(false);
   const prepareStarted = useRef(false);
   const sseConnected = useRef(false);
@@ -50,6 +54,34 @@ export default function ModuleEditor({
   useEffect(() => {
     logEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, draft]);
+
+  // The preview demo.html announces its declared states; collect them for the
+  // control panel.
+  useEffect(() => {
+    const onMsg = (ev) => {
+      const d = ev.data || {};
+      if (d.source === "mirror-demo" && d.type === "states" && Array.isArray(d.states)) {
+        setDemoStates(d.states);
+      }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  // Switch the live preview to a state (the module reacts in the iframe).
+  const applyState = useCallback((id) => {
+    setActiveState(id);
+    frameRef.current?.contentWindow?.postMessage({ source: "mirror-console", type: "set-state", id }, "*");
+  }, []);
+
+  // Opening the controls needs the live preview mounted to drive it.
+  const toggleControls = useCallback(() => {
+    setShowControls((s) => {
+      const next = !s;
+      if (next) setShowPreview(true);
+      return next;
+    });
+  }, []);
 
   const triggerPrepare = useCallback(async () => {
     if (prepareStarted.current) return;
@@ -224,6 +256,15 @@ export default function ModuleEditor({
         </div>
       </section>
 
+      {/* Floating control bubble — opens the states panel (also shows the view) */}
+      <button
+        className={"mc-bubble mc-bubble-ctrl" + (showControls ? " mc-bubble-open" : "")}
+        onClick={toggleControls}
+        title={showControls ? "Skrýt ovládání" : "Ovládání stavů"}
+      >
+        {showControls ? "✕" : "🎛"}
+      </button>
+
       {/* Floating preview bubble */}
       <button
         className={"mc-bubble" + (showPreview ? " mc-bubble-open" : "")}
@@ -233,14 +274,42 @@ export default function ModuleEditor({
         {showPreview ? "✕" : "👁"}
       </button>
 
-      {showPreview && (
+      {/* Live view — reacts to the control panel */}
+      {(showPreview || showControls) && (
         <div className="mc-preview-float">
           <iframe
+            ref={frameRef}
             key={rev}
             title="náhled modulu"
             src={`${previewBase}/demo.html?v=${rev}`}
             className="mc-frame"
+            onLoad={() => {
+              frameRef.current?.contentWindow?.postMessage({ source: "mirror-console", type: "get-states" }, "*");
+              if (activeState) applyState(activeState);
+            }}
           />
+        </div>
+      )}
+
+      {/* Controls window — switch the module's states; the live view reacts */}
+      {showControls && (
+        <div className="mc-controls-float">
+          <div className="mc-controls-title">Stavy modulu</div>
+          {demoStates.length === 0 ? (
+            <div className="mc-controls-empty">Tento modul zatím nemá definované stavy.</div>
+          ) : (
+            <div className="mc-controls-list">
+              {demoStates.map((s) => (
+                <button
+                  key={s.id}
+                  className={"mqtt-btn compact" + (activeState === s.id ? " k-ok" : "")}
+                  onClick={() => applyState(s.id)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
