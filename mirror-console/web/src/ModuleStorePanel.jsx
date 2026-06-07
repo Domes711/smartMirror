@@ -59,7 +59,13 @@ export default function ModuleStorePanel() {
     }
   }, [data]);
 
-  const switchTab = (id) => { setTab(id); setQuery(""); };
+  const switchTab = (id) => {
+    setTab(id);
+    setQuery("");
+    // Always start a freshly opened section at the top.
+    if (listRef.current) listRef.current.scrollTop = 0;
+    requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = 0; });
+  };
 
   const handlePick = (m) => {
     savedScroll.current = listRef.current?.scrollTop || 0;
