@@ -102,7 +102,7 @@ export default function ProfileDetail({ name, onBack }) {
     <div className="panel">
       <LoadingOverlay show={!!working} message={working} />
 
-      <div className="wizard-head">
+      <div className="wizard-head profile-head">
         <button className="mqtt-btn compact" onClick={onBack}>
           ← Profily
         </button>

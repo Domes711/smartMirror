@@ -294,6 +294,22 @@
 .wizard-head strong {
   font-size: 1rem;
 }
+/* Profile detail header: keep ← Profily / name / Odebrat on ONE stable row so it
+   never reflows ("rozhazuje") while editing a time window's layout. The name
+   truncates instead of wrapping. */
+.profile-head {
+  flex-wrap: nowrap;
+}
+.profile-head > strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-head .detail-head-actions {
+  flex: none;
+}
 .steps {
   margin-left: auto;
   display: flex;
@@ -1236,6 +1252,9 @@
   padding-bottom: env(safe-area-inset-bottom);
   scrollbar-width: thin;
   scrollbar-color: #fff transparent;
+  /* reserve the scrollbar so toggling it never changes content width — stops the
+     aspect-ratio mirror grid from oscillating and shaking the whole view */
+  scrollbar-gutter: stable;
 }
 .detail-scroll {
   display: flex;
