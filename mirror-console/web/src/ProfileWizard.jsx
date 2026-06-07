@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import LoadingOverlay from "./LoadingOverlay.jsx";
 import FaceCaptureSession from "./FaceCaptureSession.jsx";
+import { useToast } from "./Toast.jsx";
 
 const NAME_RE = /^[A-Za-z0-9_-]{1,40}$/;
 
@@ -13,14 +14,13 @@ export default function ProfileWizard({ existing, onClose }) {
   const [count, setCount] = useState(10);
   const [photoCount, setPhotoCount] = useState(0);
   const [training, setTraining] = useState(false);
-  const [error, setError] = useState(null);
+  const toast = useToast();
 
   const validName = NAME_RE.test(name);
   const nameExists = existing?.includes(name);
 
   const finish = useCallback(async () => {
     setTraining(true);
-    setError(null);
     try {
       const r = await fetch("/encode", {
         method: "POST",
@@ -29,12 +29,13 @@ export default function ProfileWizard({ existing, onClose }) {
       });
       const b = await r.json().catch(() => ({}));
       if (!r.ok || !b.ok) throw new Error(b.error || "trénink selhal");
+      toast.success(`Profil „${name}" vytvořen.`);
       onClose(true);
     } catch (e) {
-      setError(`Trénink selhal: ${e.message}`);
+      toast.error(`Trénink selhal: ${e.message}`);
       setTraining(false);
     }
-  }, [name, onClose]);
+  }, [name, onClose, toast]);
 
   return (
     <div className="panel wizard">
@@ -106,7 +107,6 @@ export default function ProfileWizard({ existing, onClose }) {
               Dokončit a natrénovat ({photoCount})
             </button>
           </div>
-          {error && <div className="learn-msg">{error}</div>}
         </>
       )}
     </div>

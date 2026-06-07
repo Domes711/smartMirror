@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import LoadingOverlay from "./LoadingOverlay.jsx";
 import FaceCaptureSession from "./FaceCaptureSession.jsx";
 import LayoutTab from "./LayoutTab.jsx";
+import { useToast } from "./Toast.jsx";
 
 // Detail of one profile. Card-style tabs (more to come); for now just "Fotky":
 // all training thumbnails (enlarge + delete), add more photos (modal → capture
@@ -13,7 +14,7 @@ export default function ProfileDetail({ name, onBack }) {
   const [detail, setDetail] = useState(null);
   const [busy, setBusy] = useState(false);
   const [working, setWorking] = useState(null); // overlay message while encoding/removing
-  const [error, setError] = useState(null);
+  const toast = useToast();
 
   const [askCount, setAskCount] = useState(false);
   const [addCount, setAddCount] = useState(5);
@@ -55,7 +56,6 @@ export default function ProfileDetail({ name, onBack }) {
 
   const retrain = useCallback(async () => {
     setWorking("Přetrénovávám…");
-    setError(null);
     try {
       const r = await fetch("/encode", {
         method: "POST",
@@ -64,12 +64,13 @@ export default function ProfileDetail({ name, onBack }) {
       });
       const b = await r.json().catch(() => ({}));
       if (!r.ok || !b.ok) throw new Error(b.error || "trénink selhal");
+      toast.success("Profil přetrénován ✓");
     } catch (e) {
-      setError(`Trénink selhal: ${e.message}`);
+      toast.error(`Trénink selhal: ${e.message}`);
     } finally {
       setWorking(null);
     }
-  }, [name]);
+  }, [name, toast]);
 
   const finishAdding = useCallback(async () => {
     setCapturing(false); // unmounts the session -> camera released
@@ -88,12 +89,13 @@ export default function ProfileDetail({ name, onBack }) {
         const b = await r.json().catch(() => ({}));
         throw new Error(b.error || `remove ${r.status}`);
       }
+      toast.success(`Profil „${name}" odebrán.`);
       onBack();
     } catch (e) {
-      setError(`Odebrání selhalo: ${e.message}`);
+      toast.error(`Odebrání selhalo: ${e.message}`);
       setWorking(null);
     }
-  }, [name, onBack]);
+  }, [name, onBack, toast]);
 
   const photoUrl = (f) =>
     `/photo?name=${encodeURIComponent(name)}&file=${encodeURIComponent(f)}`;
@@ -131,7 +133,6 @@ export default function ProfileDetail({ name, onBack }) {
             <button className="mqtt-btn k-bad" onClick={removeProfile}>
               Odebrat profil
             </button>
-            {error && <div className="learn-msg">{error}</div>}
           </div>
         )}
 
@@ -157,7 +158,6 @@ export default function ProfileDetail({ name, onBack }) {
                 Přetrénovat
               </button>
             </div>
-            {error && <div className="learn-msg">{error}</div>}
           </>
         )}
 
@@ -176,7 +176,6 @@ export default function ProfileDetail({ name, onBack }) {
                 Přidat a přetrénovat
               </button>
             </div>
-            {error && <div className="learn-msg">{error}</div>}
           </>
         )}
       </div>

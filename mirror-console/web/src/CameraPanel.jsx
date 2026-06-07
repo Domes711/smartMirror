@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useToast } from "./Toast.jsx";
 
 // Modes mirror supervisor.py MODES. Order = display order in the switcher.
 const MODES = [
@@ -15,6 +16,7 @@ export default function CameraPanel() {
   const [error, setError] = useState(null);
   const [streamKey, setStreamKey] = useState(0);
   const pollRef = useRef(null);
+  const toast = useToast();
 
   const refresh = useCallback(async () => {
     try {
@@ -50,14 +52,15 @@ export default function CameraPanel() {
         }
         setHealth(await res.json());
         setStreamKey((k) => k + 1);
+        toast.success(`Přepnuto: ${MODES.find((m) => m.id === mode)?.label || mode}`);
       } catch (e) {
-        setError(`Přepnutí selhalo: ${e.message}`);
+        toast.error(`Přepnutí selhalo: ${e.message}`);
         refresh();
       } finally {
         setPending(null);
       }
     },
-    [pending, health, refresh]
+    [pending, health, refresh, toast]
   );
 
   const mode = health?.mode;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import LoadingOverlay from "./LoadingOverlay.jsx";
 import ModuleEditor from "./ModuleEditor.jsx";
+import { useToast } from "./Toast.jsx";
 
 // AI module builder. Step 1: name + description (scaffolds a draft) or reopen an
 // existing draft. Step 2: the shared chat + live-preview editor, plus a button
@@ -16,7 +17,7 @@ export default function ModuleCreator({ onBack } = {}) {
   const [existingDrafts, setExistingDrafts] = useState([]);
 
   const [finalizing, setFinalizing] = useState(false);
-  const [finalMsg, setFinalMsg] = useState(null);
+  const toast = useToast();
 
   useEffect(() => {
     if (step !== 1) return;
@@ -38,7 +39,6 @@ export default function ModuleCreator({ onBack } = {}) {
       const b = await r.json().catch(() => ({}));
       if (!r.ok || !b.ok) throw new Error(b.error || "nelze vytvořit");
       setModuleName(b.name);
-      setFinalMsg(null);
       setStep(2);
     } catch (e) {
       setError(e.message);
@@ -49,13 +49,11 @@ export default function ModuleCreator({ onBack } = {}) {
 
   const openExisting = useCallback((n) => {
     setModuleName(n);
-    setFinalMsg(null);
     setStep(2);
   }, []);
 
   const finalize = useCallback(async () => {
     setFinalizing(true);
-    setFinalMsg(null);
     const post = (overwrite) =>
       fetch("/api/modules/finalize", {
         method: "POST",
@@ -73,13 +71,13 @@ export default function ModuleCreator({ onBack } = {}) {
       }
       const b = await r.json().catch(() => ({}));
       if (!r.ok || !b.ok) throw new Error(b.error || "instalace selhala");
-      setFinalMsg(`Nainstalováno do ${b.installedTo}. MagicMirror restartován.`);
+      toast.success(`${moduleName} nainstalován. MagicMirror restartován.`);
     } catch (e) {
-      setFinalMsg(`⚠ ${e.message}`);
+      toast.error(`Instalace selhala: ${e.message}`);
     } finally {
       setFinalizing(false);
     }
-  }, [moduleName]);
+  }, [moduleName, toast]);
 
   // ---- Step 1: name + description / reopen -------------------------------
   if (step === 1) {
@@ -167,7 +165,6 @@ export default function ModuleCreator({ onBack } = {}) {
       name={moduleName}
       title={moduleName}
       greeting={`Modul ${moduleName} připraven. Popiš, co má zobrazovat a jak má vypadat.`}
-      banner={finalMsg}
       onBack={() => setStep(1)}
       actions={
         <button className="mqtt-btn k-ok compact" disabled={finalizing} onClick={finalize}>
