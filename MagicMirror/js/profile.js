@@ -47,6 +47,9 @@ class ProfileManager {
 		this._loadPages();
 		this._connectMQTT();
 		this._push();
+
+		// Re-send current state to any client that (re)connects after startup.
+		this.io.on("connection", () => this._push());
 	}
 
 	stop () {

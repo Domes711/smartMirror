@@ -85,14 +85,19 @@ const MM = (function () {
 			wrapper.prepend(el);
 		}
 
-		el.className = "mmp";
+		// "module" class is required so updateWrapperStates() counts this element
+		// when deciding whether the top_center container should be visible.
+		el.className = "module mmp";
 		el.dataset.state = state;
 
 		if (state === "asleep") {
 			el.innerHTML = "";
+			el.style.position = "fixed"; // excluded from updateWrapperStates visibility check
 			updateWrapperStates();
 			return;
 		}
+
+		el.style.position = ""; // default — updateWrapperStates treats this as visible
 
 		const cfg = (typeof config !== "undefined" && config.profile) || {};
 		const defaultUser = cfg.defaultUser || "default";
