@@ -88,7 +88,7 @@ app.use(
       p === "/radar" ||
       p === "/modules" ||
       p.startsWith("/layout") ||
-      p.startsWith("/store"),
+      (p.startsWith("/store") && !p.startsWith("/store-assets")),
   })
 );
 
