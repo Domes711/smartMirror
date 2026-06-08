@@ -158,7 +158,7 @@ MAGICMIRROR_DIR = os.environ.get(
     os.path.normpath(os.path.join(_HERE, "..", "..", "MagicMirror")),
 )
 MODULES_DIR = os.path.join(MAGICMIRROR_DIR, "modules")
-PAGES_PATH = os.path.join(MODULES_DIR, "MMM-Profile", "pages.js")
+PAGES_PATH = os.path.join(MAGICMIRROR_DIR, "config", "pages.js")
 CONSOLE_MODULES_PATH = os.path.join(MAGICMIRROR_DIR, "config", "console-modules.js")
 CONFIG_JS_PATH = os.path.join(MAGICMIRROR_DIR, "config", "config.js")
 LAYOUT_STORE_PATH = os.path.join(_HERE, "layout_store.json")

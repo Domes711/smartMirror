@@ -13,6 +13,7 @@ global.root_path = path.resolve(`${__dirname}/../`);
 const { setGlobalDispatcher, Agent } = require("undici");
 
 const express = require("express");
+const ProfileManager = require("./profile");
 const Server = require("./server");
 const Utils = require("./utils");
 
@@ -59,6 +60,7 @@ function App () {
 	let httpServer;
 	let defaultModules;
 	let env;
+	let profileManager;
 
 	/**
 	 * Loads a specific module.
@@ -278,6 +280,10 @@ function App () {
 			}
 		});
 
+		// Start core profile manager (presence → layout → Face ID indicator)
+		profileManager = new ProfileManager(global.config, io);
+		profileManager.start();
+
 		Log.log("Sockets connected & modules started ...");
 
 		return global.config;
@@ -292,6 +298,8 @@ function App () {
 	 * the http server has been closed
 	 */
 	this.stop = async function () {
+		if (profileManager) profileManager.stop();
+
 		const nodePromises = [];
 		for (let nodeHelper of nodeHelpers) {
 			try {

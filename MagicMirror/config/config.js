@@ -18,6 +18,16 @@ let config = {
     timeFormat: 24,
     units: "metric",
 
+    // Core profile system — presence + face-reco + layout switching (no module needed)
+    profile: {
+        defaultUser: "default",
+        dimTimeoutMs: 60000,
+        mqttBroker: "mqtt://127.0.0.1:1883",
+        userDisplayNames: {
+            "Domes": "Domes"
+        }
+    },
+
     modules: [
         // MIRROR-CONSOLE:START (auto-managed — module instances from the layout editor; do not edit)
         // MIRROR-CONSOLE:END
@@ -25,29 +35,10 @@ let config = {
         // ── unmanaged: always visible ──
         { module: "alert" },
 
-        // ── MMM-Profile: the controller ──
-        {
-            module: "MMM-Profile",
-            position: "top_center",
-            config: {
-                defaultUser: "default",
-                // pages se načte automaticky z modulu MMM-Profile/pages.js
-                scanningStatus: "Skenování obličeje…",
-                recognizedStatus: "Obličej rozpoznán",
-                unknownStatus: "Obličej nerozpoznán",
-                userDisplayNames: {
-                    "Domes": "Domes"
-                },
-                dimTimeoutMs: 60000,
-                mqttBroker: "mqtt://127.0.0.1:1883"
-            }
-        },
-
-        // ── managed: initially rendered here, then moved by MMM-Profile according to pages.js ──
+        // ── managed: positioned by the core profile system via config/pages.js ──
         {
             id: "clock",
             module: "clock",
-            position: "top_left",  // Initial position (will be moved by MMM-Profile)
             config: {
                 displaySeconds: false
             }
@@ -55,12 +46,11 @@ let config = {
         {
             id: "google-calendar",
             module: "MMM-GoogleCalendar",
-            position: "top_left",  // Initial position (will be moved by MMM-Profile)
             config: {
                 calendars: [
                     {
                         symbol: "calendar-week",
-                        calendarID: "TVOJE_CALENDAR_ID@group.calendar.google.com"  // Nahraď svým Calendar ID
+                        calendarID: "TVOJE_CALENDAR_ID@group.calendar.google.com"
                     }
                 ]
             }

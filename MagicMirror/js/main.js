@@ -6,6 +6,107 @@ const MM = (function () {
 	/* Private Methods */
 
 	/**
+	 * Project a layout onto the mirror: move each module to its assigned region
+	 * container and show it; hide all modules not in the layout.
+	 * Called by the PROFILE_STATE / PROFILE_PREVIEW socket events.
+	 * @param {Array} layout Array of {id, position} entries from profile.js.
+	 */
+	const projectLayout = function (layout) {
+		const wantedById = new Map();
+		for (const entry of layout) {
+			if (!entry || !entry.id || !entry.position) continue;
+			wantedById.set(entry.id, entry.position);
+		}
+		for (const mod of modules) {
+			if (!mod.data || !mod.data.id) continue;
+			const pos = wantedById.get(mod.data.id);
+			const elNode = document.getElementById(mod.identifier);
+			if (!elNode) continue;
+			if (pos) {
+				const region = document.querySelector(".region." + pos.replace(/_/g, "."));
+				const target = (region && region.querySelector(":scope > .container")) || region;
+				if (target && elNode.parentElement !== target) target.appendChild(elNode);
+				mod.show(0, () => {}, { lockString: "mm-profile" });
+			} else {
+				mod.hide(0, () => {}, { lockString: "mm-profile" });
+			}
+		}
+	};
+
+	/**
+	 * Build the Face ID indicator inner HTML (same visual as MMM-Profile._buildProfile).
+	 * @param {string} profileClass  "success" | "error" | ""
+	 * @param {string} displayName   User display name (empty string for unknown/asleep)
+	 * @param {string} state         Current profile state
+	 * @returns {string} HTML string
+	 */
+	const buildProfileHTML = function (profileClass, displayName, state) {
+		const intro = (state === "scanning") ? " intro" : "";
+		return `<div class="profile${profileClass ? " " + profileClass : ""}">
+  <div class="scanner${intro}">
+    <div class="ring">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring-circle" cx="50" cy="50" r="49" pathLength="60" stroke-dasharray="1 1"/>
+      </svg>
+    </div>
+    <div class="dots"></div>
+    <div class="scan-line"></div>
+    <svg class="face" viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="outline" cx="50" cy="50" r="34"/>
+      <path class="eye-l" d="M38 42 v6"/>
+      <path class="eye-r" d="M62 42 v6"/>
+      <path class="mouth" d="M38 62 Q50 70 62 62"/>
+      <path class="x-stroke x1" d="M30 30 L70 70"/>
+      <path class="x-stroke x2" d="M70 30 L30 70"/>
+    </svg>
+    <div class="avatar" aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <circle cx="50" cy="38" r="18"/>
+        <path d="M14 96 C14 70 30 60 50 60 C70 60 86 70 86 96 Z"/>
+      </svg>
+    </div>
+  </div>
+  <div class="profile-info"><div class="name">${displayName}</div></div>
+</div>`;
+	};
+
+	/**
+	 * Create or update the Face ID indicator in top_center.
+	 * @param {string} state        Profile state: asleep|scanning|user|dimming
+	 * @param {string|null} currentUser  Currently recognized user key
+	 */
+	const renderProfileIndicator = function (state, currentUser) {
+		let el = document.getElementById("mm-profile");
+		if (!el) {
+			const wrapper = selectWrapper("top_center");
+			if (!wrapper) return;
+			el = document.createElement("div");
+			el.id = "mm-profile";
+			wrapper.prepend(el);
+		}
+
+		el.className = "mmp";
+		el.dataset.state = state;
+
+		if (state === "asleep") {
+			el.innerHTML = "";
+			updateWrapperStates();
+			return;
+		}
+
+		const cfg = (typeof config !== "undefined" && config.profile) || {};
+		const defaultUser = cfg.defaultUser || "default";
+		const names = cfg.userDisplayNames || {};
+		const isKnown = currentUser && currentUser !== defaultUser;
+		const displayName = isKnown ? (names[currentUser] || currentUser) : "";
+		const profileClass = (state === "user" || state === "dimming")
+			? (isKnown ? "success" : "error") : "";
+
+		el.innerHTML = buildProfileHTML(profileClass, displayName, state);
+		updateWrapperStates();
+	};
+
+	/**
 	 * Create dom objects for all modules that are configured for a specific position.
 	 */
 	const createDomObjects = function () {
@@ -617,7 +718,7 @@ const MM = (function () {
 			createDomObjects();
 
 			// Hidden staging area: hot-loaded managed modules live here until
-			// MMM-Profile moves them into the right region container.
+			// the core profile system moves them into the right region container.
 			if (!document.getElementById("mm-hot-staging")) {
 				const staging = document.createElement("div");
 				staging.id = "mm-hot-staging";
@@ -634,6 +735,16 @@ const MM = (function () {
 				socket.on("RELOAD", () => {
 					Log.warn("Reload notification received from server");
 					window.location.reload(true);
+				});
+
+				// Core profile system: presence/face-reco → layout projection + Face ID UI
+				socket.on("PROFILE_STATE", ({ state, currentUser, layout }) => {
+					renderProfileIndicator(state, currentUser);
+					projectLayout(layout || []);
+				});
+
+				socket.on("PROFILE_PREVIEW", ({ layout }) => {
+					projectLayout(layout || []);
 				});
 
 				// Hot-load a brand-new module without a page reload.
@@ -767,7 +878,8 @@ const MM = (function () {
 
 		/**
 		 * Hot-add a single module at runtime (no page reload).
-		 * Creates its DOM in the staging area so MMM-Profile can move it.
+		 * Creates its DOM in the staging area; the core profile system moves it
+		 * on the next PROFILE_STATE / PROFILE_PREVIEW event.
 		 * @param {Module} mObj Bootstrapped module instance from Loader.hotLoadModule().
 		 * @returns {Promise<void>}
 		 */
@@ -799,7 +911,6 @@ const MM = (function () {
 
 			updateWrapperStates();
 			sendNotification("MODULE_DOM_CREATED", null, null, mObj);
-			sendNotification("MODULE_HOT_LOADED", null, null);
 		},
 
 		/**
