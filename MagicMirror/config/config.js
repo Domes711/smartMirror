@@ -18,16 +18,6 @@ let config = {
     timeFormat: 24,
     units: "metric",
 
-    // Core profile system — presence + face-reco + layout switching (no module needed)
-    profile: {
-        defaultUser: "default",
-        dimTimeoutMs: 60000,
-        mqttBroker: "mqtt://127.0.0.1:1883",
-        userDisplayNames: {
-            "Domes": "Domes"
-        }
-    },
-
     modules: [
         // MIRROR-CONSOLE:START (auto-managed — module instances from the layout editor; do not edit)
         // MIRROR-CONSOLE:END
