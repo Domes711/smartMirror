@@ -11,10 +11,10 @@ const BADGE_RE = /shields\.io|badgen\.net|travis-ci|circleci|codecov|\.svg([?#]|
 export default function ModuleDetail({ module: m, onBack }) {
   const cat = m.catalog;
   const [readme, setReadme] = useState(null); // { markdown, baseUrl } | null
-  // mm-store screenshots first, then catalog image / local thumbs.
   const [images, setImages] = useState(() => {
     const base = m.images?.length ? m.images : m.image ? [m.image] : [];
-    const storeScreens = cat?.screenshots || [];
+    // mm-store screenshots only as fallback when module has no images of its own.
+    const storeScreens = base.length === 0 ? (cat?.screenshots || []) : [];
     return [...new Set([...storeScreens, ...base].filter(Boolean))];
   });
   const [installed, setInstalled] = useState(!!m.installed);
