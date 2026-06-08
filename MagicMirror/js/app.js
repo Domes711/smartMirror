@@ -12,6 +12,7 @@ global.root_path = path.resolve(`${__dirname}/../`);
 // used to control fetch timeout for node_helpers
 const { setGlobalDispatcher, Agent } = require("undici");
 
+const express = require("express");
 const Server = require("./server");
 const Utils = require("./utils");
 
@@ -221,6 +222,39 @@ function App () {
 		httpServer = new Server(configObj);
 		const { app, io } = await httpServer.open();
 		Log.log("Server started ...");
+
+		// Hot-load endpoint: loads a new module's node_helper at runtime without restart.
+		// Called by mirror-console when a brand-new module is placed in the layout editor.
+		app.use(express.json());
+		app.post("/module/hot-load", async (req, res) => {
+			const { moduleName, moduleId, moduleConfig } = req.body || {};
+			if (!moduleName) {
+				return res.status(400).json({ ok: false, error: "moduleName required" });
+			}
+			Log.info(`[hot-load] Request: ${moduleName} (id: ${moduleId})`);
+
+			if (nodeHelpers.some((h) => h.name === moduleName)) {
+				Log.info(`[hot-load] ${moduleName} already loaded — signalling browser`);
+				io.emit("MODULE_HOT_LOAD", { moduleName, moduleId, moduleConfig });
+				return res.json({ ok: true, alreadyLoaded: true });
+			}
+
+			try {
+				loadModule(moduleName);
+				const newHelper = nodeHelpers[nodeHelpers.length - 1];
+				if (newHelper && newHelper.name === moduleName) {
+					newHelper.setExpressApp(app);
+					newHelper.setSocketIO(io);
+					await newHelper.start();
+					Log.info(`[hot-load] ${moduleName} node_helper started`);
+				}
+				io.emit("MODULE_HOT_LOAD", { moduleName, moduleId, moduleConfig });
+				return res.json({ ok: true });
+			} catch (e) {
+				Log.error(`[hot-load] Failed for ${moduleName}:`, e.message);
+				return res.status(500).json({ ok: false, error: e.message });
+			}
+		});
 
 		const nodePromises = [];
 		for (let nodeHelper of nodeHelpers) {

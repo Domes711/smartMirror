@@ -52,6 +52,10 @@ Module.register("MMM-Profile", {
             this.domReady = true;
             this._project(this.activeLayout);
         }
+        // A new module was hot-loaded at runtime — re-project so it lands in the right position.
+        if (notification === "MODULE_HOT_LOADED") {
+            if (this.domReady) this._project(this.activeLayout);
+        }
     },
 
     socketNotificationReceived: function (notification, payload) {

@@ -263,6 +263,17 @@ const Loader = (function () {
 		},
 
 		/**
+		 * Load a single module at runtime (hot-load). Loads JS/CSS like loadModules does
+		 * for a normal startup module, then returns the bootstrapped module object.
+		 * @param {object} moduleData Module data object (same shape as getModuleData produces).
+		 * @returns {Promise<Module|null>} the new module instance, or null on failure
+		 */
+		async hotLoadModule (moduleData) {
+			await loadModule(moduleData);
+			return moduleObjects[moduleObjects.length - 1] || null;
+		},
+
+		/**
 		 * Load a file (script or stylesheet).
 		 * Prevent double loading and search for files defined in js/vendor.js.
 		 * @param {string} fileName Path of the file we want to load.

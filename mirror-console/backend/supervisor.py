@@ -167,6 +167,7 @@ LAYOUT_STORE_PATH = os.path.join(_HERE, "layout_store.json")
 # layout-editor / config-injection machinery as the built-in catalog entries.
 INSTALLED_MODULES_PATH = os.path.join(_HERE, "installed_modules.json")
 PM2_APP = os.environ.get("PM2_APP", "MagicMirror")
+MM_BASE_URL = os.environ.get("MM_BASE_URL", "http://127.0.0.1:8080")
 
 # Module Store: community catalog + image host (MagicMirror 3rd-party modules).
 STORE_CATALOG_URL = os.environ.get(
@@ -1315,10 +1316,45 @@ class Supervisor:
         return {"ok": True}
 
     @staticmethod
+    def _hot_load_modules(new_instances: list) -> dict:
+        """POST /module/hot-load to MagicMirror for each new instance.
+
+        MagicMirror loads the node_helper at runtime and emits a socket event
+        so the browser hot-loads the frontend JS/CSS too — no pm2 restart needed.
+        Returns {"ok": True} if all succeeded, {"ok": False, "failed": [...]} on error.
+        """
+        import urllib.request as _req
+        import json as _json
+        failed = []
+        for inst in new_instances:
+            mod_name = catalog_by_type().get(inst.get("type", ""), {}).get("module", inst.get("type", ""))
+            payload = _json.dumps({
+                "moduleName": mod_name,
+                "moduleId": inst.get("id", ""),
+                "moduleConfig": module_config(inst.get("type"), inst.get("values")),
+            }).encode()
+            try:
+                request = _req.Request(
+                    f"{MM_BASE_URL}/module/hot-load",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with _req.urlopen(request, timeout=10) as r:
+                    body = _json.loads(r.read())
+                    if not body.get("ok"):
+                        logging.warning("[hot-load] MagicMirror rejected %s: %s", mod_name, body)
+                        failed.append(mod_name)
+            except Exception as exc:  # noqa: BLE001
+                logging.warning("[hot-load] Request failed for %s: %s", mod_name, exc)
+                failed.append(mod_name)
+        return {"ok": len(failed) == 0, "failed": failed}
+
+    @staticmethod
     def apply_layout() -> dict:
         """Generate pages.js + console-modules.js from the draft, ensure the
         config spread, then decide: a changed set of module instances needs a
-        pm2 restart (to (un)register modules); position/window-only changes just
+        hot-load (or fallback pm2 restart); position/window-only changes just
         need the mirror to reload pages.js (frontend publishes the reload)."""
         store = load_store()
         prev_ids = set()
@@ -1340,6 +1376,18 @@ class Supervisor:
             # All newly-managed ids were already in config.js → module already
             # loaded by MagicMirror, live reload is enough.
             return {"ok": True, "restarted": False, "reload_needed": True}
+
+        # Truly new instances: hot-load them at runtime instead of restarting.
+        truly_new = [
+            i for i in store.get("instances", [])
+            if i.get("id") in added_ids and i.get("id") not in all_existing_ids
+        ]
+        result = Supervisor._hot_load_modules(truly_new)
+        if result["ok"]:
+            return {"ok": True, "restarted": False, "reload_needed": True}
+
+        # Fallback: hot-load failed → full pm2 restart.
+        logging.warning("[apply_layout] hot-load failed for %s — falling back to pm2 restart", result.get("failed"))
         res = Supervisor._pm2_restart()
         return {"ok": res["ok"], "restarted": True,
                 "reload_needed": False, "output": res.get("output", "")}

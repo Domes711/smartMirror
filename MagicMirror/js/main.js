@@ -616,6 +616,15 @@ const MM = (function () {
 
 			createDomObjects();
 
+			// Hidden staging area: hot-loaded managed modules live here until
+			// MMM-Profile moves them into the right region container.
+			if (!document.getElementById("mm-hot-staging")) {
+				const staging = document.createElement("div");
+				staging.id = "mm-hot-staging";
+				staging.style.display = "none";
+				document.body.appendChild(staging);
+			}
+
 			// Setup global socket listener for RELOAD event (watch mode)
 			if (typeof io !== "undefined") {
 				const socket = io("/", {
@@ -625,6 +634,56 @@ const MM = (function () {
 				socket.on("RELOAD", () => {
 					Log.warn("Reload notification received from server");
 					window.location.reload(true);
+				});
+
+				// Hot-load a brand-new module without a page reload.
+				// Triggered by mirror-console after it registers the module in config.js.
+				socket.on("MODULE_HOT_LOAD", async ({ moduleName, moduleId, moduleConfig }) => {
+					Log.info(`[MM] Hot-loading module: ${moduleName} (id: ${moduleId})`);
+
+					// Skip if we already have an instance of this module
+					if (modules.some((m) => m.name === moduleName && (m.data.id === moduleId || !moduleId))) {
+						Log.info(`[MM] ${moduleName} already in modules — skipping hot-load`);
+						return;
+					}
+
+					let envVars;
+					try {
+						envVars = await fetch(`${config.basePath || "/"}env`).then((r) => r.json());
+					} catch {
+						envVars = { modulesDir: "modules", defaultModulesDir: "defaultmodules" };
+					}
+
+					const isDefault = (typeof defaultModules !== "undefined") && defaultModules.indexOf(moduleName) !== -1;
+					const folder = isDefault
+						? `${envVars.defaultModulesDir}/${moduleName}/`
+						: `${envVars.modulesDir}/${moduleName}/`;
+
+					const idx = modules.length;
+					const moduleData = {
+						index: idx,
+						identifier: `module_hot_${idx}_${moduleName}`,
+						id: moduleId || null,
+						name: moduleName,
+						path: folder,
+						file: `${moduleName}.js`,
+						position: undefined,
+						classes: moduleName,
+						configDeepMerge: false,
+						config: moduleConfig || {},
+						animateIn: null,
+						animateOut: null,
+						hiddenOnStartup: false,
+						header: undefined,
+						order: 0
+					};
+
+					try {
+						const mObj = await Loader.hotLoadModule(moduleData);
+						if (mObj) await MM.addModule(mObj);
+					} catch (e) {
+						Log.error(`[MM] Hot-load failed for ${moduleName}:`, e);
+					}
 				});
 			}
 
@@ -704,6 +763,43 @@ const MM = (function () {
 		getModules () {
 			setSelectionMethodsForModules(modules);
 			return modules;
+		},
+
+		/**
+		 * Hot-add a single module at runtime (no page reload).
+		 * Creates its DOM in the staging area so MMM-Profile can move it.
+		 * @param {Module} mObj Bootstrapped module instance from Loader.hotLoadModule().
+		 * @returns {Promise<void>}
+		 */
+		async addModule (mObj) {
+			modules.push(mObj);
+
+			const dom = document.createElement("div");
+			dom.id = mObj.identifier;
+			dom.className = `module ${mObj.name}`;
+			if (typeof mObj.data.classes === "string") {
+				dom.className = `module ${mObj.name} ${mObj.data.classes}`;
+			}
+			dom.style.order = 0;
+
+			const header = document.createElement("header");
+			header.className = "module-header";
+			header.style.display = "none";
+			dom.appendChild(header);
+
+			const content = document.createElement("div");
+			content.className = "module-content";
+			dom.appendChild(content);
+
+			const staging = document.getElementById("mm-hot-staging") || document.body;
+			staging.appendChild(dom);
+
+			await updateDom(mObj, 0);
+			await mObj.start();
+
+			updateWrapperStates();
+			sendNotification("MODULE_DOM_CREATED", null, null, mObj);
+			sendNotification("MODULE_HOT_LOADED", null, null);
 		},
 
 		/**
