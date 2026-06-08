@@ -287,9 +287,10 @@ Module.register("MMM-Profile", {
             if (pos) {
                 const region = document.querySelector(
                     ".region." + pos.replace(/_/g, "."));
-                if (region && elNode.parentElement !== region) {
-                    Log.log("[MMM-Profile] Moving", id, "to region", pos);
-                    region.appendChild(elNode);
+                const target = (region && region.querySelector(":scope > .container")) || region;
+                if (target && elNode.parentElement !== target) {
+                    Log.log("[MMM-Profile] Moving", id, "to", pos);
+                    target.appendChild(elNode);
                 }
                 Log.log("[MMM-Profile] Calling show() for", id);
                 mod.show(0, () => {}, { lockString: "mmm-profile" });

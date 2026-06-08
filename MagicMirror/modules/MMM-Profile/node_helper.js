@@ -226,6 +226,9 @@ module.exports = NodeHelper.create({
 
     _push: function () {
         const layout = this._resolveLayout();
+        Log.info("[MMM-Profile] push state=" + this.state
+            + " user=" + this.currentUser
+            + " layout=" + JSON.stringify(layout));
         this.sendSocketNotification("MMP_STATE", {
             state: this.state,
             currentUser: this.currentUser,
@@ -245,6 +248,9 @@ module.exports = NodeHelper.create({
             : this.currentUser;
 
         const win = this._resolveWindow(userKey, new Date());
+        if (!win) {
+            Log.warn("[MMM-Profile] No active window for user '" + userKey + "' at current time — no layout shown");
+        }
         const winLayout = (win && Array.isArray(win.layout)) ? win.layout : [];
         const global = Array.isArray(pages.globalLayout) ? pages.globalLayout : [];
         return global.concat(winLayout);
