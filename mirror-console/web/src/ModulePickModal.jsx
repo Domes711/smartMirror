@@ -25,8 +25,13 @@ export default function ModulePickModal({ catalog, position, onCancel, onConfirm
         {!entry ? (
           <div className="modpick-list">
             {catalog.map((c) => (
-              <button key={c.type} className="mqtt-btn" onClick={() => { setType(c.type); setValues({}); }}>
-                {c.label}
+              <button key={c.type} className="modpick-card" onClick={() => { setType(c.type); setValues({}); }}>
+                <div className="modpick-thumb">
+                  {c.image
+                    ? <img src={c.image} alt="" loading="lazy" />
+                    : <span className="modpick-thumb-ph">🧩</span>}
+                </div>
+                <span className="modpick-card-name">{c.label}</span>
               </button>
             ))}
           </div>
