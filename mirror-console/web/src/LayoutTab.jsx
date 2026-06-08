@@ -29,7 +29,10 @@ export default function LayoutTab({ profile, onWindowChange }) {
   const [catalog, setCatalog] = useState([]);
   const [registered, setRegistered] = useState([]);
   const [loadedByModule, setLoadedByModule] = useState({}); // module name → [ids in config.js]
-  const [selected, setSelected] = useState(null);
+  // What layout is being edited: a time window, the user's default layout, or
+  // the always-on global layout. null = calendar overview.
+  //   { kind: "window", key } | { kind: "default" } | { kind: "global" }
+  const [target, setTarget] = useState(null);
   const [moving, setMoving] = useState(null); // instance id being moved
   const [addPos, setAddPos] = useState(null);
   const [showWindowModal, setShowWindowModal] = useState(false);
@@ -57,6 +60,30 @@ export default function LayoutTab({ profile, onWindowChange }) {
     [store, profile]
   );
 
+  // ── layout target read/write (window | per-user default | global) ──
+  const readLayout = useCallback((st, t) => {
+    if (!t || !st) return [];
+    if (t.kind === "global") return st.globalLayout || [];
+    if (t.kind === "default") return (st.defaults || {})[profile] || [];
+    return st.windows?.[profile]?.[t.key]?.layout || [];
+  }, [profile]);
+
+  const writeLayout = useCallback((st, t, layout) => {
+    if (t.kind === "global") { st.globalLayout = layout; return; }
+    if (t.kind === "default") {
+      st.defaults = st.defaults || {};
+      st.defaults[profile] = layout;
+      return;
+    }
+    st.windows[profile][t.key].layout = layout;
+  }, [profile]);
+
+  const targetTitle = (t) =>
+    !t ? ""
+    : t.kind === "global" ? "Globální rozložení (vždy zobrazené)"
+    : t.kind === "default" ? `Výchozí rozložení — ${profile}`
+    : t.key;
+
   // ── MQTT helpers (live preview / reload via the Node bridge) ──
   const publishMqtt = useCallback((topic, payload) =>
     fetch("/api/mqtt/publish", {
@@ -67,20 +94,18 @@ export default function LayoutTab({ profile, onWindowChange }) {
   const previewLayout = useCallback((layout) => publishMqtt(PREVIEW_TOPIC, { layout }), [publishMqtt]);
   const reloadMirror = useCallback(() => publishMqtt(RELOAD_TOPIC, ""), [publishMqtt]);
 
-  // entering a window editor → live preview that window; leaving the tab → revert
+  // entering an editor → live preview that layout; leaving the tab → revert
   useEffect(() => {
-    if (selected && store?.windows?.[profile]?.[selected]) {
-      previewLayout(store.windows[profile][selected].layout || []);
-    }
-  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (target) previewLayout(readLayout(store, target));
+  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { reloadMirror(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Tell the parent whether a window editor is open, so it can hide the
-  // Rozložení/Fotky subtabs while editing a single window's layout.
+  // Tell the parent whether an editor is open, so it can hide the
+  // Rozložení/Fotky subtabs while editing a single layout.
   useEffect(() => {
-    onWindowChange?.(!!selected);
+    onWindowChange?.(!!target);
     return () => onWindowChange?.(false);
-  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = useCallback(async (next) => {
     setStore(next);
@@ -140,8 +165,13 @@ export default function LayoutTab({ profile, onWindowChange }) {
     return `${base}-${n}`;
   }, [registered, store, profile]);
 
+  // An instance is "used" if referenced by the global layout, any user default,
+  // or any time-window layout — drop the rest.
   const pruneInstances = (st) => {
     const used = new Set();
+    (st.globalLayout || []).forEach((e) => used.add(e.id));
+    Object.values(st.defaults || {}).forEach((l) =>
+      (l || []).forEach((e) => used.add(e.id)));
     Object.values(st.windows || {}).forEach((ws) =>
       Object.values(ws).forEach((w) => (w.layout || []).forEach((e) => used.add(e.id))));
     st.instances = (st.instances || []).filter((i) => used.has(i.id));
@@ -158,7 +188,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
     };
     persist(st);
     setShowWindowModal(false);
-    setSelected(key);
+    setTarget({ kind: "window", key });
   };
 
   // Click on empty calendar time → add a one-hour window there and jump straight
@@ -176,7 +206,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
       label, layout: [],
     };
     persist(st);
-    setSelected(key);
+    setTarget({ kind: "window", key });
   };
 
   // Change the from/to time of an existing window (keeps its name/key + layout).
@@ -203,10 +233,21 @@ export default function LayoutTab({ profile, onWindowChange }) {
     delete st.windows[profile][name];
     pruneInstances(st);
     persist(st);
-    if (selected === name) { setSelected(null); reloadMirror(); }
+    if (target?.kind === "window" && target.key === name) { setTarget(null); reloadMirror(); }
   };
 
-  // Add a module instance to the active window.
+  // Empty the currently-edited default / global layout.
+  const clearLayout = () => {
+    if (!window.confirm("Vyčistit toto rozložení?")) return;
+    const st = clone(store);
+    writeLayout(st, target, []);
+    pruneInstances(st);
+    persist(st);
+    previewLayout([]);
+    setMoving(null);
+  };
+
+  // Add a module instance to the active layout (window / default / global).
   // If an instance of this type already exists in the store or in config.js,
   // reuse its id so no pm2 restart is needed.
   const addPlacement = ({ type, values }) => {
@@ -235,8 +276,8 @@ export default function LayoutTab({ profile, onWindowChange }) {
       }
     }
 
-    st.windows[profile][selected].layout.push({ id, position: addPos });
-    const layoutAfter = st.windows[profile][selected].layout;
+    const layoutAfter = [...readLayout(st, target), { id, position: addPos }];
+    writeLayout(st, target, layoutAfter);
     setAddPos(null);
     (async () => { await persist(st); await apply("Modul přidán a načten.", layoutAfter); })();
   };
@@ -244,19 +285,19 @@ export default function LayoutTab({ profile, onWindowChange }) {
   // move an existing placement → keep the same id → mirror repositions LIVE
   const movePlacement = (id, position) => {
     const st = clone(store);
-    const w = st.windows[profile][selected];
-    w.layout = w.layout.map((e) => (e.id === id ? { ...e, position } : e));
+    const layout = readLayout(st, target).map((e) => (e.id === id ? { ...e, position } : e));
+    writeLayout(st, target, layout);
     persist(st);
-    previewLayout(w.layout);
+    previewLayout(layout);
   };
 
   const removePlacement = (id, pos) => {
     const st = clone(store);
-    const w = st.windows[profile][selected];
-    w.layout = w.layout.filter((e) => !(e.id === id && e.position === pos));
+    const layout = readLayout(st, target).filter((e) => !(e.id === id && e.position === pos));
+    writeLayout(st, target, layout);
     pruneInstances(st);
     persist(st);
-    previewLayout(w.layout);
+    previewLayout(layout);
     if (moving === id) setMoving(null);
   };
 
@@ -272,27 +313,39 @@ export default function LayoutTab({ profile, onWindowChange }) {
     : status === "saved" ? <span className="save-dot ok">uloženo ✓</span>
     : status ? <span className="save-dot bad">{status}</span> : null;
 
-  // ── window editor ──
-  if (selected) {
-    const w = windows[selected];
-    if (!w) { setSelected(null); return null; }
+  // ── layout editor (window / default / global) ──
+  if (target) {
+    const isWindow = target.kind === "window";
+    const w = isWindow ? windows[target.key] : null;
+    if (isWindow && !w) { setTarget(null); return null; }
+    const layout = readLayout(store, target);
     return (
       <div className="layout-tab">
         <LoadingOverlay show={applying} message="Aplikuji (restart zrcadla)…" />
         <div className="wizard-head">
-          <button className="mqtt-btn compact" onClick={() => { setSelected(null); setMoving(null); reloadMirror(); }}>← Kalendář</button>
-          <strong>{selected}</strong>
-          <button type="button" className="learn-progress time-edit-btn" title="Změnit čas okna"
-            onClick={() => setEditWindow(selected)}>
-            {w.label || `${timeFromCron(w.from)}–${timeFromCron(w.to)}`} ✎
-          </button>
+          <button className="mqtt-btn compact" onClick={() => { setTarget(null); setMoving(null); reloadMirror(); }}>← Kalendář</button>
+          <strong>{isWindow ? target.key : targetTitle(target)}</strong>
+          {isWindow ? (
+            <button type="button" className="learn-progress time-edit-btn" title="Změnit čas okna"
+              onClick={() => setEditWindow(target.key)}>
+              {w.label || `${timeFromCron(w.from)}–${timeFromCron(w.to)}`} ✎
+            </button>
+          ) : (
+            <span className="learn-progress">
+              {target.kind === "global" ? "vždy zobrazené" : "když neběží žádné okno"}
+            </span>
+          )}
         </div>
-        <MirrorGrid layout={w.layout || []} idLabel={idLabel} movingId={moving}
+        <MirrorGrid layout={layout} idLabel={idLabel} movingId={moving}
           onCellClick={onCellClick} onSelect={(id) => setMoving(moving === id ? null : id)}
           onRemove={removePlacement} />
         <div className="panel-actions detail-foot">
           {statusEl}
-          <button className="mqtt-btn k-bad compact" onClick={() => deleteWindow(selected)}>Smazat okno</button>
+          {isWindow ? (
+            <button className="mqtt-btn k-bad compact" onClick={() => deleteWindow(target.key)}>Smazat okno</button>
+          ) : (
+            <button className="mqtt-btn k-bad compact" disabled={!layout.length} onClick={clearLayout}>Vyčistit</button>
+          )}
           <button className="mqtt-btn" disabled={applying} onClick={() => apply()}>Aplikovat na zrcadlo</button>
         </div>
         <p className="profiles-note">Posun: klikni na modul a pak na ＋ v cílové pozici — projeví se živě. Nový modul vyžaduje krátký restart.</p>
@@ -313,11 +366,21 @@ export default function LayoutTab({ profile, onWindowChange }) {
 
   // ── calendar (day column) ──
   const entries = Object.entries(windows);
+  const defaultCount = (store.defaults?.[profile] || []).length;
+  const globalCount = (store.globalLayout || []).length;
   return (
     <div className="layout-tab">
       <LoadingOverlay show={applying} message="Aplikuji (restart zrcadla)…" />
       <div className="cal-bar">
         <button className="mqtt-btn k-ok" onClick={() => setShowWindowModal(true)}>＋ Přidat časové okno</button>
+        <button className="mqtt-btn compact" onClick={() => setTarget({ kind: "default" })}
+          title="Co se zobrazí tomuto profilu, když neběží žádné časové okno">
+          Výchozí ({defaultCount})
+        </button>
+        <button className="mqtt-btn compact" onClick={() => setTarget({ kind: "global" })}
+          title="Co se zobrazí vždy, nezávisle na profilu i čase">
+          Globální ({globalCount})
+        </button>
         {statusEl}
         <button className="mqtt-btn" disabled={applying} onClick={() => apply()}>Aplikovat na zrcadlo</button>
       </div>
@@ -334,7 +397,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
               const top = (minsFromCron(w.from) / 60) * HOUR_PX;
               const height = Math.max(26, ((minsFromCron(w.to) - minsFromCron(w.from)) / 60) * HOUR_PX);
               return (
-                <button key={name} className="cal-event" style={{ top, height }} onClick={() => setSelected(name)}>
+                <button key={name} className="cal-event" style={{ top, height }} onClick={() => setTarget({ kind: "window", key: name })}>
                   <span className="cal-event-name">{name}</span>
                   <span className="cal-event-time">
                     <span className="time-edit" title="Změnit čas okna"
@@ -350,7 +413,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
         </div>
       </div>
       {entries.length === 0 && (
-        <div className="monitor-empty">Žádná časová okna — klikni do kalendáře na prázdný čas nebo použij tlačítko nahoře.</div>
+        <div className="monitor-empty">Žádná časová okna — klikni do kalendáře na prázdný čas nebo použij tlačítko nahoře. „Výchozí" a „Globální" určují, co se zobrazí mimo okna.</div>
       )}
 
       {showWindowModal && (

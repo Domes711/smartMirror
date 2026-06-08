@@ -207,11 +207,16 @@ class ProfileManager {
 			: this.currentUser;
 		const win = this._resolveWindow(userKey, new Date());
 		if (!win) {
-			Log.warn("[Profile] No active window for user '" + userKey + "' at current time");
+			Log.warn("[Profile] No active window for user '" + userKey + "' — using default layout");
 		}
-		const winLayout = (win && Array.isArray(win.layout)) ? win.layout : [];
+		// Active time-window layout if one matches, otherwise the user's default
+		// layout (config/pages.js → defaults[userKey]). The global layout is
+		// always shown on top of whichever of those applies.
+		const winLayout = (win && Array.isArray(win.layout))
+			? win.layout
+			: (((this.pages.defaults || {})[userKey]) || []);
 		const globalLayout = Array.isArray(this.pages.globalLayout) ? this.pages.globalLayout : [];
-		return globalLayout.concat(winLayout);
+		return globalLayout.concat(Array.isArray(winLayout) ? winLayout : []);
 	}
 
 	/**

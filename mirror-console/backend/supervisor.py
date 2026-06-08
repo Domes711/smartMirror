@@ -283,6 +283,8 @@ def catalog_by_type() -> dict:
 
 DEFAULT_STORE = {
     "globalLayout": [],
+    # Per-user fallback layout shown when no time window is active for that user.
+    "defaults": {},
     "windows": {
         "default": {
             "all_day": {
@@ -321,7 +323,7 @@ def _import_pages_windows():
         return None
     windows = {}
     for key, block in pages.items():
-        if key == "globalLayout" or not isinstance(block, dict):
+        if key in ("globalLayout", "defaults") or not isinstance(block, dict):
             continue
         wins = {}
         for name, w in block.items():
@@ -331,6 +333,7 @@ def _import_pages_windows():
         if wins:
             windows[key] = wins
     return {"globalLayout": pages.get("globalLayout", []),
+            "defaults": pages.get("defaults", {}),
             "windows": windows, "instances": []}
 
 
@@ -442,6 +445,13 @@ def validate_store(store: dict):
         for fld in cat["fields"]:
             if fld.get("required") and not (inst.get("values") or {}).get(fld["key"]):
                 return f"{cat['label']}: chybí povinné pole '{fld['label']}'"
+    for entry in store.get("globalLayout", []) or []:
+        if entry.get("position") not in MM_POSITIONS:
+            return f"globální rozložení: neplatná pozice {entry.get('position')}"
+    for profile, layout in (store.get("defaults") or {}).items():
+        for entry in (layout or []):
+            if entry.get("position") not in MM_POSITIONS:
+                return f"{profile}/výchozí: neplatná pozice {entry.get('position')}"
     for profile, wins in store.get("windows", {}).items():
         for name, w in (wins or {}).items():
             if not w.get("from") or not w.get("to"):
@@ -453,8 +463,11 @@ def validate_store(store: dict):
 
 
 def _pages_object(store: dict) -> dict:
-    out = {"globalLayout": store.get("globalLayout", [])}
+    out = {"globalLayout": store.get("globalLayout", []),
+           "defaults": store.get("defaults", {})}
     for profile, wins in store.get("windows", {}).items():
+        if profile in ("globalLayout", "defaults"):
+            continue  # reserved top-level keys — never let a profile shadow them
         out[profile] = {}
         for name, w in (wins or {}).items():
             out[profile][name] = {"from": w["from"], "to": w["to"],
