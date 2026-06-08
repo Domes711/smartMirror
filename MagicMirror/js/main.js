@@ -118,15 +118,25 @@ const MM = (function () {
 		const domCreationPromises = [];
 
 		modules.forEach(function (module) {
-			if (typeof module.data.position !== "string") {
+			// Decide where this module's DOM node is created. A fixed position
+			// goes straight into that region. A managed module (carries an `id`)
+			// without a position is placed and shown later by the profile system
+			// (projectLayout), so park its DOM in the hidden staging area now —
+			// otherwise it would have no DOM node and could never be shown in any
+			// time-window layout. Truly position-less, unmanaged modules are
+			// skipped as before.
+			let wrapper;
+			if (typeof module.data.position === "string") {
+				wrapper = selectWrapper(module.data.position);
+			} else if (module.data.id) {
+				wrapper = document.getElementById("mm-hot-staging") || document.body;
+			} else {
 				return;
 			}
 
 			let haveAnimateIn = null;
 			// check if have valid animateIn in module definition (module.data.animateIn)
 			if (module.data.animateIn && AnimateCSSIn.indexOf(module.data.animateIn) !== -1) haveAnimateIn = module.data.animateIn;
-
-			const wrapper = selectWrapper(module.data.position);
 
 			const dom = document.createElement("div");
 			dom.id = module.identifier;
@@ -720,16 +730,20 @@ const MM = (function () {
 			Log.info("All modules started!");
 			sendNotification("ALL_MODULES_STARTED");
 
-			createDomObjects();
-
-			// Hidden staging area: hot-loaded managed modules live here until
-			// the core profile system moves them into the right region container.
+			// Hidden staging area: managed modules without a fixed position — their
+			// placement comes from the core profile system at runtime — and
+			// hot-loaded modules live here until projectLayout moves them into the
+			// right region container. Created BEFORE createDomObjects() so that
+			// startup managed modules can be parked here too (otherwise they would
+			// get no DOM node and could never be shown in a time-window layout).
 			if (!document.getElementById("mm-hot-staging")) {
 				const staging = document.createElement("div");
 				staging.id = "mm-hot-staging";
 				staging.style.display = "none";
 				document.body.appendChild(staging);
 			}
+
+			createDomObjects();
 
 			// Setup global socket listener for RELOAD event (watch mode)
 			if (typeof io !== "undefined") {
