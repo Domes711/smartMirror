@@ -3,10 +3,10 @@
 # and restart everything so changes (front-end + back-end + modules) take effect.
 #
 # Safe to run repeatedly. Per-Pi state is gitignored (layout_store.json,
-# installed_modules.json, console-modules.js, pages.js, radar_config.json,
-# server/.env, node_modules, web/dist) so it is never touched. The only tracked
-# runtime file is MagicMirror/config/config.js — it is backed up first and the
-# pull is done with --autostash so your local (console-injected) version is kept.
+# installed_modules.json, console-modules.js, config/pages.js,
+# radar_config.json, node_modules, web/dist) so it is never touched.
+# The only tracked runtime file is MagicMirror/config/config.js — it is backed
+# up first and the pull is done with --autostash.
 #
 # Usage:  ./deploy.sh           # console + MagicMirror restart (fast, default)
 #         ./deploy.sh --full    # also reinstall MagicMirror core + module deps
@@ -45,24 +45,40 @@ else
   exit 1
 fi
 
-# --- 2. console back-end deps -------------------------------------------------
-c "Instaluji závislosti konzole (server)…"
-( cd mirror-console/server && "$NPM" install --no-audit --no-fund )
-ok "server hotov"
+# --- 2. migrate pages.js if needed -------------------------------------------
+# pages.js moved: modules/MMM-Profile/pages.js → config/pages.js (one-time)
+OLD_PAGES="MagicMirror/modules/MMM-Profile/pages.js"
+NEW_PAGES="MagicMirror/config/pages.js"
+if [ ! -f "$NEW_PAGES" ] && [ -f "$OLD_PAGES" ]; then
+  c "Migruji pages.js na nové místo…"
+  cp "$OLD_PAGES" "$NEW_PAGES"
+  ok "config/pages.js"
+fi
 
-# --- 3. console web: deps + build --------------------------------------------
-c "Buildím web konzoli…"
-( cd mirror-console/web && "$NPM" install --no-audit --no-fund && "$NPM" run build )
-ok "web/dist vygenerován"
-
-# --- 4. (optional) MagicMirror core + module deps ----------------------------
+# --- 3. MagicMirror core deps ------------------------------------------------
+# Always run to pick up new core dependencies (mqtt, cron-parser for profile system).
+# --full also runs ./setup.sh which covers module-level deps on top of this.
 if [ "$FULL" = "1" ]; then
   c "Reinstaluji MagicMirror core + moduly (--full)…"
   ( cd MagicMirror && ./setup.sh )
   ok "MagicMirror deps hotové"
+else
+  c "Instaluji závislosti MagicMirror core…"
+  ( cd MagicMirror && "$NPM" install --no-audit --no-fund )
+  ok "MagicMirror core deps hotové"
 fi
 
-# --- 5. restart everything ----------------------------------------------------
+# --- 4. console back-end deps -------------------------------------------------
+c "Instaluji závislosti konzole (server)…"
+( cd mirror-console/server && "$NPM" install --no-audit --no-fund )
+ok "server hotov"
+
+# --- 5. console web: deps + build --------------------------------------------
+c "Buildím web konzoli…"
+( cd mirror-console/web && "$NPM" install --no-audit --no-fund && "$NPM" run build )
+ok "web/dist vygenerován"
+
+# --- 6. restart everything ----------------------------------------------------
 restart_unit() {  # restart a systemd unit only if it is installed
   if systemctl list-unit-files "$1.service" 2>/dev/null | grep -q "$1.service"; then
     sudo systemctl restart "$1" && ok "restart $1"
@@ -81,7 +97,7 @@ else
   warn "pm2 nenalezeno — MagicMirror nerestartováno"
 fi
 
-# --- 6. health check ----------------------------------------------------------
+# --- 7. health check ----------------------------------------------------------
 c "Kontrola…"
 sleep 2
 code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz || true)"
