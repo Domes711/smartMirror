@@ -1198,22 +1198,38 @@ class Supervisor:
             raise ValueError("invalid file")
         return os.path.join(self._person_dir(name), file)
 
-    def encode_dataset(self) -> dict:
-        """Retrain encoded_faces.pickle from the dataset, then drop the cache."""
+    def encode_dataset(self, name: str = None) -> dict:
+        """Retrain encoded_faces.pickle from the dataset, then drop the cache.
+
+        With ``name`` set, only that profile is (re)encoded and merged into the
+        existing pickle — keeping enrollment fast and bounded instead of
+        re-encoding the whole dataset on every new profile (which on the Pi grows
+        unbounded and makes "Dokončit a natrénovat" appear to hang).
+        """
+        cmd = [sys.executable, ENCODE_SCRIPT,
+               "--dataset", DATASET_DIR, "--output", self.args.encodings]
+        if name:
+            if not _NAME_RE.match(name):
+                raise ValueError("invalid name")
+            cmd += ["--name", name]
         try:
             res = subprocess.run(
-                [sys.executable, ENCODE_SCRIPT,
-                 "--dataset", DATASET_DIR, "--output", self.args.encodings],
-                capture_output=True, text=True, timeout=600, cwd=_CAMERA_DIR,
+                cmd, capture_output=True, text=True, timeout=600, cwd=_CAMERA_DIR,
             )
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "output": str(exc)}
+            return {"ok": False, "output": str(exc), "error": str(exc)}
         # force reload of cached encodings on next face/learn frame
         self._fr = None
         self._known_encodings = None
         self._known_names = None
         out = (res.stdout or "") + (res.stderr or "")
-        return {"ok": res.returncode == 0, "output": out[-4000:]}
+        ok = res.returncode == 0
+        result = {"ok": ok, "output": out[-4000:]}
+        if not ok:
+            # surface the encoder's own message so the UI toast is meaningful
+            lines = [ln for ln in out.splitlines() if ln.strip()]
+            result["error"] = lines[-1] if lines else "trénink selhal"
+        return result
 
     # ---- profiles (one per learned person / dataset folder) ----------- #
     def list_profiles(self) -> list:
@@ -1569,7 +1585,8 @@ def make_handler(sup: Supervisor):
                     self._json(200, sup.capture_photo(
                         body.get("name", ""), body.get("file")))
                 elif path == "/encode":
-                    self._json(200, sup.encode_dataset())
+                    self._json(200, sup.encode_dataset(
+                        self._body().get("name") or None))
                 elif path == "/radar":
                     self._json(200, sup.set_radar(bool(self._body().get("active"))))
                 elif path == "/layout/apply":
