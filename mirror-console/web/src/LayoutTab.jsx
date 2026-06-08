@@ -28,6 +28,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
   const [store, setStore] = useState(null);
   const [catalog, setCatalog] = useState([]);
   const [registered, setRegistered] = useState([]);
+  const [loadedByModule, setLoadedByModule] = useState({}); // module name → [ids in config.js]
   const [selected, setSelected] = useState(null);
   const [moving, setMoving] = useState(null); // instance id being moved
   const [addPos, setAddPos] = useState(null);
@@ -45,6 +46,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
         setStore(st);
         setCatalog(mods.catalog || []);
         setRegistered(mods.registered_ids || []);
+        setLoadedByModule(mods.loaded_by_module || {});
       })
       .catch(() => toast.error("Nepodařilo se načíst layout."));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -191,12 +193,35 @@ export default function LayoutTab({ profile, onWindowChange }) {
     if (selected === name) { setSelected(null); reloadMirror(); }
   };
 
-  // add a NEW module instance → needs a one-time pm2 restart to register it
+  // Add a module instance to the active window.
+  // If an instance of this type already exists in the store or in config.js,
+  // reuse its id so no pm2 restart is needed.
   const addPlacement = ({ type, values }) => {
     const st = clone(store);
-    const id = nextId(type);
     st.instances = st.instances || [];
-    st.instances.push({ id, type, values });
+
+    // 1. Reuse existing store instance of the same type (e.g. placed elsewhere before)
+    const existingInst = st.instances.find((i) => i.type === type);
+    let id;
+    if (existingInst) {
+      id = existingInst.id;
+    } else {
+      // 2. Reuse an id already loaded by MagicMirror (manually in config.js)
+      const catEntry = catalog.find((c) => c.type === type);
+      const moduleName = catEntry?.module || type;
+      const preloadedIds = (loadedByModule[moduleName] || []).filter(
+        (pid) => !st.instances.some((i) => i.id === pid)
+      );
+      if (preloadedIds.length > 0) {
+        // Module already in config.js — reference its existing id, no new instance needed
+        id = preloadedIds[0];
+      } else {
+        // 3. Truly new instance — needs a one-time pm2 restart to register it
+        id = nextId(type);
+        st.instances.push({ id, type, values });
+      }
+    }
+
     st.windows[profile][selected].layout.push({ id, position: addPos });
     const layoutAfter = st.windows[profile][selected].layout;
     setAddPos(null);

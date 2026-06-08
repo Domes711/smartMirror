@@ -386,6 +386,41 @@ def registered_ids() -> list:
     return sorted(ids)
 
 
+def loaded_by_module() -> dict:
+    """Maps module name → list of ids already in config.js (any section).
+
+    Used by the layout editor to reuse existing module instances instead of
+    creating new ones (which would require a pm2 restart).
+    """
+    result: dict = {}
+    try:
+        with open(CONFIG_JS_PATH) as f:
+            text = f.read()
+        # Match both JS-object and JSON styles:
+        #   module: "clock",  id: "clock"   (JS unquoted keys)
+        #   "module": "clock", "id": "my-id" (JSON style in MIRROR-CONSOLE block)
+        for m in re.finditer(
+            r'(?:"module"|module)\s*:\s*["\']([^"\']+)["\'][^}]*?'
+            r'(?:"id"|id)\s*:\s*["\']([^"\']+)["\']',
+            text, re.S
+        ):
+            mod_name, mod_id = m.group(1), m.group(2)
+            result.setdefault(mod_name, []).append(mod_id)
+        # Also scan in reverse key order (id before module)
+        for m in re.finditer(
+            r'(?:"id"|id)\s*:\s*["\']([^"\']+)["\'][^}]*?'
+            r'(?:"module"|module)\s*:\s*["\']([^"\']+)["\']',
+            text, re.S
+        ):
+            mod_id, mod_name = m.group(1), m.group(2)
+            ids = result.setdefault(mod_name, [])
+            if mod_id not in ids:
+                ids.append(mod_id)
+    except Exception:  # noqa: BLE001
+        pass
+    return result
+
+
 def validate_store(store: dict):
     """Return an error string, or None if the store is valid."""
     if not isinstance(store, dict):
@@ -1262,7 +1297,7 @@ class Supervisor:
     @staticmethod
     def list_modules() -> dict:
         return {"catalog": effective_catalog(), "registered_ids": registered_ids(),
-                "positions": MM_POSITIONS}
+                "loaded_by_module": loaded_by_module(), "positions": MM_POSITIONS}
 
     @staticmethod
     def get_layout() -> dict:
@@ -1287,20 +1322,27 @@ class Supervisor:
         need the mirror to reload pages.js (frontend publishes the reload)."""
         store = load_store()
         prev_ids = set()
+        all_existing_ids = set()
         try:
             with open(CONFIG_JS_PATH) as f:
-                prev_ids = _managed_ids(f.read())
+                config_text = f.read()
+                prev_ids = _managed_ids(config_text)
+                # All ids in config.js before generate (both manual + managed)
+                all_existing_ids = set(re.findall(r'["\']?id["\']?\s*:\s*["\']([^"\']+)["\']', config_text))
         except Exception:  # noqa: BLE001
             pass
 
         generate_files(store)   # writes pages.js + injects modules into config.js
 
         new_ids = {i["id"] for i in store.get("instances", []) if i.get("id")}
-        if new_ids != prev_ids:
-            res = Supervisor._pm2_restart()
-            return {"ok": res["ok"], "restarted": True,
-                    "reload_needed": False, "output": res.get("output", "")}
-        return {"ok": True, "restarted": False, "reload_needed": True}
+        added_ids = new_ids - prev_ids
+        if not added_ids or added_ids.issubset(all_existing_ids):
+            # All newly-managed ids were already in config.js → module already
+            # loaded by MagicMirror, live reload is enough.
+            return {"ok": True, "restarted": False, "reload_needed": True}
+        res = Supervisor._pm2_restart()
+        return {"ok": res["ok"], "restarted": True,
+                "reload_needed": False, "output": res.get("output", "")}
 
     @staticmethod
     def _pm2_restart() -> dict:
