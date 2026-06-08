@@ -1,27 +1,32 @@
 import { useState } from "react";
 
-// Modal to create a time window: name + from/to time. On confirm returns
-// { name, from, to } (HH:MM); the parent persists it and opens the editor.
-export default function WindowModal({ onCancel, onConfirm }) {
-  const [name, setName] = useState("");
-  const [from, setFrom] = useState("09:00");
-  const [to, setTo] = useState("12:00");
+// Modal to create OR edit a time window. Without `initial` it collects
+// name + from/to (create). With `initial` ({ name, from, to } in HH:MM) it
+// pre-fills the times for editing and locks the name (the name is the window
+// key). On confirm returns { name, from, to } (HH:MM); the parent persists it.
+export default function WindowModal({ onCancel, onConfirm, initial }) {
+  const editing = !!initial;
+  const [name, setName] = useState(initial?.name || "");
+  const [from, setFrom] = useState(initial?.from || "09:00");
+  const [to, setTo] = useState(initial?.to || "12:00");
 
-  const ok = name.trim() && from && to;
+  const ok = (editing || name.trim()) && from && to;
 
   return (
     <div className="overlay" onClick={onCancel}>
       <div className="detail-box ask-box" onClick={(e) => e.stopPropagation()}>
-        <strong>Nové časové okno</strong>
+        <strong>{editing ? "Upravit čas okna" : "Nové časové okno"}</strong>
         <label className="field">
           <span>Název</span>
-          <input value={name} placeholder="ráno"
-            onChange={(e) => setName(e.target.value)} autoFocus />
+          <input value={editing ? initial.name : name} placeholder="ráno"
+            disabled={editing}
+            onChange={(e) => setName(e.target.value)} autoFocus={!editing} />
         </label>
         <div className="calib-zone">
           <label className="field">
             <span>Od</span>
-            <input type="time" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <input type="time" value={from} autoFocus={editing}
+              onChange={(e) => setFrom(e.target.value)} />
           </label>
           <label className="field">
             <span>Do</span>
@@ -31,8 +36,8 @@ export default function WindowModal({ onCancel, onConfirm }) {
         <div className="detail-actions">
           <button className="mqtt-btn compact" onClick={onCancel}>Zrušit</button>
           <button className="mqtt-btn k-ok" disabled={!ok}
-            onClick={() => onConfirm({ name: name.trim(), from, to })}>
-            Pokračovat →
+            onClick={() => onConfirm({ name: editing ? initial.name : name.trim(), from, to })}>
+            {editing ? "Uložit čas" : "Pokračovat →"}
           </button>
         </div>
       </div>

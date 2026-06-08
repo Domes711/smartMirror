@@ -33,6 +33,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
   const [moving, setMoving] = useState(null); // instance id being moved
   const [addPos, setAddPos] = useState(null);
   const [showWindowModal, setShowWindowModal] = useState(false);
+  const [editWindow, setEditWindow] = useState(null); // window key whose time is being edited
   const [status, setStatus] = useState(null);
   const [applying, setApplying] = useState(false);
   const toast = useToast();
@@ -178,6 +179,18 @@ export default function LayoutTab({ profile, onWindowChange }) {
     setSelected(key);
   };
 
+  // Change the from/to time of an existing window (keeps its name/key + layout).
+  const updateWindowTime = ({ from, to }) => {
+    const st = clone(store);
+    const w = st.windows?.[profile]?.[editWindow];
+    if (!w) { setEditWindow(null); return; }
+    w.from = cronFromTime(from);
+    w.to = cronFromTime(to);
+    w.label = `${from}–${to}`;
+    persist(st);
+    setEditWindow(null);
+  };
+
   const onCalendarClick = (e) => {
     if (e.target.closest(".cal-event")) return; // existing window handles its own click
     const rect = e.currentTarget.getBoundingClientRect();
@@ -269,7 +282,10 @@ export default function LayoutTab({ profile, onWindowChange }) {
         <div className="wizard-head">
           <button className="mqtt-btn compact" onClick={() => { setSelected(null); setMoving(null); reloadMirror(); }}>← Kalendář</button>
           <strong>{selected}</strong>
-          <span className="learn-progress">{w.label || `${timeFromCron(w.from)}–${timeFromCron(w.to)}`}</span>
+          <button type="button" className="learn-progress time-edit-btn" title="Změnit čas okna"
+            onClick={() => setEditWindow(selected)}>
+            {w.label || `${timeFromCron(w.from)}–${timeFromCron(w.to)}`} ✎
+          </button>
         </div>
         <MirrorGrid layout={w.layout || []} idLabel={idLabel} movingId={moving}
           onCellClick={onCellClick} onSelect={(id) => setMoving(moving === id ? null : id)}
@@ -283,6 +299,13 @@ export default function LayoutTab({ profile, onWindowChange }) {
         {addPos && (
           <ModulePickModal catalog={catalog} position={addPos}
             onCancel={() => setAddPos(null)} onConfirm={addPlacement} />
+        )}
+        {editWindow && windows[editWindow] && (
+          <WindowModal
+            initial={{ name: editWindow,
+              from: timeFromCron(windows[editWindow].from),
+              to: timeFromCron(windows[editWindow].to) }}
+            onCancel={() => setEditWindow(null)} onConfirm={updateWindowTime} />
         )}
       </div>
     );
@@ -314,7 +337,11 @@ export default function LayoutTab({ profile, onWindowChange }) {
                 <button key={name} className="cal-event" style={{ top, height }} onClick={() => setSelected(name)}>
                   <span className="cal-event-name">{name}</span>
                   <span className="cal-event-time">
-                    {timeFromCron(w.from)}–{timeFromCron(w.to)} · {(w.layout || []).length} mod.
+                    <span className="time-edit" title="Změnit čas okna"
+                      onClick={(e) => { e.stopPropagation(); setEditWindow(name); }}>
+                      {timeFromCron(w.from)}–{timeFromCron(w.to)} ✎
+                    </span>
+                    {" · "}{(w.layout || []).length} mod.
                   </span>
                 </button>
               );
@@ -328,6 +355,13 @@ export default function LayoutTab({ profile, onWindowChange }) {
 
       {showWindowModal && (
         <WindowModal onCancel={() => setShowWindowModal(false)} onConfirm={createWindow} />
+      )}
+      {editWindow && windows[editWindow] && (
+        <WindowModal
+          initial={{ name: editWindow,
+            from: timeFromCron(windows[editWindow].from),
+            to: timeFromCron(windows[editWindow].to) }}
+          onCancel={() => setEditWindow(null)} onConfirm={updateWindowTime} />
       )}
     </div>
   );
