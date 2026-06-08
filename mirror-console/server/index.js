@@ -128,6 +128,10 @@ app.get("/api/mqtt/stream", (req, res) => {
   req.on("close", () => sseClients.delete(res));
 });
 
+// --- store assets (store/modules/ in repo root) --------------------------
+const REPO_ROOT = path.join(__dirname, "..", "..");
+app.use("/store-assets", express.static(path.join(REPO_ROOT, "store", "modules")));
+
 // --- static React build + SPA fallback ----------------------------------
 app.use(express.static(DIST));
 app.get("*", (_req, res) => {

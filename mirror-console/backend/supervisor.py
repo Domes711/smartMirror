@@ -174,6 +174,8 @@ STORE_CATALOG_URL = os.environ.get(
 STORE_IMAGE_BASE = os.environ.get(
     "STORE_IMAGE_BASE", "https://modules.magicmirror.builders/images/")
 _STORE_TTL = 1800  # seconds to cache the fetched community catalog
+# Local store metadata: store/modules/<name>/mm-store.json (gitignored per-module).
+STORE_MODULES_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "store", "modules"))
 # A module directory/name we are willing to clone + place on disk.
 _MODULE_NAME_RE = re.compile(r"^MMM-[A-Za-z0-9_.-]{1,60}$")
 # Dirs under modules/ that are not third-party (built-ins live in default/).
@@ -564,6 +566,24 @@ def _fetch_community_catalog() -> list:
     return data
 
 
+def _load_local_meta(name: str):
+    """Load store/modules/<name>/mm-store.json and resolve screenshot paths.
+    Returns the parsed dict (screenshots rewritten to /store-assets/ URLs) or None."""
+    p = os.path.join(STORE_MODULES_DIR, name, "mm-store.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data.get("screenshots"), list):
+            data["screenshots"] = [
+                f"/store-assets/{urllib.parse.quote(name)}/{s}"
+                for s in data["screenshots"]
+                if isinstance(s, str)
+            ]
+        return data
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _community_entry(e: dict) -> dict:
     name = e.get("name") or ""
     img = e.get("image")
@@ -576,6 +596,7 @@ def _community_entry(e: dict) -> dict:
         "maintainer": e.get("maintainer") or "",
         "stars": e.get("stars"),
         "image": (STORE_IMAGE_BASE + urllib.parse.quote(img)) if img else None,
+        "catalog": _load_local_meta(e.get("id") or name),
     }
 
 
@@ -633,6 +654,7 @@ def _own_entry(d: str) -> dict:
         "category": "Moje", "maintainer": "", "stars": None,
         "image": thumbs[0] if thumbs else None, "images": thumbs,
         "installed": True, "own": True,
+        "catalog": _load_local_meta(d),
     }
 
 

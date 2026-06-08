@@ -9,10 +9,14 @@ import { useToast } from "./Toast.jsx";
 const BADGE_RE = /shields\.io|badgen\.net|travis-ci|circleci|codecov|\.svg([?#]|$)/i;
 
 export default function ModuleDetail({ module: m, onBack }) {
+  const cat = m.catalog;
   const [readme, setReadme] = useState(null); // { markdown, baseUrl } | null
-  const [images, setImages] = useState(
-    m.images && m.images.length ? m.images : m.image ? [m.image] : []
-  );
+  // mm-store screenshots first, then catalog image / local thumbs.
+  const [images, setImages] = useState(() => {
+    const base = m.images?.length ? m.images : m.image ? [m.image] : [];
+    const storeScreens = cat?.screenshots || [];
+    return [...new Set([...storeScreens, ...base].filter(Boolean))];
+  });
   const [installed, setInstalled] = useState(!!m.installed);
 
   // install progress
@@ -126,12 +130,21 @@ export default function ModuleDetail({ module: m, onBack }) {
     );
   }
 
+  const originName = cat?.name?.origin || m.name;
+  const localName = cat?.name?.cs || cat?.name?.en || "";
+  const storeDesc = cat?.description?.cs || cat?.description?.en || "";
+
   if (readme === null) {
     return (
       <div className="panel">
         <div className="wizard-head">
           <button className="mqtt-btn compact" onClick={onBack}>← Obchod</button>
-          <strong>{m.name}</strong>
+          <div className="detail-title">
+            <strong>{originName}</strong>
+            {localName && localName !== originName && (
+              <span className="detail-title-sub">{localName}</span>
+            )}
+          </div>
         </div>
         <div className="card status-card">
           <div className="spinner" />
@@ -146,30 +159,54 @@ export default function ModuleDetail({ module: m, onBack }) {
       <LoadingOverlay show={!!working} message={working} />
 
       <div className="wizard-head">
-        <button className="mqtt-btn compact" onClick={onBack}>
-          ← Obchod
-        </button>
-        <strong>{m.name}</strong>
-        <div className="detail-head-actions">
-          {m.maintainer && <span className="store-meta">👤 {m.maintainer}</span>}
+        <button className="mqtt-btn compact" onClick={onBack}>← Obchod</button>
+        <div className="detail-title">
+          <strong>{originName}</strong>
+          {localName && localName !== originName && (
+            <span className="detail-title-sub">{localName}</span>
+          )}
         </div>
       </div>
 
       <div className="detail-scroll">
         <Gallery images={images} />
 
+        {/* Tags (left) + maintainer (right) below gallery */}
+        {(cat?.tags?.length > 0 || m.maintainer) && (
+          <div className="detail-meta-row">
+            <div className="store-tags">
+              {(cat?.tags || []).map(tag => (
+                <span key={tag} className="store-tag">{tag}</span>
+              ))}
+            </div>
+            {m.maintainer && (
+              <span className="detail-maintainer">👤 {m.maintainer}</span>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
         <div className="store-detail-actions">
-          <div className="store-detail-btns">
-            {installed ? (
-              <>
+          {installed ? (
+            <>
+              <div className="store-detail-row">
                 <button className="mqtt-btn k-ok store-install-btn" onClick={() => setEditing(true)}>
                   Upravit
                 </button>
                 <button className="mqtt-btn k-bad store-install-btn" onClick={uninstall}>
                   Odinstalovat
                 </button>
-              </>
-            ) : (
+              </div>
+              {m.url && (
+                <div className="store-detail-row">
+                  <a className="mqtt-btn compact store-source-btn" href={m.url} target="_blank" rel="noreferrer">
+                    Zdroj ↗
+                  </a>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="store-detail-row">
               <button
                 className="mqtt-btn k-ok store-install-btn"
                 onClick={startInstall}
@@ -184,23 +221,30 @@ export default function ModuleDetail({ module: m, onBack }) {
                   "Instalovat"
                 )}
               </button>
-            )}
-          </div>
-          {m.url && (
-            <a className="mqtt-btn compact store-source-btn" href={m.url} target="_blank" rel="noreferrer">
-              Zdroj ↗
-            </a>
+              {m.url && (
+                <a className="mqtt-btn compact store-source-btn" href={m.url} target="_blank" rel="noreferrer">
+                  Zdroj ↗
+                </a>
+              )}
+            </div>
           )}
         </div>
 
-        {readme === null ? (
-          <p className="store-note">Načítám popis…</p>
-        ) : readme.markdown ? (
-          <div className="store-readme">
-            <Markdown source={readme.markdown} />
-          </div>
+        {/* mm-store description */}
+        {storeDesc && <p className="detail-store-desc">{storeDesc}</p>}
+
+        {/* Original README */}
+        {readme.markdown ? (
+          <>
+            {storeDesc && <h3 className="detail-section-head">Originální popis</h3>}
+            <div className="store-readme">
+              <Markdown source={readme.markdown} />
+            </div>
+          </>
         ) : (
-          <p className="store-note">{m.description || "Popis není k dispozici."}</p>
+          !storeDesc && (
+            <p className="store-note">{m.description || "Popis není k dispozici."}</p>
+          )
         )}
       </div>
     </div>

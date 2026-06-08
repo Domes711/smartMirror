@@ -1,13 +1,27 @@
-// Tiny, dependency-free Markdown renderer — enough for a module README:
-// headings, paragraphs, lists, blockquotes, fenced code, and inline
+// Markdown renderer for module READMEs.
+// Handles: headings, paragraphs, lists, blockquotes, fenced code, inline
 // bold / italic / code / links. Images are dropped (shown in the gallery).
-// Text is rendered through React (auto-escaped); only links produce raw anchors.
+// HTML blocks and inline HTML are rendered via dangerouslySetInnerHTML
+// (script tags and event handlers stripped).
+
+const HTML_TAG_RE = /<[a-zA-Z/][^>]*>/;
+
+function sanitize(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "");
+}
 
 function inline(text, key) {
   // Drop image syntax entirely (gallery handles images).
   let t = text.replace(/!\[[^\]]*\]\([^)]*\)/g, "");
+
+  // If text contains HTML tags, hand off to the browser parser.
+  if (HTML_TAG_RE.test(t)) {
+    return [<span key={key} dangerouslySetInnerHTML={{ __html: sanitize(t) }} />];
+  }
+
   const nodes = [];
-  // Split on inline tokens: `code`, **bold**, *italic*, [text](url).
   const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))/g;
   let last = 0;
   let m;
@@ -62,10 +76,24 @@ export default function Markdown({ source }) {
       continue;
     }
 
+    // HTML block (line starts with an HTML tag)
+    if (/^<[a-zA-Z/!]/.test(line.trim())) {
+      const buf = [line];
+      i += 1;
+      while (i < lines.length && lines[i].trim()) {
+        buf.push(lines[i]);
+        i += 1;
+      }
+      blocks.push(
+        <div key={key++} dangerouslySetInnerHTML={{ __html: sanitize(buf.join("\n")) }} />
+      );
+      continue;
+    }
+
     // heading
     const h = /^(#{1,4})\s+(.*)$/.exec(line);
     if (h) {
-      const lvl = Math.min(h[1].length + 1, 6); // bump down one level
+      const lvl = Math.min(h[1].length + 1, 6);
       const Tag = `h${lvl}`;
       blocks.push(<Tag key={key++}>{inline(h[2], key)}</Tag>);
       i += 1;
@@ -110,7 +138,14 @@ export default function Markdown({ source }) {
 
     // paragraph (gather until blank)
     const buf = [];
-    while (i < lines.length && lines[i].trim() && !/^\s*[-*+>]\s+/.test(lines[i]) && !/^#{1,4}\s/.test(lines[i]) && !lines[i].trim().startsWith("```")) {
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^\s*[-*+>]\s+/.test(lines[i]) &&
+      !/^#{1,4}\s/.test(lines[i]) &&
+      !lines[i].trim().startsWith("```") &&
+      !/^<[a-zA-Z/!]/.test(lines[i].trim())
+    ) {
       buf.push(lines[i]);
       i += 1;
     }

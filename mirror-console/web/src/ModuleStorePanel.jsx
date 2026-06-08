@@ -191,23 +191,40 @@ function ModuleList({ modules, empty, onPick }) {
 }
 
 function ModuleCard({ module: m, onClick }) {
+  const cat = m.catalog;
+  // Prefer official catalog image; fall back to first mm-store screenshot.
+  const image = m.image || cat?.screenshots?.[0] || null;
+  const originName = cat?.name?.origin || m.name;
+  const localName = cat?.name?.cs || cat?.name?.en || "";
+  const desc = cat?.description?.cs || cat?.description?.en || m.description;
+  const tags = cat?.tags?.slice(0, 3) || [];
+
   return (
     <button className="card store-card clickable" onClick={onClick}>
       <div className="store-thumb">
-        {m.image
-          ? <img src={m.image} alt="" loading="lazy" />
+        {image
+          ? <img src={image} alt="" loading="lazy" />
           : <span className="store-thumb-ph">🪞</span>}
       </div>
       <div className="store-card-body">
         <div className="store-card-top">
-          <h4>{m.name}</h4>
+          <h4>{originName}</h4>
         </div>
-        {m.description && <p className="store-desc">{m.description}</p>}
-        <div className="store-meta">
-          {m.maintainer && <span>👤 {m.maintainer}</span>}
-          {typeof m.stars === "number" && <span>★ {m.stars}</span>}
-          {m.category && <span className="store-cat">{m.category}</span>}
-        </div>
+        {localName && localName !== originName && (
+          <p className="store-card-subtitle">{localName}</p>
+        )}
+        {desc && <p className="store-desc">{desc}</p>}
+        {tags.length > 0 ? (
+          <div className="store-card-tags">
+            {tags.map(tag => <span key={tag} className="store-tag">{tag}</span>)}
+          </div>
+        ) : (
+          <div className="store-meta">
+            {m.maintainer && <span>👤 {m.maintainer}</span>}
+            {typeof m.stars === "number" && <span>★ {m.stars}</span>}
+            {m.category && <span className="store-cat">{m.category}</span>}
+          </div>
+        )}
       </div>
     </button>
   );
