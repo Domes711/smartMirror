@@ -596,7 +596,7 @@ def _community_entry(e: dict) -> dict:
         "maintainer": e.get("maintainer") or "",
         "stars": e.get("stars"),
         "image": (STORE_IMAGE_BASE + urllib.parse.quote(img)) if img else None,
-        "catalog": _load_local_meta(e.get("id") or name),
+        "catalog": _load_local_meta(name),
     }
 
 
