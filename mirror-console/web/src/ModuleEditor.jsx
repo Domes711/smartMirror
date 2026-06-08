@@ -22,12 +22,11 @@ export default function ModuleEditor({
   autoPrepare = false,
   onBack,
 }) {
+  const [tab, setTab] = useState("chat");
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showControls, setShowControls] = useState(false);
-  const [demoStates, setDemoStates] = useState([]); // [{id,label}] declared by demo.html
+  const [demoStates, setDemoStates] = useState([]);
   const [activeState, setActiveState] = useState(null);
   const [rev, setRev] = useState(1);
 
@@ -38,8 +37,6 @@ export default function ModuleEditor({
   const prepareStarted = useRef(false);
   const sseConnected = useRef(false);
 
-  // Run the adopt turn once both the SSE stream is live and `open` decided it is
-  // needed — either ordering can win the race, so check from both sides.
   const maybePrepare = useCallback(() => {
     if (sseConnected.current && pendingPrepare.current) {
       pendingPrepare.current = false;
@@ -55,8 +52,6 @@ export default function ModuleEditor({
     logEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, draft]);
 
-  // The preview demo.html announces its declared states; collect them for the
-  // control panel.
   useEffect(() => {
     const onMsg = (ev) => {
       const d = ev.data || {};
@@ -68,27 +63,9 @@ export default function ModuleEditor({
     return () => window.removeEventListener("message", onMsg);
   }, []);
 
-  // Switch the live preview to a state (the module reacts in the iframe).
   const applyState = useCallback((id) => {
     setActiveState(id);
     frameRef.current?.contentWindow?.postMessage({ source: "mirror-console", type: "set-state", id }, "*");
-  }, []);
-
-  // Opening the controls needs the live preview mounted to drive it.
-  const toggleControls = useCallback(() => {
-    setShowControls((s) => {
-      const next = !s;
-      if (next) setShowPreview(true);
-      return next;
-    });
-  }, []);
-
-  // Closing the live view also closes the controls (they have nothing to drive).
-  const togglePreview = useCallback(() => {
-    setShowPreview((p) => {
-      if (p) setShowControls(false);
-      return !p;
-    });
   }, []);
 
   const triggerPrepare = useCallback(async () => {
@@ -112,7 +89,6 @@ export default function ModuleEditor({
   }, [name]);
   triggerPrepareRef.current = triggerPrepare;
 
-  // Open / load the session (and, for installed modules, ensure demo.html).
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -141,9 +117,7 @@ export default function ModuleEditor({
         if (alive) setMessages([{ role: "sys", text: `⚠ ${e.message}` }]);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, name]);
 
@@ -153,16 +127,11 @@ export default function ModuleEditor({
     if (r) setRev(r);
   }
 
-  // Agent output stream.
   useEffect(() => {
     const es = new EventSource(`/api/modules/chat/stream?${qs}`);
     es.onmessage = (ev) => {
       let m;
-      try {
-        m = JSON.parse(ev.data);
-      } catch {
-        return;
-      }
+      try { m = JSON.parse(ev.data); } catch { return; }
       if (m.type === "text") {
         streamRef.current += m.text;
         setMessages((l) => {
@@ -186,14 +155,11 @@ export default function ModuleEditor({
       } else if (m.type === "connected") {
         setRev(m.rev);
         sseConnected.current = true;
-        maybePrepare(); // adopt turn, once the stream is live
+        maybePrepare();
       }
     };
     es.onerror = () => {};
-    return () => {
-      sseConnected.current = false;
-      es.close();
-    };
+    return () => { sseConnected.current = false; es.close(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, name]);
 
@@ -224,92 +190,74 @@ export default function ModuleEditor({
     (text?.startsWith("⚠") ? " mc-sys-error" : text?.startsWith("✎") ? " mc-sys-tool" : "");
 
   return (
-    <div className="panel mc-panel">
+    <div className="panel creator-panel">
       <header className="mc-head">
         {onBack && (
-          <button className="pill pill-btn mc-back" onClick={onBack} title="Zpět">
-            ←
-          </button>
+          <button className="mqtt-btn compact k-muted" onClick={onBack} title="Zpět">←</button>
         )}
-        <div className="mc-head-title">
-          <strong>{title || name}</strong>
-          <span className="mc-head-sub">{scope === "installed" ? "Úprava modulu" : "Tvorba modulu"}</span>
-        </div>
-        <div className="mc-actions">
-          <button
-            className={"mqtt-btn compact mc-toggle" + (showControls ? " active" : "")}
-            onClick={toggleControls}
-            title="Ovládání stavů"
-          >
-            🎛
-          </button>
-          <button
-            className={"mqtt-btn compact mc-toggle" + (showPreview ? " active" : "")}
-            onClick={togglePreview}
-            title="Náhled modulu"
-          >
-            👁
-          </button>
-          {actions}
-        </div>
+        <strong className="mc-head-name">{title || name}</strong>
+        <div className="mc-actions">{actions}</div>
       </header>
 
       {banner && <div className="learn-msg">{banner}</div>}
 
-      <section className="card mc-chat">
-        {started ? (
-          <div className="mc-log">
-            {messages.map((m, i) =>
-              m.role === "sys" ? (
-                <div key={i} className={sysClass(m.text)}>
-                  {m.text}
+      <div className="subnav">
+        <button className={"subnav-item" + (tab === "chat" ? " active" : "")} onClick={() => setTab("chat")}>
+          Chat
+        </button>
+        <button className={"subnav-item" + (tab === "preview" ? " active" : "")} onClick={() => setTab("preview")}>
+          Náhled
+        </button>
+      </div>
+
+      {/* Chat — always mounted so SSE stream is uninterrupted */}
+      <div className={"mc-chat" + (tab !== "chat" ? " mc-hidden" : "")}>
+        <div className="mc-log">
+          {started ? (
+            <>
+              {messages.map((m, i) =>
+                m.role === "sys" ? (
+                  <div key={i} className={sysClass(m.text)}>{m.text}</div>
+                ) : (
+                  <div key={i} className={"mc-msg mc-" + m.role}>
+                    {m.role === "assistant" && <span className="mc-msg-role">Claude</span>}
+                    {m.text}
+                  </div>
+                )
+              )}
+              {busy && (
+                <div className="mc-typing" aria-label="pracuji">
+                  <span /><span /><span />
                 </div>
-              ) : (
-                <div key={i} className={"mc-msg mc-" + m.role}>
-                  {m.role === "assistant" && <span className="mc-msg-role">Claude</span>}
-                  {m.text}
-                </div>
-              )
-            )}
-            {busy && (
-              <div className="mc-typing" aria-label="pracuji">
-                <span />
-                <span />
-                <span />
-              </div>
-            )}
-            <div ref={logEnd} />
-          </div>
-        ) : (
-          <div className="mc-hero">
-            <div className="mc-hero-icon">🧩</div>
-            <p className="mc-hero-text">{greeting || `Modul ${name} připraven.`}</p>
-            <p className="mc-hero-hint">Napiš dole, co má modul zobrazovat a jak má vypadat.</p>
-          </div>
-        )}
+              )}
+            </>
+          ) : (
+            <div className="mc-hero">
+              <div className="mc-hero-icon">🧩</div>
+              <p className="mc-hero-text">{greeting || `Modul ${name} připraven.`}</p>
+              <p className="mc-hero-hint">Napiš dole, co má modul zobrazovat a jak má vypadat.</p>
+            </div>
+          )}
+          <div ref={logEnd} />
+        </div>
         <div className="mc-input">
           <textarea
             rows={1}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
             }}
             placeholder="Napiš, co změnit… (Enter odešle, Shift+Enter nový řádek)"
             disabled={busy}
           />
-          <button className="mc-send" disabled={busy || !draft.trim()} onClick={send} title="Odeslat">
-            ➤
-          </button>
+          <button className="mc-send" disabled={busy || !draft.trim()} onClick={send} title="Odeslat">➤</button>
         </div>
-      </section>
+      </div>
 
-      {/* Live view — reacts to the control panel */}
-      {(showPreview || showControls) && (
-        <div className="mc-preview-float">
+      {/* Preview + controls */}
+      {tab === "preview" && (
+        <div className="mc-preview-panel">
           <iframe
             ref={frameRef}
             key={rev}
@@ -321,17 +269,9 @@ export default function ModuleEditor({
               if (activeState) applyState(activeState);
             }}
           />
-        </div>
-      )}
-
-      {/* Controls window — switch the module's states; the live view reacts */}
-      {showControls && (
-        <div className="mc-controls-float">
-          <div className="mc-controls-title">Stavy modulu</div>
-          {demoStates.length === 0 ? (
-            <div className="mc-controls-empty">Tento modul zatím nemá definované stavy.</div>
-          ) : (
-            <div className="mc-controls-list">
+          {demoStates.length > 0 && (
+            <div className="mc-controls-inline">
+              <span className="mc-controls-label">Stavy</span>
               {demoStates.map((s) => (
                 <button
                   key={s.id}

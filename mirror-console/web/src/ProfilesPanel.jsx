@@ -63,7 +63,7 @@ export default function ProfilesPanel() {
   }
 
   return (
-    <div className="panel">
+    <div className="panel profiles-panel">
       <div className="store-topbar">
         <button className="pill pill-btn" onClick={() => setAdding(true)}>
           ＋ Přidat profil
@@ -77,37 +77,39 @@ export default function ProfilesPanel() {
         )}
       </div>
 
-      {profiles && profiles.length === 0 ? (
-        <div className="card status-card">
-          <div className="status-icon">👤</div>
-          <h2>Žádné profily</h2>
-          <p>
-            Profily vznikají z naučených obličejů. Klikni na{" "}
-            <strong>＋ Přidat profil</strong> a vytvoř první.
-          </p>
-        </div>
-      ) : (
-        <div className="profiles">
-          {(profiles || []).map((p) => (
-            <button
-              key={p.name}
-              className="card profile-card clickable"
-              onClick={() => setDetailName(p.name)}
-            >
-              <div className="profile-photo">
-                <img
-                  src={`/photo?name=${encodeURIComponent(p.name)}&file=${encodeURIComponent(p.sample)}`}
-                  alt={p.name}
-                />
-              </div>
-              <div className="profile-body">
-                <h3>{p.name}</h3>
-                <span className="profile-meta">{p.count} fotek</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="profiles-scroll">
+        {profiles && profiles.length === 0 ? (
+          <div className="card status-card">
+            <div className="status-icon">👤</div>
+            <h2>Žádné profily</h2>
+            <p>
+              Profily vznikají z naučených obličejů. Klikni na{" "}
+              <strong>＋ Přidat profil</strong> a vytvoř první.
+            </p>
+          </div>
+        ) : (
+          <div className="profiles">
+            {(profiles || []).map((p) => (
+              <button
+                key={p.name}
+                className="card profile-card clickable"
+                onClick={() => setDetailName(p.name)}
+              >
+                <div className="profile-photo">
+                  <img
+                    src={`/photo?name=${encodeURIComponent(p.name)}&file=${encodeURIComponent(p.sample)}`}
+                    alt={p.name}
+                  />
+                </div>
+                <div className="profile-body">
+                  <h3>{p.name}</h3>
+                  <span className="profile-meta">{p.count} fotek</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

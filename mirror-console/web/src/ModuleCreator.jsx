@@ -82,20 +82,16 @@ export default function ModuleCreator({ onBack } = {}) {
   // ---- Step 1: name + description / reopen -------------------------------
   if (step === 1) {
     return (
-      <div className="panel wizard">
+      <div className="panel creator-panel">
         <LoadingOverlay show={creating} message="Připravuji modul…" />
         <div className="wizard-head">
           {onBack && (
             <button className="mqtt-btn compact" onClick={onBack}>←</button>
           )}
           <strong>Nový modul (AI)</strong>
-          <div className="steps">
-            <span className="step-dot active">1 Zadání</span>
-            <span className="step-dot">2 Vzhled</span>
-          </div>
         </div>
 
-        <div className="subnav creator-subnav">
+        <div className="subnav">
           <button
             className={"subnav-item" + (mode === "new" ? " active" : "")}
             onClick={() => setMode("new")}
@@ -111,49 +107,51 @@ export default function ModuleCreator({ onBack } = {}) {
           </button>
         </div>
 
-        {mode === "new" && (
-          <div className="card wizard-step">
-            <label className="field">
-              <span>Jméno modulu</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="např. Counter nebo MMM-Counter"
-                autoFocus
-              />
-            </label>
-            <label className="field">
-              <span>Popis — co má modul dělat / zobrazovat</span>
-              <textarea
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="např. Odpočet dní do nejbližší výplaty, velké číslo a popisek pod ním."
-              />
-            </label>
-            {error && <div className="hint-bad">{error}</div>}
-            <button className="mqtt-btn k-ok" disabled={!name.trim() || creating} onClick={createDraft}>
-              Vytvořit a pokračovat →
-            </button>
-          </div>
-        )}
+        <div className="creator-scroll">
+          {mode === "new" && (
+            <div className="card wizard-step">
+              <label className="field">
+                <span>Jméno modulu</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="např. Counter nebo MMM-Counter"
+                  autoFocus
+                />
+              </label>
+              <label className="field">
+                <span>Popis — co má modul dělat / zobrazovat</span>
+                <textarea
+                  rows={4}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="např. Odpočet dní do nejbližší výplaty, velké číslo a popisek pod ním."
+                />
+              </label>
+              {error && <div className="hint-bad">{error}</div>}
+              <button className="mqtt-btn k-ok" disabled={!name.trim() || creating} onClick={createDraft}>
+                Vytvořit a pokračovat →
+              </button>
+            </div>
+          )}
 
-        {mode === "continue" && (
-          <div className="card wizard-step">
-            {existingDrafts.length > 0 ? (
-              <div className="mc-draftlist">
-                {existingDrafts.map((d) => (
-                  <button key={d.name} className="mqtt-btn mc-draft" onClick={() => openExisting(d.name)}>
-                    <strong>{d.name}</strong>
-                    {d.description && <span className="mc-draft-desc">{d.description}</span>}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="store-note">Žádné rozpracované moduly.</p>
-            )}
-          </div>
-        )}
+          {mode === "continue" && (
+            <div className="card wizard-step">
+              {existingDrafts.length > 0 ? (
+                <div className="mc-draftlist">
+                  {existingDrafts.map((d) => (
+                    <button key={d.name} className="mqtt-btn mc-draft" onClick={() => openExisting(d.name)}>
+                      <strong>{d.name}</strong>
+                      {d.description && <span className="mc-draft-desc">{d.description}</span>}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="store-note">Žádné rozpracované moduly.</p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     );
   }

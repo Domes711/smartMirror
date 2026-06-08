@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  height: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -110,8 +110,10 @@
   overflow-y: auto;
   min-height: 0;
 }
-/* store panel: only .store-scroll scrolls, not the whole panel */
-.store-panel {
+/* panels where only the inner list scrolls, not the whole panel */
+.store-panel,
+.profiles-panel,
+.creator-panel {
   overflow: hidden;
 }
 .store-scroll {
@@ -122,6 +124,13 @@
   flex-direction: column;
   gap: 10px;
 }
+.profiles-scroll,
+.creator-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 /* profile detail inner content area */
 .detail-scroll {
   display: flex;
@@ -142,8 +151,7 @@
   appearance: none;
   border: 1px solid rgba(52, 211, 153, 0.35);
   cursor: pointer;
-  font: inherit;
-  font-weight: 700;
+  font-family: inherit;
   background: rgba(52, 211, 153, 0.15);
   color: var(--ok);
 }
@@ -1560,23 +1568,33 @@
   border-color: rgba(120, 180, 255, 0.7);
 }
 
+.mc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.mc-head-name {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .mc-actions {
   display: flex;
   gap: 8px;
-  margin-left: auto;
 }
-
-.mc-panel {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+.mc-hidden {
+  display: none;
 }
 
 .mc-chat {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  flex: 1;
+  overflow: hidden;
   min-height: 0;
 }
 .mc-log {
@@ -1586,6 +1604,9 @@
   gap: 8px;
   overflow-y: auto;
   min-height: 0;
+  padding: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 .mc-msg {
   padding: 12px 16px;
@@ -1607,6 +1628,15 @@
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
+.mc-msg-role {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  margin-bottom: 3px;
+}
 .mc-sys {
   align-self: center;
   color: #9aa4b2;
@@ -1617,8 +1647,10 @@
 .mc-input {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
   align-items: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .mc-input textarea {
   flex: 1;
@@ -1632,61 +1664,35 @@
   padding: 8px 10px;
 }
 
-/* Floating preview bubble (Messenger-style) */
-.mc-bubble {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-size: 1.4rem;
-  border: none;
-  cursor: pointer;
+.mc-preview-panel {
+  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  z-index: 200;
-  transition: transform 0.15s, background 0.15s;
-}
-.mc-bubble:hover { transform: scale(1.1); }
-.mc-bubble.mc-bubble-open { background: var(--surface-2); color: var(--text); }
-
-/* Floating preview panel */
-.mc-preview-float {
-  position: fixed;
-  bottom: 88px;
-  right: 16px;
-  width: min(420px, calc(100vw - 32px));
-  height: min(340px, 50dvh);
-  border-radius: 14px;
+  flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  border: 1px solid var(--border);
-  background: #000;
-  z-index: 199;
+  min-height: 0;
+}
+.mc-controls-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mc-controls-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .mc-frame {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   border: none;
   display: block;
-  flex: 1;
-  width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
   background: #000;
-  min-height: 420px;
-}
-
-@media (max-width: 760px) {
-  .mc-split {
-    grid-template-columns: 1fr;
-  }
 }
 
 .mc-draftlist {
