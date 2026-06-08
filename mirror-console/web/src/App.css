@@ -6,7 +6,8 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* ---- top bar ---- */
@@ -106,10 +107,45 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
+  min-height: 0;
+}
+/* store panel: only .store-scroll scrolls, not the whole panel */
+.store-panel {
+  overflow: hidden;
+}
+.store-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* profile detail inner content area */
+.detail-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .panel-head {
   display: flex;
   justify-content: flex-end;
+}
+.store-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pill-btn {
+  appearance: none;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--ok);
 }
 
 /* ---- mode switcher (segmented) ---- */
@@ -305,6 +341,58 @@
 .subtabs {
   align-self: flex-start;
 }
+
+/* ---- secondary underline nav (ProfileDetail, ModuleStorePanel) ---- */
+.store-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.subnav {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.subnav-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s;
+}
+.subnav-item:hover {
+  color: var(--text);
+}
+.subnav-item.active {
+  color: var(--text);
+}
+.subnav-item.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+.subnav-item .store-tab-count {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.subnav-item.active .store-tab-count {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent);
+}
+
 .detail-foot {
   gap: 10px;
 }

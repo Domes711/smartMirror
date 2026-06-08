@@ -104,7 +104,7 @@ export default function ModuleStorePanel() {
   };
 
   return (
-    <div className="panel">
+    <div className="panel store-panel">
       {/* Pinned controls: status pill + tab switcher + per-tab action row.
           Stays put while only the module list below scrolls. */}
       <div className="store-head">
@@ -123,14 +123,14 @@ export default function ModuleStorePanel() {
           </p>
         )}
 
-        <div className="subnav store-subnav">
+        <div className="subnav">
           {TABS.map(t => (
             <button
               key={t.id}
               className={"subnav-item" + (tab === t.id ? " active" : "")}
               onClick={() => switchTab(t.id)}
             >
-              <span className="store-tab-label">{t.label}</span>
+              {t.label}
               {!loading && <span className="store-tab-count">{counts[t.id]}</span>}
             </button>
           ))}
