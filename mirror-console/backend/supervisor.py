@@ -796,20 +796,14 @@ def _unique_instance_id(name: str, store: dict) -> str:
 
 
 def _register_installed(name: str) -> None:
-    """Record an installed module in the catalog and add a bare instance, then
-    regenerate the files. Placement (which window / default layout) is done
-    later in the layout editor."""
+    """Record a freshly installed module in the catalog so it can be placed in
+    the layout editor. No instance is created and config.js is NOT touched here:
+    the module is given an id, written into config.js and hot-loaded only when
+    the user places it in a layout (see apply_layout) — no pm2 restart."""
     mods = load_installed_modules()
     if not any(m.get("type") == name for m in mods):
         mods.append({"type": name, "module": name, "label": name, "fields": []})
         save_installed_modules(mods)
-    store = load_store()
-    insts = store.setdefault("instances", [])
-    if not any(i.get("type") == name for i in insts):
-        iid = _unique_instance_id(name, store)
-        insts.append({"id": iid, "type": name, "values": {}})
-        save_store(store)
-    generate_files(store)
 
 
 def _npm_install(cwd: str) -> tuple:
@@ -840,12 +834,12 @@ def _install_worker(mid: str, url: str, name: str, dest: str) -> None:
             rc, out = _npm_install(dest)
             if rc != 0:
                 raise RuntimeError("npm install selhal: " + out[-400:])
-        _set_job(mid, phase="config", percent=88)
+        _set_job(mid, phase="registering", percent=90)
         _register_installed(name)
-        _set_job(mid, phase="restarting", percent=94)
-        res = Supervisor._pm2_restart()
-        if not res.get("ok"):
-            raise RuntimeError("restart selhal: " + res.get("output", ""))
+        # The module now lives on disk + in the catalog. It is wired into
+        # config.js and hot-loaded into the running core only when the user
+        # places it in a layout (apply_layout) — no config write, no pm2 restart
+        # at install time.
         # Ask the Express server to run the adopt agent (demo.html + CLAUDE.md
         # analysis) on the freshly installed module. Fire-and-forget — the agent
         # runs on the background; the install is already complete.

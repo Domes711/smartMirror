@@ -79,9 +79,8 @@ export default function ModuleDetail({ module: m, onBack }) {
           setInstalling(false);
           if (s.ok) {
             setInstalled(true);
-            setWorking("Restartuji zrcadlo…");
-            toast.success(`${m.name} nainstalován.`);
-            setTimeout(() => onBack(), 1500);
+            toast.success(`${m.name} nainstalován. Umísti ho v Rozložení.`);
+            setTimeout(() => onBack(), 1200);
           } else {
             toast.error(s.error || "Instalace selhala");
           }
@@ -277,8 +276,7 @@ const PHASE_LABELS = {
   cloning: "Stahuji…",
   cloned: "Staženo…",
   npm: "Závislosti…",
-  config: "Konfiguruji…",
-  restarting: "Restart…",
+  registering: "Registruji…",
   analysing: "Analyzuji modul…",
   done: "Hotovo",
   error: "Chyba",
