@@ -96,14 +96,20 @@ export default function ProfilesPanel() {
                 onClick={() => setDetailName(p.name)}
               >
                 <div className="profile-photo">
-                  <img
-                    src={`/photo?name=${encodeURIComponent(p.name)}&file=${encodeURIComponent(p.sample)}`}
-                    alt={p.name}
-                  />
+                  {p.sample ? (
+                    <img
+                      src={`/photo?name=${encodeURIComponent(p.name)}&file=${encodeURIComponent(p.sample)}`}
+                      alt={p.name}
+                    />
+                  ) : (
+                    <div className="profile-photo-placeholder">{p.builtin ? "🌐" : "👤"}</div>
+                  )}
                 </div>
                 <div className="profile-body">
                   <h3>{p.name}</h3>
-                  <span className="profile-meta">{p.count} fotek</span>
+                  <span className="profile-meta">
+                    {p.builtin ? "když není nikdo rozpoznán" : `${p.count} fotek`}
+                  </span>
                 </div>
               </button>
             ))}

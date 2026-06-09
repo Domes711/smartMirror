@@ -108,16 +108,17 @@ Module-management contract in `config.js` and `pages.js`:
   for managed modules.
 - Unmanaged modules (`alert`, `updatenotification`, MMM-Profile itself) keep
   their `position` from `config.js` and stay visible always.
-- `pages.js` schema: `globalLayout` (always-on, all users) plus `defaults`
-  (`{<userKey>: layout}` — per-user fallback shown when no window is active) plus
-  `<userKey>.<windowName>` with 5-field cron `from`/`to` (`min hour dom month
-  dow`, 0=Sunday). Active window = the one whose `from` fired most recently AND
-  more recently than its `to`. Latest `from` wins on ties. Resolution =
-  `globalLayout` + (active window's layout, else `defaults[userKey]`). All three
-  are edited in the console layout editor (calendar windows + the **Výchozí** and
-  **Globální** buttons).
-- The `default` user must exist — used during wake-up before face-reco
-  finishes and for `user_unknown` results.
+- `pages.js` schema: `defaults` (`{<userKey>: layout}` — per-user fallback shown
+  when no window is active) plus `<userKey>.<windowName>` with 5-field cron
+  `from`/`to` (`min hour dom month dow`, 0=Sunday). Active window = the one whose
+  `from` fired most recently AND more recently than its `to`. Latest `from` wins
+  on ties. Resolution = active window's layout, else `defaults[userKey]` (no
+  separate always-on global layer). Edited in the console layout editor (calendar
+  windows + the **Výchozí** button per profile).
+- The `default` user is the built-in fallback shown when no face is recognized
+  (wake-up before face-reco finishes, `user_unknown`). It behaves like any other
+  profile (time windows + a default layout), is always listed first in the
+  console, and **cannot be deleted**.
 
 The Face ID animation (scanning ring → checkmark / X-cross → avatar reveal)
 has a **canonical reference** at `tests/face-id-animation.html`. Treat that

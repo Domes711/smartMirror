@@ -210,13 +210,13 @@ class ProfileManager {
 			Log.warn("[Profile] No active window for user '" + userKey + "' — using default layout");
 		}
 		// Active time-window layout if one matches, otherwise the user's default
-		// layout (config/pages.js → defaults[userKey]). The global layout is
-		// always shown on top of whichever of those applies.
-		const winLayout = (win && Array.isArray(win.layout))
+		// layout (config/pages.js → defaults[userKey]). When nobody is recognized
+		// userKey is the built-in "default" user, so that profile drives the
+		// no-recognition display — there is no separate always-on global layer.
+		const layout = (win && Array.isArray(win.layout))
 			? win.layout
 			: (((this.pages.defaults || {})[userKey]) || []);
-		const globalLayout = Array.isArray(this.pages.globalLayout) ? this.pages.globalLayout : [];
-		return globalLayout.concat(Array.isArray(winLayout) ? winLayout : []);
+		return Array.isArray(layout) ? layout : [];
 	}
 
 	/**

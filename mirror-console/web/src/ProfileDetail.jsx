@@ -8,6 +8,7 @@ import { useToast } from "./Toast.jsx";
 // all training thumbnails (enlarge + delete), add more photos (modal → capture
 // session → retrain), retrain, and remove the whole profile.
 export default function ProfileDetail({ name, onBack }) {
+  const builtin = name === "default"; // the no-recognition fallback user — cannot be removed
   const [tab, setTab] = useState("layout");
   const [windowOpen, setWindowOpen] = useState(false); // a time-window layout editor is open
   const [photos, setPhotos] = useState([]);
@@ -130,9 +131,16 @@ export default function ProfileDetail({ name, onBack }) {
 
         {tab === "settings" && (
           <div className="card wizard-step">
-            <button className="mqtt-btn k-bad" onClick={removeProfile}>
-              Odebrat profil
-            </button>
+            {builtin ? (
+              <p className="profiles-note">
+                Výchozí uživatel se zobrazí, když není rozpoznán žádný obličej.
+                Nelze ho odebrat.
+              </p>
+            ) : (
+              <button className="mqtt-btn k-bad" onClick={removeProfile}>
+                Odebrat profil
+              </button>
+            )}
           </div>
         )}
 

@@ -614,6 +614,15 @@
   object-fit: cover;
   display: block;
 }
+.profile-photo-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.4rem;
+  background: #0b0f14;
+}
 .profile-body {
   display: flex;
   align-items: baseline;

@@ -281,12 +281,15 @@ def effective_catalog() -> list:
 def catalog_by_type() -> dict:
     return {c["type"]: c for c in effective_catalog()}
 
+# The built-in fallback user shown when no face is recognized. It behaves like
+# any other profile (time windows + a default layout) but cannot be deleted.
+DEFAULT_PROFILE = "default"
+
 DEFAULT_STORE = {
-    "globalLayout": [],
     # Per-user fallback layout shown when no time window is active for that user.
     "defaults": {},
     "windows": {
-        "default": {
+        DEFAULT_PROFILE: {
             "all_day": {
                 "from": "0 0 * * *", "to": "59 23 * * *",
                 "label": "Celý den",
@@ -332,8 +335,7 @@ def _import_pages_windows():
                               "layout": w.get("layout", [])}
         if wins:
             windows[key] = wins
-    return {"globalLayout": pages.get("globalLayout", []),
-            "defaults": pages.get("defaults", {}),
+    return {"defaults": pages.get("defaults", {}),
             "windows": windows, "instances": []}
 
 
@@ -445,9 +447,6 @@ def validate_store(store: dict):
         for fld in cat["fields"]:
             if fld.get("required") and not (inst.get("values") or {}).get(fld["key"]):
                 return f"{cat['label']}: chybí povinné pole '{fld['label']}'"
-    for entry in store.get("globalLayout", []) or []:
-        if entry.get("position") not in MM_POSITIONS:
-            return f"globální rozložení: neplatná pozice {entry.get('position')}"
     for profile, layout in (store.get("defaults") or {}).items():
         for entry in (layout or []):
             if entry.get("position") not in MM_POSITIONS:
@@ -463,8 +462,7 @@ def validate_store(store: dict):
 
 
 def _pages_object(store: dict) -> dict:
-    out = {"globalLayout": store.get("globalLayout", []),
-           "defaults": store.get("defaults", {})}
+    out = {"defaults": store.get("defaults", {})}
     for profile, wins in store.get("windows", {}).items():
         if profile in ("globalLayout", "defaults"):
             continue  # reserved top-level keys — never let a profile shadow them
@@ -798,9 +796,9 @@ def _unique_instance_id(name: str, store: dict) -> str:
 
 
 def _register_installed(name: str) -> None:
-    """Record an installed module in the catalog, add a bare instance + a
-    globalLayout slot so it shows after restart, then regenerate the files.
-    Configuration / placement is refined later in the layout editor."""
+    """Record an installed module in the catalog and add a bare instance, then
+    regenerate the files. Placement (which window / default layout) is done
+    later in the layout editor."""
     mods = load_installed_modules()
     if not any(m.get("type") == name for m in mods):
         mods.append({"type": name, "module": name, "label": name, "fields": []})
@@ -1248,26 +1246,38 @@ class Supervisor:
     def list_profiles(self) -> list:
         import random
         profiles = []
-        if not os.path.isdir(DATASET_DIR):
-            return profiles
-        for name in sorted(os.listdir(DATASET_DIR)):
-            d = os.path.join(DATASET_DIR, name)
-            if not os.path.isdir(d) or not _NAME_RE.match(name):
-                continue
-            photos = [f for f in os.listdir(d)
-                      if os.path.splitext(f)[1].lower() in (".jpg", ".jpeg", ".png")]
-            if not photos:
-                continue
-            profiles.append({
-                "name": name,
-                "count": len(photos),
-                "sample": random.choice(photos),  # one random training photo
-            })
+        seen = set()
+        if os.path.isdir(DATASET_DIR):
+            for name in sorted(os.listdir(DATASET_DIR)):
+                d = os.path.join(DATASET_DIR, name)
+                if not os.path.isdir(d) or not _NAME_RE.match(name):
+                    continue
+                photos = [f for f in os.listdir(d)
+                          if os.path.splitext(f)[1].lower() in (".jpg", ".jpeg", ".png")]
+                if not photos:
+                    continue
+                profiles.append({
+                    "name": name,
+                    "count": len(photos),
+                    "sample": random.choice(photos),  # one random training photo
+                    "builtin": name == DEFAULT_PROFILE,
+                })
+                seen.add(name)
+        # The built-in "default" user (shown when no face is recognized) is always
+        # present, even with no training photos, and is listed first.
+        if DEFAULT_PROFILE not in seen:
+            profiles.insert(0, {"name": DEFAULT_PROFILE, "count": 0,
+                                "sample": None, "builtin": True})
+        else:
+            profiles.sort(key=lambda p: (p["name"] != DEFAULT_PROFILE, p["name"]))
         return profiles
 
     def remove_profile(self, name: str) -> dict:
         """Delete the person's dataset folder, then rebuild the encodings so
-        the removed face is no longer recognized."""
+        the removed face is no longer recognized. The built-in default user
+        cannot be removed."""
+        if name == DEFAULT_PROFILE:
+            raise ValueError("výchozího uživatele nelze odebrat")
         import shutil
         d = self._person_dir(name)  # validates name
         if os.path.isdir(d):
@@ -1503,8 +1513,9 @@ class Supervisor:
                    if i.get("type") == name and i.get("id")}
         store["instances"] = [i for i in store.get("instances", [])
                               if i.get("type") != name]
-        store["globalLayout"] = [g for g in store.get("globalLayout", [])
-                                 if g.get("id") not in removed]
+        store["defaults"] = {
+            k: [e for e in (v or []) if e.get("id") not in removed]
+            for k, v in (store.get("defaults") or {}).items()}
         for wins in store.get("windows", {}).values():
             for w in (wins or {}).values():
                 w["layout"] = [e for e in w.get("layout", [])

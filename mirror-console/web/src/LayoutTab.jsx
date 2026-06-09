@@ -29,9 +29,9 @@ export default function LayoutTab({ profile, onWindowChange }) {
   const [catalog, setCatalog] = useState([]);
   const [registered, setRegistered] = useState([]);
   const [loadedByModule, setLoadedByModule] = useState({}); // module name → [ids in config.js]
-  // What layout is being edited: a time window, the user's default layout, or
-  // the always-on global layout. null = calendar overview.
-  //   { kind: "window", key } | { kind: "default" } | { kind: "global" }
+  // What layout is being edited: a time window or the user's default layout
+  // (shown when no window is active). null = calendar overview.
+  //   { kind: "window", key } | { kind: "default" }
   const [target, setTarget] = useState(null);
   const [moving, setMoving] = useState(null); // instance id being moved
   const [addPos, setAddPos] = useState(null);
@@ -60,16 +60,14 @@ export default function LayoutTab({ profile, onWindowChange }) {
     [store, profile]
   );
 
-  // ── layout target read/write (window | per-user default | global) ──
+  // ── layout target read/write (window | per-user default) ──
   const readLayout = useCallback((st, t) => {
     if (!t || !st) return [];
-    if (t.kind === "global") return st.globalLayout || [];
     if (t.kind === "default") return (st.defaults || {})[profile] || [];
     return st.windows?.[profile]?.[t.key]?.layout || [];
   }, [profile]);
 
   const writeLayout = useCallback((st, t, layout) => {
-    if (t.kind === "global") { st.globalLayout = layout; return; }
     if (t.kind === "default") {
       st.defaults = st.defaults || {};
       st.defaults[profile] = layout;
@@ -80,7 +78,6 @@ export default function LayoutTab({ profile, onWindowChange }) {
 
   const targetTitle = (t) =>
     !t ? ""
-    : t.kind === "global" ? "Globální rozložení (vždy zobrazené)"
     : t.kind === "default" ? `Výchozí rozložení — ${profile}`
     : t.key;
 
@@ -165,11 +162,10 @@ export default function LayoutTab({ profile, onWindowChange }) {
     return `${base}-${n}`;
   }, [registered, store, profile]);
 
-  // An instance is "used" if referenced by the global layout, any user default,
-  // or any time-window layout — drop the rest.
+  // An instance is "used" if referenced by any user default layout or any
+  // time-window layout — drop the rest.
   const pruneInstances = (st) => {
     const used = new Set();
-    (st.globalLayout || []).forEach((e) => used.add(e.id));
     Object.values(st.defaults || {}).forEach((l) =>
       (l || []).forEach((e) => used.add(e.id)));
     Object.values(st.windows || {}).forEach((ws) =>
@@ -236,7 +232,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
     if (target?.kind === "window" && target.key === name) { setTarget(null); reloadMirror(); }
   };
 
-  // Empty the currently-edited default / global layout.
+  // Empty the currently-edited default layout.
   const clearLayout = () => {
     if (!window.confirm("Vyčistit toto rozložení?")) return;
     const st = clone(store);
@@ -247,7 +243,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
     setMoving(null);
   };
 
-  // Add a module instance to the active layout (window / default / global).
+  // Add a module instance to the active layout (window / default).
   // If an instance of this type already exists in the store or in config.js,
   // reuse its id so no pm2 restart is needed.
   const addPlacement = ({ type, values }) => {
@@ -313,7 +309,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
     : status === "saved" ? <span className="save-dot ok">uloženo ✓</span>
     : status ? <span className="save-dot bad">{status}</span> : null;
 
-  // ── layout editor (window / default / global) ──
+  // ── layout editor (window / default) ──
   if (target) {
     const isWindow = target.kind === "window";
     const w = isWindow ? windows[target.key] : null;
@@ -331,9 +327,7 @@ export default function LayoutTab({ profile, onWindowChange }) {
               {w.label || `${timeFromCron(w.from)}–${timeFromCron(w.to)}`} ✎
             </button>
           ) : (
-            <span className="learn-progress">
-              {target.kind === "global" ? "vždy zobrazené" : "když neběží žádné okno"}
-            </span>
+            <span className="learn-progress">když neběží žádné okno</span>
           )}
         </div>
         <MirrorGrid layout={layout} idLabel={idLabel} movingId={moving}
@@ -367,7 +361,6 @@ export default function LayoutTab({ profile, onWindowChange }) {
   // ── calendar (day column) ──
   const entries = Object.entries(windows);
   const defaultCount = (store.defaults?.[profile] || []).length;
-  const globalCount = (store.globalLayout || []).length;
   return (
     <div className="layout-tab">
       <LoadingOverlay show={applying} message="Aplikuji (restart zrcadla)…" />
@@ -376,10 +369,6 @@ export default function LayoutTab({ profile, onWindowChange }) {
         <button className="mqtt-btn compact" onClick={() => setTarget({ kind: "default" })}
           title="Co se zobrazí tomuto profilu, když neběží žádné časové okno">
           Výchozí ({defaultCount})
-        </button>
-        <button className="mqtt-btn compact" onClick={() => setTarget({ kind: "global" })}
-          title="Co se zobrazí vždy, nezávisle na profilu i čase">
-          Globální ({globalCount})
         </button>
         {statusEl}
         <button className="mqtt-btn" disabled={applying} onClick={() => apply()}>Aplikovat na zrcadlo</button>
