@@ -161,9 +161,22 @@ Each in-repo MagicMirror module follows the same shape:
 
 ## Setup (fresh Pi)
 
+**One-shot bootstrap** (copy just this one file to the Pi):
+
 ```bash
-git clone <repo> smartMirror && cd smartMirror
-./setup.sh        # camera + radar + console + MagicMirror, idempotent
+scp bootstrap.sh admin@10.0.0.249:~
+ssh admin@10.0.0.249 'bash ~/bootstrap.sh'   # clones smartMirror + runs ./setup.sh
+```
+
+`bootstrap.sh` clones the repo into `~/smartMirror` (or `git pull` if present),
+then `exec`s `./setup.sh`. Override repo/branch/dir:
+`SMARTMIRROR_REPO=… SMARTMIRROR_BRANCH=… SMARTMIRROR_DIR=… bash bootstrap.sh`
+(default `git@github.com:Domes711/smartMirror.git`, branch `master`).
+
+Or, if the repo is already on the Pi:
+
+```bash
+cd ~/smartMirror && ./setup.sh   # camera + radar + console + MagicMirror, idempotent
 ```
 
 `setup.sh` also clones the **private mm-store** repo into `store/` (the gitignored
@@ -173,10 +186,15 @@ Default `git@github.com:Domes711/MMM-store.git`; override with
 left alone if it isn't a git repo). Missing this clone is why the store shows
 raw `MMM-Xxx` names with no cs labels/tags.
 
-To wipe a messy Pi before re-cloning: run `cleanup-pi.sh` (full reset — removes
-our systemd units, the pm2 app + boot hook, autostart/cron entries, sudoers, and
-the retired `~/MagicMirror`/`~/ld2450`; backs up real config + per-Pi state to
-`~/mirror-backup-<ts>/` first).
+**Cleanup before a fresh start:**
+
+- `cleanup-pi.sh` — full reset that **keeps the repo** for re-clone: removes our
+  systemd units, the pm2 app + boot hook, autostart/cron entries, sudoers, and
+  the retired `~/MagicMirror`/`~/ld2450`; backs up real config + enrolled faces +
+  per-Pi state to `~/mirror-backup-<ts>/` first.
+- `nuke-pi.sh` — **total** reset: everything `cleanup-pi.sh` does **plus deleting
+  `~/smartMirror` itself** (the backup is outside the repo, so config/faces/
+  calibration survive). Pair it with `bootstrap.sh` for a from-scratch rebuild.
 
 `setup.sh` chains each component's `setup.sh` (they detect node/python and the
 repo path, generate systemd units, build the web). Remaining one-time steps it
