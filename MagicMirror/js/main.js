@@ -2,6 +2,10 @@
 
 const MM = (function () {
 	let modules = [];
+	// Last layout projected (from PROFILE_STATE / PROFILE_PREVIEW). Kept so a
+	// module that finishes hot-loading AFTER the layout was projected can still
+	// be placed — see the MODULE_HOT_LOAD handler.
+	let lastLayout = [];
 
 	/* Private Methods */
 
@@ -12,6 +16,7 @@ const MM = (function () {
 	 * @param {Array} layout Array of {id, position} entries from profile.js.
 	 */
 	const projectLayout = function (layout) {
+		lastLayout = Array.isArray(layout) ? layout : [];
 		const wantedById = new Map();
 		for (const entry of layout) {
 			if (!entry || !entry.id || !entry.position) continue;
@@ -803,7 +808,13 @@ const MM = (function () {
 
 					try {
 						const mObj = await Loader.hotLoadModule(moduleData);
-						if (mObj) await MM.addModule(mObj);
+						if (mObj) {
+							await MM.addModule(mObj);
+							// The layout was likely already projected before this
+							// module finished loading (hot-load is async), so it was
+							// skipped (no DOM node yet). Re-project now that it exists.
+							projectLayout(lastLayout);
+						}
 					} catch (e) {
 						Log.error(`[MM] Hot-load failed for ${moduleName}:`, e);
 					}
