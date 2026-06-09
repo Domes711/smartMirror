@@ -31,13 +31,19 @@ plus our own modules, the camera/radar daemons, and the `mirror-console` web app
 - `MagicMirror/` — **vendored fork** of MagicMirror² core (full, runnable; our
   fork adds per-instance `id` support). `MagicMirror/setup.sh` installs core +
   every module's deps; `start-magicmirror.sh` + `pm2-setup.sh` run it under pm2.
-- `MagicMirror/config/config.js` — mirror of `~/MagicMirror/config/config.js`
-  (hand-maintained; **never auto-edited** — the console splices in
-  `console-modules.js` via a one-time manual `...require(...)`).
-- `MagicMirror/config/pages.js` — **STALE/unused**; the live layout schedule is
-  `MagicMirror/modules/MMM-Profile/pages.js` (loaded by its `node_helper.js`),
-  and is **generated** by the console's layout editor.
-- `MagicMirror/modules/MMM-Profile/` — our own module (presence-driven profile + page scheduler; absorbed the former MMM-FaceRecoIndicator)
+- `MagicMirror/config/config.js` — mirror of the Pi's `config.js`. Hand-maintained
+  except for the `// MIRROR-CONSOLE:START … :END` block, into which the console
+  **auto-injects** the managed module instances (`id` + `module` + `config`, no
+  `position`). Each module carries an `id`; `position` is omitted (placement is
+  pages.js only).
+- `MagicMirror/config/pages.js` — **the live layout schedule**, read by the core
+  profile system (`MagicMirror/js/profile.js`) and **generated** by the console's
+  layout editor. (The old `modules/MMM-Profile/pages.js` is retired.)
+- `MagicMirror/js/profile.js` + `MagicMirror/js/main.js` — the **core** profile
+  system (presence-driven state machine + cron-window layout resolution over
+  MQTT; `main.js` `projectLayout` does the placement and renders the Face ID
+  indicator). Replaces the old MMM-Profile module — `modules/MMM-Profile/` is
+  retired/legacy.
 - `MagicMirror/modules/MMM-Brno-Transit/` — our own module (Brno IDS JMK departures from GTFS)
 - `MagicMirror/modules/MMM-HA-Reminders/` — our own module (iPhone Reminders via Home Assistant todo entities)
 - `MagicMirror/modules/MMM-Mail/` — fork of [MMPieps/MMM-Mail](https://github.com/MMPieps/MMM-Mail) pinned at `c24f973` with added `mailboxes` (multi-folder + per-folder `slaHours` countdown) on top of upstream
@@ -51,8 +57,10 @@ plus our own modules, the camera/radar daemons, and the `mirror-console` web app
 - `mirror-console/` — **web console** (React + Vite + Express + Python
   supervisor) on `http://<pi>:8000`. Tabs: **Kamera** (camera arbiter —
   Face detect / Test obličejů / Test gest), **Profily** (enroll faces + per-
-  profile **Rozložení** layout editor → generates `pages.js` +
-  `console-modules.js`), **Radar** (live map + on/off), **MQTT** (publish test
+  profile **Rozložení** layout editor — time windows + a **Výchozí** default
+  layout per profile → generates `config/pages.js` and injects managed modules
+  into `config.js`; the non-deletable `default` profile is the no-recognition
+  fallback), **Radar** (live map + on/off), **MQTT** (publish test
   messages + bus monitor), **Moduly (AI)** (build a new MagicMirror module by
   chatting with Claude — runs on the Pi via the Claude Agent SDK, edits a
   scaffolded draft with a live `demo.html` iframe preview, then installs it onto
@@ -67,17 +75,19 @@ Per-Pi runtime state (`radar_config.json`, `layout_store.json`,
 
 ## Architecture: how the mirror decides what to show
 
-The mirror is **event-driven**, not always-on. Read `MagicMirror/modules/MMM-Profile/README.md`
-plus `docs/superpowers/specs/2026-04-26-mmm-profile-design.md` before changing
-anything that touches presence, face recognition, layout, or display power.
+The mirror is **event-driven**, not always-on. Read `MagicMirror/js/profile.js`
+(the core profile system) plus `docs/superpowers/specs/2026-04-26-mmm-profile-design.md`
+before changing anything that touches presence, face recognition, layout, or
+display power.
 
-> **Note (current arch):** events now flow over **MQTT**, not HTTP. The camera
-> is also arbitrated by `mirror-console` (the supervisor starts/stops
+> **Note (current arch):** events flow over **MQTT**, not HTTP, and the profile
+> system lives in the **MagicMirror core** (`js/profile.js`), not a module. The
+> camera is arbitrated by `mirror-console` (the supervisor starts/stops
 > `face_reco`). Topics: `smartmirror/radar/presence` (`present`/`absent`),
 > `smartmirror/radar/targets` (live positions), `smartmirror/camera/recognition`
 > (`{user}`), `smartmirror/camera/gesture`, `smartmirror/control/reset`, plus
-> `smartmirror/radar/{control,config}` for calibration. The numbered steps below
-> describe the original HTTP design and are kept for context.
+> `smartmirror/radar/{control,config}` for calibration. Steps 1-2 below keep the
+> original HTTP wording for context (now MQTT); steps 3-4 reflect the core.
 
 Data flow:
 
@@ -90,14 +100,14 @@ Data flow:
    against `encoded_faces.pickle`, and POSTs `{event: "user_recognized",
    user: "<name>"}` or `{event: "user_unknown"}`. Any failure also posts
    `user_unknown` so the mirror never gets stuck in `scanning`.
-3. **`MMM-Profile/node_helper.js`** receives all events on
-   `http://127.0.0.1:8080/mmm-profile/event` (mounted on MagicMirror's
-   existing Express server, no extra port).
-4. **`MMM-Profile.js`** runs the state machine
-   (`asleep` / `scanning` / `user` / `dimming`), renders the Face ID
-   indicator at `top_center`, and **rearranges every other module on the
-   mirror** to match the layout for `(currentUser, current cron window)` from
-   `pages.js`.
+3. **`MagicMirror/js/profile.js`** (`ProfileManager`, core) subscribes to the
+   MQTT topics above, runs the state machine
+   (`asleep` / `scanning` / `user` / `dimming`), resolves the active layout from
+   `config/pages.js`, and emits `PROFILE_STATE` over socket.io.
+4. **`MagicMirror/js/main.js`** receives `PROFILE_STATE`, renders the Face ID
+   indicator at `top_center`, and `projectLayout` **moves every id-bearing
+   module** into the region from the layout for `(currentUser, current cron
+   window)`.
 
 Module-management contract in `config.js` and `pages.js`:
 
@@ -124,9 +134,10 @@ Module-management contract in `config.js` and `pages.js`:
   console, and **cannot be deleted**.
 
 The Face ID animation (scanning ring → checkmark / X-cross → avatar reveal)
-has a **canonical reference** at `tests/face-id-animation.html`. Treat that
-file as the source of truth; `MMM-Profile.css` mirrors its CSS. State →
-class on `.profile`: `scanning` (no class) / `success` / `error`.
+has a **canonical reference** at `tests/face-id-animation.html` — the source of
+truth. The core renders the indicator (`MagicMirror/js/main.js`), styled to
+mirror that file. State → class on `.profile`: `scanning` (no class) /
+`success` / `error`.
 
 ## Module file conventions
 
@@ -162,8 +173,10 @@ the retired `~/MagicMirror`/`~/ld2450`; backs up real config + per-Pi state to
 
 `setup.sh` chains each component's `setup.sh` (they detect node/python and the
 repo path, generate systemd units, build the web). Remaining one-time steps it
-prints: enable UART (`raspi-config`), splice `...require('./console-modules.js')`
-into `~/MagicMirror/config/config.js`, and `pm2 startup` for boot autostart.
+prints: enable UART (`raspi-config`) and `pm2 startup` for boot autostart. (The
+console injects managed modules into `config.js` between `// MIRROR-CONSOLE`
+markers automatically — no manual `require()` splice; `console-modules.js` is
+legacy.)
 Services: `ld2450` (enabled), `mirror-console-backend`/`-web` (enabled),
 `face_reco` (installed but **disabled** — the console starts/stops it),
 MagicMirror under **pm2** (process name `MagicMirror`).
@@ -237,7 +250,9 @@ checkboxes). All plans are currently **unstarted** (no `- [x]` ticked).
 Active plans (current architecture):
 
 - **MMM-Profile** (supersedes the v1 face-reco + radar plans for everything
-  except the Pi-side prerequisites)
+  except the Pi-side prerequisites). **Now implemented in the MagicMirror core**
+  (`js/profile.js` + `js/main.js`), not as a module — the spec/plan remain the
+  design reference.
   - Spec: `docs/superpowers/specs/2026-04-26-mmm-profile-design.md`
   - Plan: `docs/superpowers/plans/2026-04-26-mmm-profile.md`
 - **MMM-Spending** (today's spending from Wallet by BudgetBakers)
