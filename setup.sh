@@ -31,6 +31,23 @@ echo "── sudoers (console controls face_reco / ld2450) ──"
 sudo cp "$DIR/mirror-console/sudoers.d/mirror-console" /etc/sudoers.d/mirror-console || true
 sudo visudo -cf /etc/sudoers.d/mirror-console || true
 
+# ── mm-store (private module catalog: store/modules/<MMM-Name>/mm-store.json) ──
+# Gitignored, lives in its own private repo. Cloned here so the store shows the
+# curated cs/en names, descriptions and tags. Override the URL with:
+#   MM_STORE_REPO=... ./setup.sh
+MM_STORE_REPO="${MM_STORE_REPO:-git@github.com:Domes711/MMM-store.git}"
+echo
+echo "── mm-store (store/) ──"
+if [ -d "$DIR/store/.git" ]; then
+  if git -C "$DIR/store" pull --ff-only; then echo "✓ mm-store aktualizován"; else echo "✗ mm-store pull selhal — pokračuji"; fi
+elif [ -e "$DIR/store" ] && [ -n "$(ls -A "$DIR/store" 2>/dev/null)" ]; then
+  echo "• store/ už existuje (není to git repo) — nechávám beze změny"
+elif git clone --depth 1 "$MM_STORE_REPO" "$DIR/store"; then
+  echo "✓ mm-store naklonován ($MM_STORE_REPO)"
+else
+  echo "✗ mm-store clone selhal ($MM_STORE_REPO) — zkontroluj přístup (SSH klíč) / nastav MM_STORE_REPO; pokračuji"
+fi
+
 run "1/4  Camera (face recognition)" "$DIR/camera/setup.sh"
 run "2/4  Radar (LD2450)"            "$DIR/ld2450/setup.sh"
 run "3/4  Mirror console"            "$DIR/mirror-console/setup.sh"
@@ -45,7 +62,7 @@ else
   echo "  ✓ Hotovo."
 fi
 echo "════════════════════════════════════════════"
-echo "Automatizováno: sudoers, UART (raspi-config), config.js spread, pm2 autostart."
+echo "Automatizováno: sudoers, mm-store clone (store/), UART (raspi-config), pm2 autostart."
 echo
 echo "Ruční (citlivé / vyžaduje rozhodnutí):"
 echo "  • REBOOT pokud se UART zapnul poprvé (radar pak uvidí /dev/ttyAMA0)."

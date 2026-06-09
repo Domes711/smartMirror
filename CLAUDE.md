@@ -166,6 +166,13 @@ git clone <repo> smartMirror && cd smartMirror
 ./setup.sh        # camera + radar + console + MagicMirror, idempotent
 ```
 
+`setup.sh` also clones the **private mm-store** repo into `store/` (the gitignored
+module-catalog metadata: `store/modules/<MMM-Name>/mm-store.json` + screenshots).
+Default `git@github.com:Domes711/MMM-store.git`; override with
+`MM_STORE_REPO=… ./setup.sh`. If `store/` already exists it's `git pull`ed (or
+left alone if it isn't a git repo). Missing this clone is why the store shows
+raw `MMM-Xxx` names with no cs labels/tags.
+
 To wipe a messy Pi before re-cloning: run `cleanup-pi.sh` (full reset — removes
 our systemd units, the pm2 app + boot hook, autostart/cron entries, sudoers, and
 the retired `~/MagicMirror`/`~/ld2450`; backs up real config + per-Pi state to
