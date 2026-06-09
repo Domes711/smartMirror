@@ -274,6 +274,12 @@ def effective_catalog() -> list:
             continue
         c.setdefault("fields", [])
         c.setdefault("module", c["type"])
+        # No explicit fields? Derive the config wizard from the module's
+        # mm-store.json so the layout editor prompts for its settings.
+        if not c["fields"]:
+            wf = _wizard_fields(c["type"])
+            if wf:
+                c["fields"] = wf
         by_type[c["type"]] = c
     return list(by_type.values())
 
@@ -629,6 +635,52 @@ def _load_local_meta(name: str):
         return data
     except Exception:  # noqa: BLE001
         return None
+
+
+def _pick_lang(val, lang: str = "cs") -> str:
+    """Resolve a localized {cs,en,…} dict (or plain string) to a single string."""
+    if isinstance(val, dict):
+        return val.get(lang) or val.get("en") or next(iter(val.values()), "") or ""
+    return val or ""
+
+
+def _wizard_fields(name: str, lang: str = "cs"):
+    """Convert a module's mm-store.json `wizard` into layout-editor `fields`
+    (the config form shown when the module is added to a layout). Returns a list
+    or None if the module has no wizard. Field shape:
+      {key, label, required, type, help?, placeholder?, options?[{value,label}]}
+    """
+    meta = _load_local_meta(name)
+    wiz = (meta or {}).get("wizard")
+    if not isinstance(wiz, list):
+        return None
+    fields = []
+    for w in wiz:
+        if not isinstance(w, dict) or not w.get("key"):
+            continue
+        f = {
+            "key": w["key"],
+            "label": _pick_lang(w.get("label"), lang) or w["key"],
+            "required": bool(w.get("required")),
+            "type": w.get("type") or "text",
+        }
+        help_txt = _pick_lang(w.get("help"), lang)
+        if help_txt:
+            f["help"] = help_txt
+        ph = _pick_lang(w.get("placeholder"), lang)
+        if ph:
+            f["placeholder"] = ph
+        if isinstance(w.get("options"), list):
+            opts = []
+            for o in w["options"]:
+                if isinstance(o, dict):
+                    opts.append({"value": o.get("value", ""),
+                                 "label": _pick_lang(o.get("label"), lang) or str(o.get("value", ""))})
+                else:
+                    opts.append({"value": o, "label": str(o)})
+            f["options"] = opts
+        fields.append(f)
+    return fields
 
 
 def _community_entry(e: dict) -> dict:
