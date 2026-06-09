@@ -784,17 +784,6 @@ def _set_job(mid: str, **kw) -> None:
         _install_jobs.setdefault(mid, {}).update(kw)
 
 
-def _unique_instance_id(name: str, store: dict) -> str:
-    base = name.lower()
-    taken = set(registered_ids()) | {i.get("id") for i in store.get("instances", [])}
-    if base not in taken:
-        return base
-    n = 2
-    while f"{base}-{n}" in taken:
-        n += 1
-    return f"{base}-{n}"
-
-
 def _register_installed(name: str) -> None:
     """Record a freshly installed module in the catalog so it can be placed in
     the layout editor. No instance is created and config.js is NOT touched here:
