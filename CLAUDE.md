@@ -101,13 +101,16 @@ Data flow:
 
 Module-management contract in `config.js` and `pages.js`:
 
-- Every module that should be controllable by MMM-Profile carries a custom
-  **`id`** field in `config.js`. `pages.js` references modules by that `id`.
-- For a managed module, `position` in `config.js` is **ignored** — the
-  active page's `position` wins. Convention: omit `position` in `config.js`
-  for managed modules.
-- Unmanaged modules (`alert`, `updatenotification`, MMM-Profile itself) keep
-  their `position` from `config.js` and stay visible always.
+- Every module that should appear on the mirror carries a custom **`id`** field
+  in `config.js`. `pages.js` references modules by that `id`, and placement is
+  driven **solely** by `pages.js`.
+- The `position` field in `config.js` is **ignored entirely** — there is no
+  position-based placement. At startup every id-bearing module's DOM is built in
+  a hidden staging area and the profile system (`projectLayout`) moves it into
+  the region from the active page. Omit `position` in `config.js`.
+- A module **without an `id`** is never region-placed. Notification/overlay
+  modules like `alert` still work (they render via their own mechanism, not a
+  region), so they need no `id`.
 - `pages.js` schema: `defaults` (`{<userKey>: layout}` — per-user fallback shown
   when no window is active) plus `<userKey>.<windowName>` with 5-field cron
   `from`/`to` (`min hour dom month dow`, 0=Sunday). Active window = the one whose

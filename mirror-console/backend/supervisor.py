@@ -481,7 +481,7 @@ def _console_modules_array(store: dict) -> list:
         mods.append({
             "id": inst["id"],
             "module": cat.get("module", inst.get("type")),
-            "position": "top_center",  # initial; MMM-Profile repositions per pages.js
+            # no `position` — placement is driven solely by pages.js
             "config": module_config(inst.get("type"), inst.get("values")),
         })
     return mods
@@ -522,7 +522,7 @@ def _managed_block(store: dict) -> str:
         obj = {
             "id": inst["id"],
             "module": cat.get("module", inst.get("type")),
-            "position": "top_center",  # initial; MMM-Profile repositions per pages.js
+            # no `position` — placement is driven solely by pages.js
             "config": module_config(inst.get("type"), inst.get("values")),
         }
         lines.append("        " + json.dumps(obj, ensure_ascii=False) + ",")

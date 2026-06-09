@@ -118,21 +118,14 @@ const MM = (function () {
 		const domCreationPromises = [];
 
 		modules.forEach(function (module) {
-			// Decide where this module's DOM node is created. A fixed position
-			// goes straight into that region. A managed module (carries an `id`)
-			// without a position is placed and shown later by the profile system
-			// (projectLayout), so park its DOM in the hidden staging area now —
-			// otherwise it would have no DOM node and could never be shown in any
-			// time-window layout. Truly position-less, unmanaged modules are
-			// skipped as before.
-			let wrapper;
-			if (typeof module.data.position === "string") {
-				wrapper = selectWrapper(module.data.position);
-			} else if (module.data.id) {
-				wrapper = document.getElementById("mm-hot-staging") || document.body;
-			} else {
-				return;
-			}
+			// Placement is driven solely by config/pages.js via the profile system
+			// (projectLayout, matched by module `id`). The config.js `position`
+			// field is intentionally ignored. Build only id-bearing modules — each
+			// parked in the hidden staging area — for the profile system to move
+			// into its region. Modules without an id are not region-placed
+			// (notification modules like `alert` still work via their own mechanism).
+			if (!module.data.id) return;
+			const wrapper = document.getElementById("mm-hot-staging") || document.body;
 
 			let haveAnimateIn = null;
 			// check if have valid animateIn in module definition (module.data.animateIn)
