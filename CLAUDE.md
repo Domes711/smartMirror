@@ -161,19 +161,21 @@ Each in-repo MagicMirror module follows the same shape:
 
 ## Setup (fresh Pi)
 
-**One-shot bootstrap** (copy just this one file to the Pi):
+**`setup.sh` self-bootstraps** — copy just this one file to the Pi and run it:
 
 ```bash
-scp bootstrap.sh admin@10.0.0.249:~
-ssh admin@10.0.0.249 'bash ~/bootstrap.sh'   # clones smartMirror + runs ./setup.sh
+scp setup.sh admin@10.0.0.249:~
+ssh admin@10.0.0.249 'bash ~/setup.sh'
 ```
 
-`bootstrap.sh` clones the repo into `~/smartMirror` (or `git pull` if present),
-then `exec`s `./setup.sh`. Override repo/branch/dir:
-`SMARTMIRROR_REPO=… SMARTMIRROR_BRANCH=… SMARTMIRROR_DIR=… bash bootstrap.sh`
-(default `git@github.com:Domes711/smartMirror.git`, branch `master`).
+When run from **outside** the repo (the component dirs aren't next to it),
+`setup.sh` clones the repo into `~/smartMirror` (or `git pull` if present) and
+hands off to the repo's `setup.sh`. Override repo/branch/dir:
+`SMARTMIRROR_REPO=… SMARTMIRROR_BRANCH=… SMARTMIRROR_DIR=… bash setup.sh`
+(default `git@github.com:Domes711/smartMirror.git`, branch `master`; use the
+`https://…` repo URL if the Pi has no SSH key).
 
-Or, if the repo is already on the Pi:
+Run from **inside** the repo it just sets everything up:
 
 ```bash
 cd ~/smartMirror && ./setup.sh   # camera + radar + console + MagicMirror, idempotent

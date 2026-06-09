@@ -13,6 +13,35 @@
 set -u
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Self-bootstrap: if this file was dropped OUTSIDE the repo (the component dirs
+# aren't next to it), clone/update the repo into ~/smartMirror and hand off to
+# its setup.sh. Lets you copy JUST this one file to a fresh Pi and run it.
+# Override: SMARTMIRROR_REPO=…  SMARTMIRROR_BRANCH=…  SMARTMIRROR_DIR=…
+if [ ! -f "$DIR/mirror-console/setup.sh" ] || [ ! -f "$DIR/MagicMirror/setup.sh" ]; then
+  TARGET="${SMARTMIRROR_DIR:-$HOME/smartMirror}"
+  if [ "$DIR" = "$TARGET" ]; then
+    echo "✗ Repo v $TARGET je neúplný (chybí komponentní setup.sh)."
+    echo "  Smaž ho (nuke-pi.sh) a spusť setup.sh znovu mimo repo."
+    exit 1
+  fi
+  REPO_URL="${SMARTMIRROR_REPO:-git@github.com:Domes711/smartMirror.git}"
+  BRANCH="${SMARTMIRROR_BRANCH:-master}"
+  if ! command -v git >/dev/null 2>&1; then
+    echo "✗ git není nainstalován (sudo apt-get install -y git)"; exit 1
+  fi
+  echo "▸ setup.sh běží mimo repo ($DIR) — bootstrap → $TARGET"
+  if [ -d "$TARGET/.git" ]; then
+    git -C "$TARGET" fetch origin "$BRANCH" 2>/dev/null && git -C "$TARGET" checkout "$BRANCH" 2>/dev/null
+    git -C "$TARGET" pull --ff-only origin "$BRANCH" || echo "⚠ pull selhal — pokračuji se stávajícím checkoutem"
+  else
+    echo "▸ Klonuji $REPO_URL ($BRANCH) → $TARGET"
+    git clone --branch "$BRANCH" "$REPO_URL" "$TARGET" \
+      || { echo "✗ git clone selhal — zkontroluj SSH klíč, nebo: SMARTMIRROR_REPO=https://github.com/Domes711/smartMirror.git bash setup.sh"; exit 1; }
+  fi
+  exec bash "$TARGET/setup.sh"
+fi
+
 cd "$DIR"
 
 FAILED=""
