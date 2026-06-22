@@ -8,6 +8,17 @@ import path from "node:path";
 // src/services/mqtt.ts (no proxy needed for ws://<pi>:9001).
 const MIRROR_HTTP = process.env.VITE_MIRROR_HTTP || "http://10.0.0.249:8000";
 
+// REST fallback endpoints (camera stream, photo upload, layout, store) are
+// proxied to the supervisor/Express on :8000 in BOTH dev and preview, so the
+// built app served from the Pi stays same-origin. MQTT goes direct over
+// WebSocket (ws://<host>:9001) — no proxy needed. See src/services/mqtt.ts.
+const restProxy = Object.fromEntries(
+  [
+    "/mode", "/healthz", "/stream.mjpg", "/capture", "/encode", "/dataset",
+    "/photo", "/profiles", "/radar", "/modules", "/layout", "/store", "/api",
+  ].map((p) => [p, MIRROR_HTTP])
+);
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -16,21 +27,13 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    proxy: {
-      // Supervisor/Express REST (proxied by mirror-console Express at :8000).
-      "/mode": MIRROR_HTTP,
-      "/healthz": MIRROR_HTTP,
-      "/stream.mjpg": MIRROR_HTTP,
-      "/capture": MIRROR_HTTP,
-      "/encode": MIRROR_HTTP,
-      "/dataset": MIRROR_HTTP,
-      "/photo": MIRROR_HTTP,
-      "/profiles": MIRROR_HTTP,
-      "/radar": MIRROR_HTTP,
-      "/modules": MIRROR_HTTP,
-      "/layout": MIRROR_HTTP,
-      "/store": MIRROR_HTTP,
-      "/api": MIRROR_HTTP,
-    },
+    proxy: restProxy,
+  },
+  // `vite preview` serves the production build (dist/) — this is what the
+  // mirror-control systemd unit runs on the Pi. See deploy.sh.
+  preview: {
+    host: true,
+    port: 8080,
+    proxy: restProxy,
   },
 });

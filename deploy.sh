@@ -78,6 +78,41 @@ c "Buildím web konzoli…"
 ( cd mirror-console/web && "$NPM" install --no-audit --no-fund && "$NPM" run build )
 ok "web/dist vygenerován"
 
+# --- 5b. Mirror Control app (nová appka): build + serve unit ------------------
+# Builds mirrorControl/ (Vite SPA) and serves the production build with
+# `vite preview` under a systemd unit on :8080. MQTT goes direct (ws :9001);
+# REST fallback is proxied to :8000 (see mirrorControl/vite.config.ts).
+c "Buildím Mirror Control (nová appka)…"
+( cd mirrorControl && "$NPM" install --no-audit --no-fund && "$NPM" run build )
+ok "mirrorControl/dist vygenerován"
+
+MC_USER="$(id -un)"
+NODE_BIN_DIR="$(dirname "$NPM")"
+c "Instaluji službu mirror-control (port 8080)…"
+sudo tee /etc/systemd/system/mirror-control.service >/dev/null <<EOF
+[Unit]
+Description=Mirror Control web app (Vite preview)
+After=network.target
+
+[Service]
+Type=simple
+User=$MC_USER
+WorkingDirectory=$REPO/mirrorControl
+Environment=HOME=$HOME
+Environment=PATH=$NODE_BIN_DIR:/usr/local/bin:/usr/bin:/bin
+ExecStart=$NPM run preview -- --host 0.0.0.0 --port 8080 --strictPort
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable mirror-control >/dev/null 2>&1 || true
+ok "mirror-control.service nainstalován"
+
 # --- 6. restart everything ----------------------------------------------------
 restart_unit() {  # restart a systemd unit only if it is installed
   if systemctl list-unit-files "$1.service" 2>/dev/null | grep -q "$1.service"; then
@@ -89,6 +124,7 @@ restart_unit() {  # restart a systemd unit only if it is installed
 c "Restartuji služby…"
 restart_unit mirror-console-backend
 restart_unit mirror-console-web
+restart_unit mirror-control
 restart_unit ld2450
 if [ -n "$PM2" ]; then
   "$PM2" restart MagicMirror >/dev/null 2>&1 && ok "restart MagicMirror (pm2)" \
@@ -102,6 +138,8 @@ c "Kontrola…"
 sleep 2
 code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz || true)"
 [ "$code" = "200" ] && ok "konzole běží (HTTP 200)" || warn "konzole neodpovídá (HTTP $code) — viz: journalctl -u mirror-console-web -n 50"
+mc_code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ || true)"
+[ "$mc_code" = "200" ] && ok "Mirror Control běží (HTTP 200, :8080)" || warn "Mirror Control neodpovídá (HTTP $mc_code) — viz: journalctl -u mirror-control -n 50"
 
 echo
-ok "Hotovo. Změny FE i BE jsou nasazené."
+ok "Hotovo. Změny FE i BE jsou nasazené. Mirror Control: http://<pi>:8080"
