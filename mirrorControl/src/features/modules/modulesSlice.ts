@@ -31,6 +31,12 @@ export interface ModulesState {
   // confirmations
   uninstallModal: string | null;
   deleteModModal: string | null;
+  // --- real AI builder (Claude Agent SDK + SSE) ---
+  aiAvailable: boolean;
+  aiRev: number;
+  aiScope: "draft" | "installed";
+  aiStreaming: boolean;
+  serverDrafts: { name: string; description: string }[] | null;
 }
 
 const initialState: ModulesState = {
@@ -62,6 +68,11 @@ const initialState: ModulesState = {
   ctrlDefault: "",
   uninstallModal: null,
   deleteModModal: null,
+  aiAvailable: false,
+  aiRev: 1,
+  aiScope: "draft",
+  aiStreaming: false,
+  serverDrafts: null,
 };
 
 const modulesSlice = createSlice({
@@ -207,6 +218,51 @@ const modulesSlice = createSlice({
       s.chat.push({ role: "me", text: a.payload.summary });
       s.chat.push({ role: "bot", text: a.payload.ack });
       s.ctrlFormOpen = false;
+    },
+    // --- real AI builder ---
+    setAiAvailable(s, a: PayloadAction<boolean>) {
+      s.aiAvailable = a.payload;
+    },
+    setServerDrafts(s, a: PayloadAction<{ name: string; description: string }[]>) {
+      s.serverDrafts = a.payload;
+    },
+    aiOpen(s, a: PayloadAction<{ name: string; scope: "draft" | "installed" }>) {
+      s.workshopMod = a.payload.name;
+      s.aiScope = a.payload.scope;
+      s.workshopTab = "chat";
+      s.chat = [];
+      s.chatDraft = "";
+      s.aiStreaming = false;
+      s.wsBackModal = false;
+      s.wsEditing = a.payload.scope === "installed";
+      s.ctrlFormOpen = false;
+    },
+    aiSetSession(s, a: PayloadAction<{ messages: ChatMsg[]; rev: number }>) {
+      s.chat = a.payload.messages;
+      s.aiRev = a.payload.rev;
+      s.aiStreaming = false;
+    },
+    aiUserSend(s, a: PayloadAction<string>) {
+      s.wsEditing = true;
+      s.chat.push({ role: "me", text: a.payload });
+      s.chat.push({ role: "bot", text: "" }); // accumulator
+      s.aiStreaming = true;
+      s.chatDraft = "";
+    },
+    aiAppendText(s, a: PayloadAction<string>) {
+      const last = s.chat[s.chat.length - 1];
+      if (last && last.role === "bot") last.text += a.payload;
+      else s.chat.push({ role: "bot", text: a.payload });
+    },
+    aiStreamDone(s, a: PayloadAction<{ rev: number }>) {
+      s.aiStreaming = false;
+      s.aiRev = a.payload.rev || s.aiRev + 1;
+      const last = s.chat[s.chat.length - 1];
+      if (last && last.role === "bot" && !last.text.trim()) last.text = "✓";
+    },
+    aiError(s, a: PayloadAction<string>) {
+      s.aiStreaming = false;
+      s.chat.push({ role: "bot", kind: "status", text: a.payload });
     },
     // drafts
     saveDraft(s, a: PayloadAction<Draft>) {

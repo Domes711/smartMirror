@@ -193,6 +193,16 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
   } catch (e) {
     dispatch(mirrorActions.setError(String(e)));
   }
+
+  // 6. AI builder availability + drafts (best-effort)
+  try {
+    const st = await api.aiStatus();
+    dispatch(modulesActions.setAiAvailable(!!st.claudeCli));
+    const d = await api.aiListDrafts().catch(() => ({ drafts: [] }));
+    dispatch(modulesActions.setServerDrafts(d.drafts || []));
+  } catch {
+    dispatch(modulesActions.setAiAvailable(false));
+  }
   } finally {
     dispatch(mirrorActions.setLoading(false));
   }

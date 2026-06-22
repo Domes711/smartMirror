@@ -5,24 +5,35 @@ import { BackButton, Spinner } from "@/components/shell";
 import { Segmented, Toggle, tokens as C } from "@/components/ui";
 import { modulesActions } from "@/features/modules/modulesSlice";
 import * as fx from "@/app/thunks";
+import * as ai from "@/app/ai";
+import { aiDemoUrl } from "@/services/api";
 
 export default function Workshop() {
   const dispatch = useAppDispatch();
   const { L, en, raw } = useT();
   const m = useAppSelector((s) => s.modules);
   const ui = useAppSelector((s) => s.ui);
+  const aiOn = useAppSelector((s) => s.mirror.live && s.modules.aiAvailable);
   const chatRef = useRef<HTMLDivElement>(null);
 
   const installing = ui.taskKind === "install" && ui.taskTarget === m.workshopMod;
   const isInstalled = m.installed.includes(m.workshopMod) && !installing && !m.wsEditing;
   const canInstall = !installing && (!m.installed.includes(m.workshopMod) || m.wsEditing);
+  const streaming = aiOn ? m.aiStreaming : ui.agentBusy;
+  const send = (t?: string) => dispatch(aiOn ? ai.aiSend(t) : fx.agentSend(t));
+  const lastBot = m.chat[m.chat.length - 1]?.role === "bot" ? m.chat[m.chat.length - 1].text : "";
 
   useEffect(() => {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [m.chat.length, ui.agentBusy, m.ctrlFormOpen]);
+  }, [m.chat.length, lastBot, streaming, m.ctrlFormOpen]);
 
   const back = () => {
+    // AI drafts are persisted server-side — just leave (install via the button)
+    if (aiOn) {
+      dispatch(fx.nav("modules", "modules"));
+      return;
+    }
     const done = installing || (m.installed.includes(m.workshopMod) && !m.wsEditing);
     if (done) dispatch(fx.nav("modules", "modules"));
     else dispatch(modulesActions.openWsBack());
@@ -45,7 +56,7 @@ export default function Workshop() {
         <BackButton onClick={back} />
         <h2 style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>{m.workshopMod}</h2>
         {canInstall && (
-          <button onClick={() => dispatch(fx.wsInstallNow())} className="mc-lift" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--mono)", fontSize: 11, borderRadius: 999, padding: "9px 14px", cursor: "pointer", border: `1px solid ${C.ink}`, background: C.ink, color: C.paper }}>
+          <button onClick={() => dispatch(aiOn ? ai.aiInstall() : fx.wsInstallNow())} className="mc-lift" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--mono)", fontSize: 11, borderRadius: 999, padding: "9px 14px", cursor: "pointer", border: `1px solid ${C.ink}`, background: C.ink, color: C.paper }}>
             <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }}><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
             {L.toMirror}
           </button>
@@ -91,17 +102,17 @@ export default function Workshop() {
               );
             })}
             {m.ctrlFormOpen && <CtrlForm />}
-            {ui.agentBusy && (
+            {streaming && (
               <div style={{ alignSelf: "center", display: "inline-flex", alignItems: "center", gap: 10, padding: "9px 16px", border: `1px solid ${C.line}`, borderRadius: 999, background: C.p2, animation: "scin .26s ease" }}>
                 <Spinner color="#6B6212" track="#D8D7CB" size={15} />
-                <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.bink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ui.agentStatus || L.agentWorking}</span>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.bink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{aiOn ? L.agentWorking : ui.agentStatus || L.agentWorking}</span>
               </div>
             )}
           </div>
 
           <div className="mc-noscroll" style={{ flex: "0 0 auto", display: "flex", gap: 8, margin: "12px 0", overflowX: "auto" }}>
             {(raw.wsSuggest as string[]).map((sgg) => (
-              <button key={sgg} onClick={() => dispatch(fx.agentSend(sgg))} className="mc-lift" style={{ flex: "0 0 auto", whiteSpace: "nowrap", fontFamily: "var(--mono)", fontSize: 11, border: `1px solid ${C.line}`, borderRadius: 999, padding: "7px 12px", cursor: "pointer", background: "transparent", color: C.mute }}>{sgg}</button>
+              <button key={sgg} onClick={() => send(sgg)} className="mc-lift" style={{ flex: "0 0 auto", whiteSpace: "nowrap", fontFamily: "var(--mono)", fontSize: 11, border: `1px solid ${C.line}`, borderRadius: 999, padding: "7px 12px", cursor: "pointer", background: "transparent", color: C.mute }}>{sgg}</button>
             ))}
           </div>
 
@@ -109,14 +120,23 @@ export default function Workshop() {
             <input
               value={m.chatDraft}
               onChange={(e) => dispatch(modulesActions.setChatDraft(e.target.value))}
-              onKeyDown={(e) => { if (e.key === "Enter") dispatch(fx.agentSend()); }}
+              onKeyDown={(e) => { if (e.key === "Enter") send(); }}
               placeholder={L.wsComposer}
               style={{ flex: 1, background: C.p3, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 14px", fontSize: 13, color: C.ink }}
             />
-            <button onClick={() => dispatch(fx.agentSend())} style={{ width: 46, height: 46, flex: "0 0 46px", borderRadius: "50%", border: `1px solid ${C.ink}`, background: C.ink, cursor: "pointer", display: "grid", placeItems: "center" }}>
+            <button onClick={() => send()} style={{ width: 46, height: 46, flex: "0 0 46px", borderRadius: "50%", border: `1px solid ${C.ink}`, background: C.ink, cursor: "pointer", display: "grid", placeItems: "center" }}>
               <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, fill: C.paper }}><path d="M3 11l18-8-8 18-2-7-8-3z" /></svg>
             </button>
           </div>
+        </div>
+      ) : aiOn ? (
+        <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "0 22px 18px" }}>
+          <div style={{ position: "relative", background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "9 / 14" }}>
+            <span style={{ position: "absolute", top: 12, left: 14, zIndex: 2, fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: "#a9a89d" }}>{L.preview}</span>
+            <span style={{ position: "absolute", top: 12, right: 14, zIndex: 2, fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: C.signal }}>● {L.live}</span>
+            <iframe key={m.aiRev} src={aiDemoUrl(m.workshopMod, m.aiScope, m.aiRev)} title="demo" style={{ width: "100%", height: "100%", border: "none", background: "#000" }} />
+          </div>
+          <p style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: C.mute, lineHeight: 1.6, margin: "12px 2px 0" }}>{en ? "Live preview of the module — refreshes as the agent edits." : "Živý náhled modulu — obnovuje se, jak ho agent upravuje."}</p>
         </div>
       ) : (
         <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "0 22px 18px" }}>

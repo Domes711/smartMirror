@@ -94,6 +94,35 @@ export const uninstallModule = (name: string) => jpost("/store/uninstall", { nam
 /* ---------- mqtt bridge (fallback publish via backend) ---------- */
 export const mqttPublish = (topic: string, payload: unknown) => jpost("/api/mqtt/publish", { topic, payload });
 
+/* ---------- AI module builder (Claude Agent SDK + SSE) ---------- */
+export interface AiMsg { role: "user" | "assistant" | "sys"; text: string; files?: string[]; ts?: number }
+export const aiStatus = () => req<{ claudeCli: boolean; claudeVersion?: string; model?: string }>("/api/modules/ai-status");
+export const aiListDrafts = () => req<{ drafts: { name: string; description: string }[] }>("/api/modules/list");
+export const aiCreateDraft = (name: string, description: string) =>
+  jpost("/api/modules/draft", { name, description }) as Promise<{ ok: boolean; name: string; rev: number }>;
+export const aiSession = (name: string, scope: "draft" | "installed" = "draft") =>
+  req<{ name: string; scope: string; description: string; prepared: boolean; messages: AiMsg[]; rev: number }>(`/api/modules/session?name=${encodeURIComponent(name)}&scope=${scope}`);
+export const aiChat = (name: string, scope: "draft" | "installed", message: string) =>
+  jpost("/api/modules/chat", { name, scope, message });
+export const aiFinalize = (name: string, overwrite = false) =>
+  jpost("/api/modules/finalize", { name, overwrite }) as Promise<{ ok: boolean; name?: string; message?: string; exists?: boolean; error?: string }>;
+export const aiDemoUrl = (name: string, scope: "draft" | "installed", rev: number) =>
+  `${scope === "installed" ? "/module-installed" : "/module-draft"}/${encodeURIComponent(name)}/demo.html?v=${rev}`;
+
+export interface AiEvent { type: "connected" | "text" | "tool" | "error" | "done"; text?: string; tool?: string; file?: string; rev?: number; touched?: boolean }
+/** Open the live agent SSE stream. Caller must close() the returned source. */
+export function aiStream(name: string, scope: "draft" | "installed", onEvent: (e: AiEvent) => void): EventSource {
+  const es = new EventSource(`/api/modules/chat/stream?name=${encodeURIComponent(name)}&scope=${scope}`);
+  es.onmessage = (m) => {
+    try {
+      onEvent(JSON.parse(m.data));
+    } catch {
+      /* ignore keep-alives */
+    }
+  };
+  return es;
+}
+
 /** Backend positions use `middle_center`; the app uses `middle`. */
 export const posToRegion = (p: string): string => (p === "middle_center" ? "middle" : p);
 export const regionToPos = (r: string): string => (r === "middle" ? "middle_center" : r);

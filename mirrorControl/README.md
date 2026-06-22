@@ -106,8 +106,11 @@ If the backend is unreachable (e.g. plain `npm run dev` with no Pi), the app
 false`). `src/services/api.ts` is the typed client for every endpoint.
 
 ### Still local / simulated
-- The **AI module builder** (Workshop) still runs its 4-step status locally —
-  the real `/api/modules/*` (Claude Agent SDK + SSE) is not yet wired.
+- The **AI module builder** is wired to the real backend when available
+  (`/api/modules/ai-status` → `claudeCli`): create a real scaffolded draft,
+  chat with the agent (SSE stream into the chat), watch the live `demo.html`
+  preview iframe, and **finalize** (install) onto the mirror. It falls back to
+  the local 4-step simulation when the Claude CLI isn't present on the Pi.
 - The **new-profile wizard** enrolls locally (real per-shot capture under a new
   dataset name + final `/encode` is a follow-up).
 - The editor offers the **full catalog** (built-in + installed + your own).
