@@ -112,7 +112,6 @@ false`). `src/services/api.ts` is the typed client for every endpoint.
   dataset name + final `/encode` is a follow-up).
 - The editor offers the **full catalog** (built-in + installed + your own).
   Placing a type reuses an existing instance (no duplicate) or creates a new
-  one. Types with **required config** (e.g. a calendar id) can't be filled from
-  the app yet — adding one with no existing instance fails on apply with the
-  backend's reason; configure it in the console for now. The Settings network
-  **scan** is cosmetic.
+  one. Types with **required config** (catalog `fields`, e.g. a calendar id)
+  pop a **config modal** to fill the fields before the instance is created. The
+  Settings network **scan** is cosmetic.

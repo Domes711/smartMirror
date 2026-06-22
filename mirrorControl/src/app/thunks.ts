@@ -112,6 +112,20 @@ export const confirmDelScene = (): Thunk => (dispatch, getState) => {
 };
 
 /** Region-plus: place held / move selected, with the right toast. */
+// --- placement helpers (palette TYPE → real instance id) ---
+const isCatalogType = (type: string, m: RootState["mirror"]) => m.catalogEntries.some((c) => c.type === type);
+const reusableInstance = (type: string, m: RootState["mirror"]): string | null =>
+  (m.layout?.instances || []).find((i) => i.type === type)?.id || m.loadedByModule[type]?.[0] || null;
+const requiredFields = (type: string, m: RootState["mirror"]) =>
+  (m.catalogEntries.find((c) => c.type === type)?.fields || []).filter((f) => f.required);
+function freshInstanceId(type: string, m: RootState["mirror"]): string {
+  const taken = new Set<string>([...(m.layout?.instances || []).map((i) => i.id), ...Object.values(m.loadedByModule).flat()]);
+  let id = type;
+  let n = 2;
+  while (taken.has(id)) id = `${type}-${n++}`;
+  return id;
+}
+
 /**
  * Resolve a palette id to a real instance id. A palette entry can be a catalog
  * TYPE (built-in / installed / own) — placing it reuses an existing instance of
@@ -120,18 +134,17 @@ export const confirmDelScene = (): Thunk => (dispatch, getState) => {
  */
 function resolvePlaceId(id: string, dispatch: AppDispatch, getState: () => RootState): string {
   const m = getState().mirror;
-  if (!m.live) return id;
-  const isType = m.catalogEntries.some((c) => c.type === id);
-  if (!isType) return id; // already an instance id
-  const existing = (m.layout?.instances || []).find((i) => i.type === id)?.id || m.loadedByModule[id]?.[0];
-  if (existing) return existing;
-  const taken = new Set<string>([...(m.layout?.instances || []).map((i) => i.id), ...Object.values(m.loadedByModule).flat()]);
-  let newId = id;
-  let n = 2;
-  while (taken.has(newId)) newId = `${id}-${n++}`;
+  if (!m.live || !isCatalogType(id, m)) return id;
+  const reuse = reusableInstance(id, m);
+  if (reuse) return reuse;
+  const newId = freshInstanceId(id, m);
   dispatch(mirrorActions.addInstance({ id: newId, type: id, values: {} }));
   return newId;
 }
+
+/** A brand-new instance of `type` would need required config we can't infer. */
+const needsConfig = (type: string, m: RootState["mirror"]) =>
+  m.live && isCatalogType(type, m) && !reusableInstance(type, m) && requiredFields(type, m).length > 0;
 
 export const regionPlus =
   (rid: import("@/types").RegionId): Thunk =>
@@ -142,6 +155,10 @@ export const regionPlus =
       return;
     }
     if (s.picked) {
+      if (needsConfig(s.picked, getState().mirror)) {
+        dispatch(scenesActions.openCfgModal({ type: s.picked, rid }));
+        return;
+      }
       const id = resolvePlaceId(s.picked, dispatch, getState);
       dispatch(scenesActions.placeSpecificAt({ rid, id }));
       dispatch(toast(Lof(getState()).tAdded));
@@ -154,10 +171,32 @@ export const regionPlus =
 export const addModToZone =
   (rid: import("@/types").RegionId, mod: string): Thunk =>
   (dispatch, getState) => {
+    if (needsConfig(mod, getState().mirror)) {
+      dispatch(scenesActions.openCfgModal({ type: mod, rid }));
+      return;
+    }
     const id = resolvePlaceId(mod, dispatch, getState);
     dispatch(scenesActions.addModToZone({ rid, mod: id }));
     dispatch(toast(Lof(getState()).tAdded));
   };
+
+/** Submit the required-config modal: create the configured instance + place it. */
+export const submitCfg = (): Thunk => (dispatch, getState) => {
+  const s = getState().scenes;
+  const m = getState().mirror;
+  const type = s.cfgType;
+  const rid = s.cfgRid;
+  if (!type || !rid) return;
+  if (requiredFields(type, m).some((f) => !(s.cfgValues[f.key] || "").trim())) {
+    dispatch(toast(Lof(getState()).cfgMissing));
+    return;
+  }
+  const id = freshInstanceId(type, m);
+  dispatch(mirrorActions.addInstance({ id, type, values: { ...s.cfgValues } }));
+  dispatch(scenesActions.placeSpecificAt({ rid, id }));
+  dispatch(scenesActions.closeCfgModal());
+  dispatch(toast(Lof(getState()).tAdded));
+};
 
 export const removeModFromScene =
   (mod: string): Thunk =>
