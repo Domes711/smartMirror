@@ -4,6 +4,7 @@ import { useT } from "@/i18n/useT";
 import { Mirror } from "./Mirror";
 import { tokens as C } from "./ui";
 import { fmod } from "@/data/catalog";
+import { resolveActiveId } from "@/app/selectors";
 import type { Regions } from "@/types";
 
 export const HOUR_PX = 36;
@@ -106,7 +107,8 @@ export function Calendar({ cards, showAllDay, onCalClick }: { cards: SceneCard[]
 /** Build SceneCard[] from the scenes record. */
 export function useSceneCards(opts: { onOpen: (id: string) => void; scheduledOnly?: boolean }): SceneCard[] {
   const scenes = useAppSelector((s) => s.scenes.scenes);
-  const active = useAppSelector((s) => s.scenes.activeScene);
+  useAppSelector((s) => s.ui.time); // re-resolve as the clock ticks
+  const active = resolveActiveId(scenes);
   const en = useAppSelector((s) => s.ui.lang === "en");
   return Object.keys(scenes)
     .map((id) => {

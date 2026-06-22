@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { RegionId, Scene, SelChip, Regions, TimeWindow } from "@/types";
+import { resolveActiveId } from "@/app/selectors";
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -86,7 +87,9 @@ const scenesSlice = createSlice({
       s.live = clone(s.scenes[s.activeScene].regions);
     },
     applyLive(s) {
-      s.live = clone(s.scenes[s.activeScene].regions);
+      // snapshot what the mirror should show right now (time-resolved)
+      s.activeScene = resolveActiveId(s.scenes) || s.activeScene;
+      s.live = clone(s.scenes[s.activeScene]?.regions ?? {});
       s.dirty = 0;
     },
     setActiveScene(s, a: PayloadAction<string>) {

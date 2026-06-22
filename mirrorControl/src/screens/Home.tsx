@@ -4,18 +4,23 @@ import { Mirror } from "@/components/Mirror";
 import { MirrorLoader } from "@/components/MirrorLoader";
 import { PillButton, tokens as C, h1 } from "@/components/ui";
 import * as fx from "@/app/thunks";
+import { resolveActiveId } from "@/app/selectors";
 
 export default function Home() {
   const dispatch = useAppDispatch();
   const { L } = useT();
   const en = useAppSelector((s) => s.ui.lang === "en");
   const homeLoading = useAppSelector((s) => s.ui.homeLoading);
-  const live = useAppSelector((s) => s.scenes.live);
   const scenes = useAppSelector((s) => s.scenes.scenes);
-  const active = useAppSelector((s) => s.scenes.activeScene);
-  const regions = live || scenes[active].regions;
+  // re-render on each clock tick so the resolved scene tracks the time of day
+  useAppSelector((s) => s.ui.time);
+  const connected = useAppSelector((s) => s.mirror.connected);
+  const liveData = useAppSelector((s) => s.mirror.live);
+  const activeId = resolveActiveId(scenes);
+  const sc = scenes[activeId];
+  const regions = sc?.regions ?? {};
   const liveCount = Object.values(regions).reduce((n, a) => n + (a?.length || 0), 0);
-  const activeName = en && scenes[active].name_en ? scenes[active].name_en : scenes[active].name;
+  const activeName = sc ? (en && sc.name_en ? sc.name_en : sc.name) : "—";
 
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 2px", borderBottom: `1px solid ${C.line}` }}>
@@ -56,7 +61,9 @@ export default function Home() {
             <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{L.defaultTag}</span>
           </Row>
           <Row label={L.connection}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: C.green }}>● {L.online} · 192.168.1.42</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: connected ? C.green : C.signal }}>
+              ● {connected ? `${L.online}${liveData ? "" : " · sync…"}` : (en ? "offline" : "offline")}
+            </span>
           </Row>
           <Row label={L.modsRunning}>
             <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{liveCount}</span>
