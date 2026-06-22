@@ -25,6 +25,17 @@ sudo systemctl enable --now mosquitto
 # WebSocket listener so the mirrorControl app (browser) can speak MQTT directly.
 # TCP 1883 stays for the Pi-side daemons; 9001 is websockets for the phone app.
 echo "▸ mosquitto: TCP 1883 + WebSocket 9001 (for mirrorControl)…"
+# Neutralize any OTHER conf.d file that declares a listener — a leftover
+# (e.g. local.conf with `listener 1883`) collides with ours → mosquitto fails
+# to start with "Duplicate listener". Back it up as .disabled and let ours win.
+for f in /etc/mosquitto/conf.d/*.conf; do
+  [ -e "$f" ] || continue
+  case "$f" in */smartmirror.conf) continue ;; esac
+  if grep -qE '^[[:space:]]*listener' "$f" 2>/dev/null; then
+    sudo mv "$f" "$f.disabled.$(date +%s)"
+    echo "  • zakázán konfliktní $(basename "$f") (obsahoval listener)"
+  fi
+done
 sudo tee /etc/mosquitto/conf.d/smartmirror.conf >/dev/null <<'EOF'
 listener 1883
 protocol mqtt
@@ -34,7 +45,8 @@ protocol websockets
 
 allow_anonymous true
 EOF
-sudo systemctl restart mosquitto
+sudo systemctl restart mosquitto \
+  || echo "  ! mosquitto restart selhal — viz: sudo journalctl -u mosquitto -n 20 -l"
 
 echo "▸ Python deps (face_recognition, mediapipe, opencv… — may take a while)…"
 pip3 install --break-system-packages -r requirements.txt
