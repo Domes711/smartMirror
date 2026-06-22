@@ -218,7 +218,8 @@ MODULE_CATALOG = [
         {"key": "entity", "label": "todo entity", "required": True}]},
     {"type": "MMM-Brno-Transit", "module": "MMM-Brno-Transit",
      "label": "MHD Brno", "fields": [
-        {"key": "stopId", "label": "ID zastávky", "required": True}]},
+        {"key": "stopName", "label": "Zastávka", "required": True,
+         "type": "brno_stop", "placeholder": "např. Hlavní nádraží"}]},
     {"type": "MMM-Package-Tracker", "module": "MMM-Package-Tracker",
      "label": "Zásilky", "fields": [
         {"key": "apiKey", "label": "AfterShip API key", "required": True},
@@ -378,6 +379,15 @@ def module_config(mtype: str, values: dict) -> dict:
         return {"weatherProvider": "openmeteo", "type": "current",
                 "lat": v.get("lat"), "lon": v.get("lon"),
                 "apiKey": v.get("apiKey")}
+    if mtype == "MMM-Brno-Transit":
+        cfg = {"stopName": v.get("stopName", "")}
+        # IDS JMK GTFS feed (data.brno.cz dataset) — stable ArcGIS Hub download;
+        # baked in so a stop picked on the map works without asking for a URL.
+        cfg["gtfsUrl"] = v.get("gtfsUrl") or \
+            "https://www.arcgis.com/sharing/rest/content/items/379d2e9a7907460c8ca7fda1f3e84328/data"
+        if v.get("stopId"):
+            cfg["stopId"] = v["stopId"]
+        return cfg
     if mtype in ("clock", "compliments"):
         return {}
     return dict(v)  # default: flat passthrough
