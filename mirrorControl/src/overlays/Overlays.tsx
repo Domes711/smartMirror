@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { Modal, BottomSheet, tokens as C } from "@/components/ui";
+import { StopMap } from "@/components/StopMap";
 import { scenesActions } from "@/features/scenes/scenesSlice";
 import { modulesActions } from "@/features/modules/modulesSlice";
 import { profilesActions } from "@/features/profiles/profilesSlice";
@@ -277,9 +279,20 @@ function ConfigModal() {
   const type = useAppSelector((s) => s.scenes.cfgType);
   const values = useAppSelector((s) => s.scenes.cfgValues);
   const entry = useAppSelector((s) => s.mirror.catalogEntries.find((c) => c.type === type));
+  const [mapKey, setMapKey] = useState<string | null>(null);
   if (!open || !type || !entry) return null;
   const fields = entry.fields || [];
   const missing = fields.some((f) => f.required && !(values[f.key] || "").trim());
+
+  if (mapKey) {
+    return (
+      <StopMap
+        initial={values[mapKey] || ""}
+        onPick={(name) => dispatch(scenesActions.setCfgValue({ key: mapKey, value: name }))}
+        onClose={() => setMapKey(null)}
+      />
+    );
+  }
 
   return (
     <Modal open onClose={() => dispatch(scenesActions.closeCfgModal())}>
@@ -308,6 +321,12 @@ function ConfigModal() {
                 type={f.type === "number" ? "number" : "text"}
                 style={{ ...fld, marginBottom: 0, borderColor: f.required && !v.trim() ? C.line : C.line }}
               />
+            )}
+            {f.type === "brno_stop" && (
+              <button onClick={() => setMapKey(f.key)} className="mc-lift" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 8, fontFamily: "var(--mono)", fontSize: 11.5, borderRadius: 999, padding: "10px 14px", cursor: "pointer", border: `1px solid ${C.ink}`, background: "transparent", color: C.ink }}>
+                <svg viewBox="0 0 24 24" style={{ width: 15, height: 15, fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }}><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>
+                Vybrat na mapě
+              </button>
             )}
             {f.help && <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: C.mute, margin: "5px 0 0" }}>{f.help}</p>}
           </div>
