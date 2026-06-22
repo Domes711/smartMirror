@@ -36,8 +36,15 @@ cp -f MagicMirror/config/config.js "MagicMirror/config/config.js.bak.$(date +%s)
 git fetch --prune origin
 CUR_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 [ "$CUR_BRANCH" = "master" ] || { c "Přepínám z '$CUR_BRANCH' na master"; git checkout master; }
+OLD_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
 if git pull --rebase --autostash origin master; then
   ok "na $(git rev-parse --short HEAD)"
+  # deploy.sh may have rewritten itself in the pull — re-exec the new version
+  # once so every later step runs from the updated script (e.g. ports).
+  if [ "${DEPLOY_REEXEC:-0}" != "1" ] && [ "$OLD_HEAD" != "$(git rev-parse HEAD)" ]; then
+    ok "deploy.sh aktualizován — spouštím novou verzi…"
+    DEPLOY_REEXEC=1 exec bash "$0" "$@"
+  fi
 else
   echo
   echo "‼ git pull selhal (nejspíš konflikt v config.js)."
