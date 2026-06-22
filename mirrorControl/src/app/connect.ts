@@ -39,7 +39,7 @@ function entriesToRegions(layout: api.LayoutEntry[]): Regions {
   }
   return r;
 }
-function regionsToEntries(regions: Regions): api.LayoutEntry[] {
+export function regionsToEntries(regions: Regions): api.LayoutEntry[] {
   const out: api.LayoutEntry[] = [];
   for (const reg of Object.keys(regions) as (keyof Regions)[]) {
     for (const id of regions[reg] || []) out.push({ id, position: api.regionToPos(reg as string) });

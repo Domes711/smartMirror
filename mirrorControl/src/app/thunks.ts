@@ -9,7 +9,7 @@ import type { Draft, Scene, ScreenId, TabGroup, TaskKind } from "@/types";
 import { publish, TOPICS } from "@/services/mqtt";
 import { STORE } from "@/data/catalog";
 import * as api from "@/services/api";
-import { refreshStoreData, loadProfileLive, scenesToStore } from "@/app/connect";
+import { refreshStoreData, loadProfileLive, scenesToStore, regionsToEntries } from "@/app/connect";
 import { mirrorActions } from "@/features/mirror/mirrorSlice";
 import { resolveActiveId } from "@/app/selectors";
 
@@ -245,6 +245,13 @@ const pushLayoutLive = (): Thunk => async (dispatch, getState) => {
     // on mqtt://127.0.0.1:1883) and directly over the browser's WS.
     await api.mqttPublish(TOPICS.profileReload, "").catch(() => {});
     publish(TOPICS.profileReload, { user: s.mirror.currentUserKey });
+    // Immediately project the active layout so the change shows at once,
+    // instead of waiting for the next presence/recognition event.
+    const st = getState();
+    const activeId = resolveActiveId(st.scenes.scenes);
+    const layout = regionsToEntries(st.scenes.scenes[activeId]?.regions || {});
+    await api.mqttPublish(TOPICS.profilePreview, { layout }).catch(() => {});
+    publish(TOPICS.profilePreview, { layout });
     const fresh = await api.getLayout().catch(() => null);
     if (fresh) dispatch(mirrorActions.setLayout(fresh));
     dispatch(toast(Lof(getState()).tApplied));

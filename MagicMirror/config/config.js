@@ -33,7 +33,7 @@ let config = {
             id: "clock",
             module: "clock",
             config: {
-                displaySeconds: false
+                displaySeconds: true
             }
         },
         {
