@@ -89,9 +89,11 @@ export const editBack = (): Thunk => (dispatch, getState) => {
   dispatch(nav(s.editReturn as ScreenId, groupOf(s.editReturn as ScreenId)));
 };
 
+const notConnected = (s: RootState) => (en(s) ? "Mirror not connected — not applied" : "Zrcadlo nepřipojeno — neaplikováno");
+
 export const saveSceneAndBack = (): Thunk => (dispatch, getState) => {
   if (getState().mirror.live) dispatch(pushLayoutLive()); // toasts apply result
-  else dispatch(toast(Lof(getState()).tSceneSaved));
+  else dispatch(toast(notConnected(getState())));
   const s = getState().scenes;
   dispatch(nav(s.editReturn as ScreenId, groupOf(s.editReturn as ScreenId)));
 };
@@ -238,7 +240,10 @@ const pushLayoutLive = (): Thunk => async (dispatch, getState) => {
   try {
     await api.putLayout(next);
     await api.applyLayout();
-    // belt & suspenders: tell the core to re-read pages.js
+    // Make the core re-read pages.js. apply_layout relies on the frontend to
+    // publish the reload — do it BOTH via the backend bridge (reliable; core is
+    // on mqtt://127.0.0.1:1883) and directly over the browser's WS.
+    await api.mqttPublish(TOPICS.profileReload, "").catch(() => {});
     publish(TOPICS.profileReload, { user: s.mirror.currentUserKey });
     const fresh = await api.getLayout().catch(() => null);
     if (fresh) dispatch(mirrorActions.setLayout(fresh));
