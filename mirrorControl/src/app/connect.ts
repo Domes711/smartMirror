@@ -114,6 +114,16 @@ export function scenesToStore(store: LayoutStore, userKey: string, scenes: Recor
     };
   }
   next.windows[userKey] = wins;
+
+  // every id referenced by a layout must have an instance, or PUT /layout 400s.
+  const have = new Set((next.instances || []).map((i) => i.id));
+  const referenced = new Set<string>();
+  for (const u of Object.keys(next.windows)) for (const k of Object.keys(next.windows[u])) for (const e of next.windows[u][k].layout) referenced.add(e.id);
+  for (const u of Object.keys(next.defaults)) for (const e of next.defaults[u]) referenced.add(e.id);
+  next.instances = next.instances || [];
+  for (const id of referenced) {
+    if (!have.has(id)) next.instances.push({ id, type: id, values: {} });
+  }
   return next;
 }
 
@@ -150,7 +160,9 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
     dispatch(mirrorActions.setError(String(e)));
   }
 
-  // 4. layout store → scenes for the default profile
+  // 4. layout store → scenes for the default profile. This is REQUIRED for the
+  // scene editor to read/write; only go "live" once it loads, otherwise saves
+  // would silently no-op against a null layout.
   let layout: LayoutStore | null = null;
   try {
     layout = await api.getLayout();
@@ -160,8 +172,10 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
     if (ids.size) dispatch(modulesActions.setInstalled([...ids]));
     dispatch(scenesActions.loadFromBackend(buildUserScenes(layout, "default", en)));
     dispatch(mirrorActions.setCurrentUserKey("default"));
+    dispatch(mirrorActions.setLive(true));
   } catch (e) {
-    dispatch(mirrorActions.setError(String(e)));
+    dispatch(mirrorActions.setError("layout: " + String(e)));
+    return; // stay on seed mocks; do not claim live
   }
 
   // 5. profiles
@@ -179,8 +193,6 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
   } catch (e) {
     dispatch(mirrorActions.setError(String(e)));
   }
-
-  dispatch(mirrorActions.setLive(true));
 };
 
 /** Re-fetch the store catalog (after install/uninstall) and refresh installed. */

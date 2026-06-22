@@ -90,9 +90,9 @@ export const editBack = (): Thunk => (dispatch, getState) => {
 };
 
 export const saveSceneAndBack = (): Thunk => (dispatch, getState) => {
-  if (getState().mirror.live) dispatch(pushLayoutLive());
+  if (getState().mirror.live) dispatch(pushLayoutLive()); // toasts apply result
+  else dispatch(toast(Lof(getState()).tSceneSaved));
   const s = getState().scenes;
-  dispatch(toast(Lof(getState()).tSceneSaved));
   dispatch(nav(s.editReturn as ScreenId, groupOf(s.editReturn as ScreenId)));
 };
 
@@ -104,7 +104,8 @@ export const discardAndBack = (): Thunk => (dispatch, getState) => {
 
 export const confirmDelScene = (): Thunk => (dispatch, getState) => {
   dispatch(scenesActions.confirmDelScene());
-  dispatch(toast(Lof(getState()).tSceneDel));
+  if (getState().mirror.live) dispatch(pushLayoutLive()); // persist + apply
+  else dispatch(toast(Lof(getState()).tSceneDel));
   dispatch(nav("scenes", "scenes"));
 };
 
@@ -220,29 +221,44 @@ export const addWindow = (): Thunk => (dispatch, getState) => {
   dispatch(editScene(id, "windows"));
 };
 
-/** Persist the current scenes back to the live layout store + apply. */
-const pushLayoutLive = (): Thunk => (dispatch, getState) => {
+/** Persist the current scenes back to the live layout store + apply to mirror. */
+const pushLayoutLive = (): Thunk => async (dispatch, getState) => {
   const s = getState();
-  const store = s.mirror.layout;
-  if (!store) return;
+  let store = s.mirror.layout;
+  if (!store) {
+    try {
+      store = await api.getLayout();
+    } catch (e) {
+      dispatch(mirrorActions.setError(String(e)));
+      return;
+    }
+  }
   const next = scenesToStore(store, s.mirror.currentUserKey, s.scenes.scenes);
   dispatch(mirrorActions.setLayout(next));
-  api
-    .putLayout(next)
-    .then(() => api.applyLayout())
-    .catch((e) => dispatch(mirrorActions.setError(String(e))));
+  try {
+    await api.putLayout(next);
+    await api.applyLayout();
+    // belt & suspenders: tell the core to re-read pages.js
+    publish(TOPICS.profileReload, { user: s.mirror.currentUserKey });
+    const fresh = await api.getLayout().catch(() => null);
+    if (fresh) dispatch(mirrorActions.setLayout(fresh));
+    dispatch(toast(Lof(getState()).tApplied));
+  } catch (e) {
+    dispatch(mirrorActions.setError(String(e)));
+    dispatch(toast(en(getState()) ? "Apply failed — see Comms" : "Aplikace selhala — viz Komunikace"));
+  }
 };
 
 export const applyMirror = (): Thunk => (dispatch, getState) => {
   dispatch(scenesActions.applyLive());
   const s = getState();
   if (s.mirror.live) {
-    dispatch(pushLayoutLive());
+    dispatch(pushLayoutLive()); // toasts apply result
   } else {
     // MQTT-first fallback: tell the core to re-read the active layout.
     publish(TOPICS.profileReload, { scene: s.scenes.activeScene });
+    dispatch(toast(Lof(s).tApplied));
   }
-  dispatch(toast(Lof(s).tApplied));
   dispatch(startLiveLoad());
 };
 
