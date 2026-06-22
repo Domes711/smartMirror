@@ -34,7 +34,7 @@ crontab -l > "$BK/crontab.bak" 2>/dev/null || true
 
 # --- systemd units ------------------------------------------------------
 echo "▸ Removing systemd units…"
-for svc in mirror-console-web mirror-console-backend ld2450 face_reco; do
+for svc in mirror-console-web mirror-console-backend mirror-control ld2450 face_reco; do
   sudo systemctl stop "$svc" 2>/dev/null || true
   sudo systemctl disable "$svc" 2>/dev/null || true
   sudo rm -f "/etc/systemd/system/$svc.service"
