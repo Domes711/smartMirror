@@ -386,6 +386,13 @@ function systemPromptAppend(scope, name) {
   const langInstruction = `LANGUAGE: Always reply in the mirror's configured language (language code: "${lang}"). ` +
     `If "${lang}" is "cs", write in Czech. If "en", write in English. Match the language exactly — never switch.`;
 
+  const act = `ACT IMMEDIATELY — every user message is a direct instruction to change the module RIGHT NOW.
+- On EVERY message, make the corresponding edit to the files immediately. Never wait for a confirmation word like "do it" / "udělej" / "ok" — the message itself IS the go-ahead.
+- Never reply with only a question, a plan, or "should I…?". Do the change first, then confirm in one short sentence.
+- If a message is brief or just names a feature (e.g. "title", "subscribe", "bigger"), interpret it as "add/change that now" and implement your best reasonable version immediately.
+- The ONLY time you may ask instead of acting is when you literally cannot proceed without a secret only the user has (e.g. an API key) — and even then, implement everything that does NOT depend on it first, then ask for just that value.
+- Bias strongly toward doing. A turn that edits files is always better than a turn that only talks.`;
+
   const tone = `TONE & COMMUNICATION STYLE — the person you are talking to is NOT a programmer:
 - Use plain, friendly language. No jargon, no code terms in chat replies.
 - Never explain implementation details unless explicitly asked.
@@ -409,6 +416,8 @@ function systemPromptAppend(scope, name) {
   if (scope === "installed") {
     return `${langInstruction}
 
+${act}
+
 ${tone}
 
 You are helping a user customise an installed smart-mirror module named "${name}". Make the change they ask for while keeping the module working.
@@ -419,6 +428,8 @@ ${ref}`;
   }
 
   return `${langInstruction}
+
+${act}
 
 ${tone}
 
