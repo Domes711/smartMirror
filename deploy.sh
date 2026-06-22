@@ -80,7 +80,7 @@ ok "web/dist vygenerován"
 
 # --- 5b. Mirror Control app (nová appka): build + serve unit ------------------
 # Builds mirrorControl/ (Vite SPA) and serves the production build with
-# `vite preview` under a systemd unit on :8080. MQTT goes direct (ws :9001);
+# `vite preview` under a systemd unit on :8090. MQTT goes direct (ws :9001);
 # REST fallback is proxied to :8000 (see mirrorControl/vite.config.ts).
 c "Buildím Mirror Control (nová appka)…"
 ( cd mirrorControl && "$NPM" install --no-audit --no-fund && "$NPM" run build )
@@ -88,7 +88,7 @@ ok "mirrorControl/dist vygenerován"
 
 MC_USER="$(id -un)"
 NODE_BIN_DIR="$(dirname "$NPM")"
-c "Instaluji službu mirror-control (port 8080)…"
+c "Instaluji službu mirror-control (port 8090)…"
 sudo tee /etc/systemd/system/mirror-control.service >/dev/null <<EOF
 [Unit]
 Description=Mirror Control web app (Vite preview)
@@ -100,7 +100,7 @@ User=$MC_USER
 WorkingDirectory=$REPO/mirrorControl
 Environment=HOME=$HOME
 Environment=PATH=$NODE_BIN_DIR:/usr/local/bin:/usr/bin:/bin
-ExecStart=$NPM run preview -- --host 0.0.0.0 --port 8080 --strictPort
+ExecStart=$NPM run preview -- --host 0.0.0.0 --port 8090 --strictPort
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -138,8 +138,8 @@ c "Kontrola…"
 sleep 2
 code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz || true)"
 [ "$code" = "200" ] && ok "konzole běží (HTTP 200)" || warn "konzole neodpovídá (HTTP $code) — viz: journalctl -u mirror-console-web -n 50"
-mc_code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ || true)"
-[ "$mc_code" = "200" ] && ok "Mirror Control běží (HTTP 200, :8080)" || warn "Mirror Control neodpovídá (HTTP $mc_code) — viz: journalctl -u mirror-control -n 50"
+mc_code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/ || true)"
+[ "$mc_code" = "200" ] && ok "Mirror Control běží (HTTP 200, :8090)" || warn "Mirror Control neodpovídá (HTTP $mc_code) — viz: journalctl -u mirror-control -n 50"
 
 echo
-ok "Hotovo. Změny FE i BE jsou nasazené. Mirror Control: http://<pi>:8080"
+ok "Hotovo. Změny FE i BE jsou nasazené. Mirror Control: http://<pi>:8090"

@@ -33,7 +33,7 @@ export default defineConfig({
   // mirror-control systemd unit runs on the Pi. See deploy.sh.
   preview: {
     host: true,
-    port: 8080,
+    port: 8090,
     proxy: restProxy,
   },
 });
