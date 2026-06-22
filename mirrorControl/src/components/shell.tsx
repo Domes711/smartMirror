@@ -214,20 +214,17 @@ export function BottomNav() {
   );
 }
 
-/* ---------- phone frame ---------- */
+/* ---------- app surface (full-bleed, no device frame) ---------- */
 export function PhoneFrame({ children }: { children: ReactNode }) {
   return (
-    <div style={{ height: "100dvh", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px" }}>
-      <div
-        style={{
-          width: "100%", maxWidth: 392, height: "min(844px, 96vh)", background: C.paper,
-          borderRadius: 46, border: `1px solid var(--frame-border)`, boxShadow: "0 30px 80px -30px rgba(0,0,0,.45)",
-          position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
-          fontFamily: "var(--grotesk)", color: C.ink,
-        }}
-      >
-        {children}
-      </div>
+    <div
+      style={{
+        height: "100dvh", width: "100%", background: C.paper,
+        position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
+        fontFamily: "var(--grotesk)", color: C.ink,
+      }}
+    >
+      {children}
     </div>
   );
 }
