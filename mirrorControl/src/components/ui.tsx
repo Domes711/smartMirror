@@ -146,6 +146,20 @@ export function PillButton({
   );
 }
 
+/** Indeterminate loading bar (red sweep) + optional label. */
+export function LoadingBar({ label }: { label?: string }) {
+  return (
+    <div style={{ width: "100%" }}>
+      <div style={{ position: "relative", height: 4, borderRadius: 999, background: C.p3, overflow: "hidden" }}>
+        <span style={{ position: "absolute", top: 0, bottom: 0, width: "32%", borderRadius: 999, background: C.signal, animation: "mc-hscan 1.1s ease-in-out infinite" }} />
+      </div>
+      {label && (
+        <p style={{ fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: ".14em", textTransform: "uppercase", color: C.mute, textAlign: "center", margin: "12px 0 0" }}>{label}</p>
+      )}
+    </div>
+  );
+}
+
 export const eyebrow: CSSProperties = {
   fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: C.mute,
 };

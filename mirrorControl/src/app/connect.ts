@@ -124,6 +124,7 @@ export function scenesToStore(store: LayoutStore, userKey: string, scenes: Recor
 /* ---------- bootstrap ---------- */
 export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getState) => {
   const en = getState().ui.lang === "en";
+  try {
   // 1. reachability
   try {
     const st = await api.mqttStatus().catch(() => api.health());
@@ -191,6 +192,9 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
     dispatch(profilesActions.loadProfiles(list));
   } catch (e) {
     dispatch(mirrorActions.setError(String(e)));
+  }
+  } finally {
+    dispatch(mirrorActions.setLoading(false));
   }
 };
 

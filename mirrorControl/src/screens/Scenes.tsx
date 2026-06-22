@@ -1,13 +1,14 @@
 import type { MouseEvent } from "react";
-import { useAppDispatch } from "@/app/hooks";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { Calendar, useSceneCards, HOUR_PX } from "@/components/Calendar";
-import { PillButton, tokens as C, h1 } from "@/components/ui";
+import { LoadingBar, PillButton, tokens as C, h1 } from "@/components/ui";
 import * as fx from "@/app/thunks";
 
 export default function Scenes() {
   const dispatch = useAppDispatch();
   const { L } = useT();
+  const loading = useAppSelector((s) => s.mirror.loading);
   const cards = useSceneCards({ onOpen: (id) => dispatch(fx.editScene(id, "scenes")) });
 
   // tap an empty slot on the calendar → new scene at that hour
@@ -30,7 +31,13 @@ export default function Scenes() {
       </div>
       <p style={{ flex: "0 0 auto", fontFamily: "var(--mono)", fontSize: 11, color: C.mute, lineHeight: 1.6, margin: "10px 0 16px" }}>{L.layoutsHint}</p>
       <div id="mc-cal-scroll" className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "2px 22px 28px" }}>
-        <Calendar cards={cards} showAllDay onCalClick={onCalClick} />
+        {loading ? (
+          <div style={{ padding: "40px 4px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <LoadingBar label={L.loadingMirror} />
+          </div>
+        ) : (
+          <Calendar cards={cards} showAllDay onCalClick={onCalClick} />
+        )}
       </div>
     </section>
   );

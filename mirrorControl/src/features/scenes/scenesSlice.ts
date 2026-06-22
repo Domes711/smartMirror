@@ -339,9 +339,9 @@ const scenesSlice = createSlice({
     },
     confirmDelScene(s) {
       const id = s.editing;
-      if (id && s.scenes[id] && Object.keys(s.scenes).length > 1) {
+      if (id && s.scenes[id]) {
         delete s.scenes[id];
-        if (s.activeScene === id) s.activeScene = Object.keys(s.scenes)[0];
+        if (s.activeScene === id) s.activeScene = Object.keys(s.scenes)[0] || "";
       }
       s.delModal = false;
       s.editing = null;
