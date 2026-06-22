@@ -315,6 +315,11 @@ unmodified upstream. Our modules (`modules/MMM-*`) are not part of this delta.
   - **`MM.addModule(mObj)`** — append a hot-loaded module at runtime (DOM in
     staging, `updateDom` + `start`), plus the **`MODULE_HOT_LOAD`** socket handler
     that drives it.
+  - **`MM.updateDom` "displayed" guard relaxed**: upstream drops an update when a
+    module has no `position`; our id-bearing modules have none (placement is
+    pages.js-only), so the guard now also accepts a module with an **`id`** —
+    otherwise every self-update (clock tick, weather refresh, …) is rejected and
+    the module looks frozen after its first render.
 - `package.json` — added deps: **`cron-parser` ^4.9.0** (cron-window resolution)
   and **`mqtt` ^5.11.2** (profile event bus). (`croner` is also present.)
 

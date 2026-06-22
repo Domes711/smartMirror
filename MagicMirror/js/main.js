@@ -878,7 +878,12 @@ const MM = (function () {
 				return;
 			}
 
-			if (!module.data.position) {
+			// Fork: id-bearing modules are placed by the profile system
+			// (projectLayout via config/pages.js) and carry NO config.js
+			// `position`. Treat "has an id" as displayed too — otherwise every
+			// self-update (clock tick, weather refresh, …) is rejected here and
+			// the module looks frozen after its initial render.
+			if (!module.data.position && !module.data.id) {
 				Log.warn("module tries to update the DOM without being displayed.");
 				return;
 			}
