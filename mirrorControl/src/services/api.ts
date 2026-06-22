@@ -7,7 +7,16 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     headers: init?.body ? { "Content-Type": "application/json" } : undefined,
     ...init,
   });
-  if (!res.ok) throw new Error(`${init?.method || "GET"} ${path} → ${res.status}`);
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.clone().json();
+      if (j && typeof j.error === "string") detail = ` — ${j.error}`;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(`${init?.method || "GET"} ${path} → ${res.status}${detail}`);
+  }
   const ct = res.headers.get("content-type") || "";
   return (ct.includes("application/json") ? res.json() : (res.text() as unknown)) as Promise<T>;
 }

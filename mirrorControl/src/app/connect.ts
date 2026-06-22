@@ -144,14 +144,15 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
     dispatch(mirrorActions.setError(String(e)));
   }
 
-  // 3. module catalog + positions (for the editor). registered_ids are the
-  // real module ids that already exist in config.js (+ store) — placing those
-  // just positions an existing module, so no instance is created (no dupes).
-  let registeredIds: string[] = [];
+  // 3. module catalog + positions (for the editor). The catalog is the full set
+  // of placeable module TYPES (built-in + installed + your own), so the editor
+  // can offer all of them. loaded_by_module lets placement reuse an existing
+  // instance instead of creating a duplicate.
+  let placeableTypes: string[] = [];
   try {
     const mods = await api.getModules();
-    dispatch(mirrorActions.setModulesMeta({ positions: mods.positions, catalog: mods.catalog }));
-    registeredIds = mods.registered_ids || [];
+    dispatch(mirrorActions.setModulesMeta({ positions: mods.positions, catalog: mods.catalog, loadedByModule: mods.loaded_by_module || {} }));
+    placeableTypes = (mods.catalog || []).map((c) => c.type);
   } catch (e) {
     dispatch(mirrorActions.setError(String(e)));
   }
@@ -163,8 +164,9 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
   try {
     layout = await api.getLayout();
     dispatch(mirrorActions.setLayout(layout));
-    // editor palette = real existing module ids (config.js + store instances)
-    const ids = new Set<string>(registeredIds);
+    // editor palette = every placeable catalog type (own + installed + built-in)
+    // + any existing instance ids (so already-placed modules show up too)
+    const ids = new Set<string>(placeableTypes);
     (layout.instances || []).forEach((i) => ids.add(i.id));
     if (ids.size) dispatch(modulesActions.setInstalled([...ids]));
     dispatch(scenesActions.loadFromBackend(buildUserScenes(layout, "default", en)));
@@ -200,11 +202,10 @@ export const refreshStoreData = (): Thunk<Promise<void>> => async (dispatch, get
     const all = [...cat.own, ...cat.community];
     setRuntimeCatalog(all.map((e) => mapStoreModule(e, false)), all.map((e) => mapStoreModule(e, true)));
     const mods = await api.getModules();
-    const ids = new Set(mods.registered_ids || []);
+    const ids = new Set<string>((mods.catalog || []).map((c) => c.type));
     (getState().mirror.layout?.instances || []).forEach((i) => ids.add(i.id));
     dispatch(modulesActions.setInstalled([...ids]));
-    // nudge a re-render of catalog-derived screens
-    dispatch(mirrorActions.setModulesMeta({ positions: mods.positions, catalog: mods.catalog }));
+    dispatch(mirrorActions.setModulesMeta({ positions: mods.positions, catalog: mods.catalog, loadedByModule: mods.loaded_by_module || {} }));
   } catch (e) {
     dispatch(mirrorActions.setError(String(e)));
   }

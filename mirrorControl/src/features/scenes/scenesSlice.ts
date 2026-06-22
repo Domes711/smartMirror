@@ -182,6 +182,15 @@ const scenesSlice = createSlice({
         s.dirty += 1;
       }
     },
+    /** Place a specific (already-resolved) id into a region; clears `picked`. */
+    placeSpecificAt(s, a: PayloadAction<{ rid: RegionId; id: string }>) {
+      if (!s.editing) return;
+      const reg = s.scenes[s.editing].regions;
+      reg[a.payload.rid] = reg[a.payload.rid] || [];
+      if (!reg[a.payload.rid]!.includes(a.payload.id)) reg[a.payload.rid]!.push(a.payload.id);
+      s.picked = null;
+      s.dirty += 1;
+    },
     addModToZone(s, a: PayloadAction<{ rid: RegionId; mod: string }>) {
       if (!s.editing) return;
       const reg = s.scenes[s.editing].regions;

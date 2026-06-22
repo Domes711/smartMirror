@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { CatalogEntry, LayoutStore } from "@/services/api";
+import type { CatalogEntry, LayoutStore, ModuleInstance } from "@/services/api";
 
 export interface MirrorState {
   /** backend reachable (REST) */
@@ -10,6 +10,8 @@ export interface MirrorState {
   layout: LayoutStore | null;
   positions: string[];
   catalogEntries: CatalogEntry[];
+  /** module name → instance ids already in config.js (reuse, avoid dupes) */
+  loadedByModule: Record<string, string[]>;
   /** app profile display-name → backend layout-store user key */
   profileKeys: Record<string, string>;
   /** which profile's windows are currently projected into the scenes slice */
@@ -23,6 +25,7 @@ const initialState: MirrorState = {
   layout: null,
   positions: [],
   catalogEntries: [],
+  loadedByModule: {},
   profileKeys: { default: "default" },
   currentUserKey: "default",
 };
@@ -43,9 +46,16 @@ const mirrorSlice = createSlice({
     setLayout(s, a: PayloadAction<LayoutStore>) {
       s.layout = a.payload;
     },
-    setModulesMeta(s, a: PayloadAction<{ positions: string[]; catalog: CatalogEntry[] }>) {
+    setModulesMeta(s, a: PayloadAction<{ positions: string[]; catalog: CatalogEntry[]; loadedByModule?: Record<string, string[]> }>) {
       s.positions = a.payload.positions;
       s.catalogEntries = a.payload.catalog;
+      if (a.payload.loadedByModule) s.loadedByModule = a.payload.loadedByModule;
+    },
+    /** Add a freshly-created module instance (optimistic; persisted on apply). */
+    addInstance(s, a: PayloadAction<ModuleInstance>) {
+      if (!s.layout) return;
+      if (!s.layout.instances) s.layout.instances = [];
+      if (!s.layout.instances.some((i) => i.id === a.payload.id)) s.layout.instances.push(a.payload);
     },
     setProfileKeys(s, a: PayloadAction<Record<string, string>>) {
       s.profileKeys = { default: "default", ...a.payload };
