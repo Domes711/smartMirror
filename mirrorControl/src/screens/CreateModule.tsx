@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { MiniThumb } from "@/components/MiniThumb";
@@ -5,12 +6,19 @@ import { BackButton } from "@/components/shell";
 import { tokens as C } from "@/components/ui";
 import { modulesActions } from "@/features/modules/modulesSlice";
 import * as fx from "@/app/thunks";
+import * as ai from "@/app/ai";
 
 export default function CreateModule() {
   const dispatch = useAppDispatch();
   const { L, en } = useT();
   const m = useAppSelector((s) => s.modules);
+  const aiOn = useAppSelector((s) => s.mirror.live && s.modules.aiAvailable);
   const isNew = m.createTab !== "drafts";
+  const draftCount = aiOn ? m.serverDrafts?.length ?? 0 : m.drafts.length;
+
+  useEffect(() => {
+    if (aiOn && !isNew) dispatch(ai.refreshDrafts());
+  }, [aiOn, isNew, dispatch]);
 
   const input = (val: string, on: (v: string) => void, ph: string, ta?: boolean) =>
     ta ? (
@@ -33,7 +41,7 @@ export default function CreateModule() {
 
       <div style={{ flex: "0 0 auto", display: "flex", gap: 20, borderBottom: `1px solid ${C.line}`, margin: "14px 0 18px" }}>
         <Tab on={() => dispatch(modulesActions.setCreateTab("new"))} label={L.createSecNew} sel={isNew} />
-        <Tab on={() => dispatch(modulesActions.setCreateTab("drafts"))} label={`${L.createSecDrafts} · ${m.drafts.length}`} sel={!isNew} />
+        <Tab on={() => dispatch(modulesActions.setCreateTab("drafts"))} label={`${L.createSecDrafts} · ${draftCount}`} sel={!isNew} />
       </div>
 
       <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "6px 22px 28px" }}>
@@ -47,8 +55,25 @@ export default function CreateModule() {
               <label style={{ display: "block", fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 7, textTransform: "uppercase", letterSpacing: ".08em" }}>{L.modDo}</label>
               {input(m.createDesc, (v) => dispatch(modulesActions.setCreateDesc(v)), L.modDoPh, true)}
             </div>
-            <button onClick={() => dispatch(fx.doCreate())} style={{ width: "100%", fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "12px 18px", cursor: "pointer", border: `1px solid ${C.ink}`, background: C.ink, color: C.paper }}>{L.createContinue}</button>
+            <button onClick={() => dispatch(aiOn ? ai.aiCreateAndOpen() : fx.doCreate())} style={{ width: "100%", fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "12px 18px", cursor: "pointer", border: `1px solid ${C.ink}`, background: C.ink, color: C.paper }}>{L.createContinue}</button>
           </div>
+        ) : aiOn ? (
+          m.serverDrafts && m.serverDrafts.length ? (
+            m.serverDrafts.map((d) => (
+              <div key={d.name} onClick={() => dispatch(ai.openAiWorkshop(d.name, "draft"))} className="mc-lift" style={{ border: `1px solid ${C.line}`, borderRadius: 16, background: C.p2, padding: 16, marginBottom: 14, cursor: "pointer", display: "flex", gap: 14, alignItems: "flex-start" }}>
+                <div style={{ flex: "0 0 70px", height: 70, borderRadius: 10, background: C.ink, display: "grid", placeItems: "center", border: `1px solid ${C.ink}`, overflow: "hidden" }}><MiniThumb m={{ mini: [d.name.replace(/^MMM-/, "").slice(0, 8).toUpperCase()] }} /></div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{d.name}</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "3px 0 5px" }}>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, letterSpacing: ".06em", textTransform: "uppercase", color: C.bink, background: C.bsoft, border: `1px solid ${C.bline}`, borderRadius: 999, padding: "3px 9px" }}>{L.draftBadge}</span>
+                  </div>
+                  <p style={{ fontSize: 13, lineHeight: 1.4, color: C.ink2, margin: 0 }}>{d.description || ""}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p style={{ fontFamily: "var(--mono)", fontSize: 12, color: C.mute, lineHeight: 1.6, padding: "6px 0 20px" }}>{L.draftsEmpty}</p>
+          )
         ) : m.drafts.length ? (
           m.drafts.map((d) => (
             <div key={d.n} onClick={() => dispatch(fx.openWorkshop(d.n, true))} className="mc-lift" style={{ border: `1px solid ${C.line}`, borderRadius: 16, background: C.p2, padding: 16, marginBottom: 14, cursor: "pointer", display: "flex", gap: 14, alignItems: "flex-start" }}>
