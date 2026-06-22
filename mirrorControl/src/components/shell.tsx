@@ -7,30 +7,6 @@ import * as fx from "@/app/thunks";
 import { tokens as C } from "./ui";
 import type { TabGroup } from "@/types";
 
-/* ---------- status bar ---------- */
-export function StatusBar() {
-  const time = useAppSelector((s) => s.ui.time);
-  return (
-    <div
-      style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "calc(16px + env(safe-area-inset-top)) 30px 8px",
-        fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700,
-      }}
-    >
-      <span>{time}</span>
-      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 11 }}>
-          {[4, 6, 9, 11].map((h) => (
-            <i key={h} style={{ width: 3, height: h, background: C.ink, display: "block" }} />
-          ))}
-        </div>
-        <span style={{ border: `1.5px solid ${C.ink}`, borderRadius: 4, padding: "1px 4px", fontSize: 10, lineHeight: 1 }}>19</span>
-      </div>
-    </div>
-  );
-}
-
 /* ---------- chrome (wordmark · DEV · gear) ---------- */
 export function Chrome() {
   const dispatch = useAppDispatch();
@@ -38,7 +14,7 @@ export function Chrome() {
   const devMode = useAppSelector((s) => s.dev.devMode);
   const onSettings = useAppSelector((s) => s.ui.screen === "settings");
   return (
-    <div style={{ padding: "4px 22px 12px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ padding: "calc(env(safe-area-inset-top) + 14px) 22px 12px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}>
       <span
         onClick={() => dispatch(fx.titleTap())}
         style={{ fontSize: 13, letterSpacing: ".2em", textTransform: "uppercase", fontWeight: 700, fontFamily: "var(--mono)", cursor: "pointer", userSelect: "none" }}
@@ -195,7 +171,7 @@ export function BottomNav() {
   const nav = (g: TabGroup, sc: "radar" | "camera" | "comms") => dispatch(fx.nav(sc, g));
 
   return (
-    <div style={{ flex: "0 0 auto", display: "flex", padding: "12px 14px calc(12px + env(safe-area-inset-bottom))", borderTop: `1px solid ${C.line}`, background: C.paper }}>
+    <div style={{ flex: "0 0 auto", display: "flex", padding: "12px 14px 10px", borderTop: `1px solid ${C.line}`, background: C.paper }}>
       {devMode ? (
         <>
           <NavItem active={tab === "radar"} label={L.navRadar} onClick={() => nav("radar", "radar")}>{Ico.radar}</NavItem>
