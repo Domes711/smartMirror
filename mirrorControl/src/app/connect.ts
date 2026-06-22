@@ -98,8 +98,13 @@ export function scenesToStore(store: LayoutStore, userKey: string, scenes: Recor
       continue;
     }
     const sc = scenes[id];
-    if (!sc.scheduled || sc.startH == null || sc.endH == null) continue;
     const key = id.includes(":") ? id.split(":").slice(1).join(":") : id;
+    if (sc.allDay) {
+      // preserve all-day windows (e.g. the backend's default window)
+      wins[key] = { from: "0 0 * * *", to: "59 23 * * *", label: sc.name || (sc.use || "all_day"), layout: regionsToEntries(sc.regions) };
+      continue;
+    }
+    if (!sc.scheduled || sc.startH == null || sc.endH == null) continue;
     const toH = (sc.endH - 1 + 24) % 24;
     wins[key] = {
       from: `0 ${sc.startH} * * *`,

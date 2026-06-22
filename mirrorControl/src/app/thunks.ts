@@ -11,6 +11,7 @@ import { STORE } from "@/data/catalog";
 import * as api from "@/services/api";
 import { refreshStoreData, loadProfileLive, scenesToStore } from "@/app/connect";
 import { mirrorActions } from "@/features/mirror/mirrorSlice";
+import { resolveActiveId } from "@/app/selectors";
 
 type Thunk = (dispatch: AppDispatch, getState: () => RootState) => void;
 
@@ -74,16 +75,7 @@ export const editResolved =
   (ret: string): Thunk =>
   (dispatch, getState) => {
     const s = getState().scenes;
-    const d = new Date();
-    const h = d.getHours() + d.getMinutes() / 60;
-    const isDefault = (id: string) => /^default/i.test(s.scenes[id].use || "");
-    const ids = Object.keys(s.scenes).filter((id) => {
-      const sc = s.scenes[id];
-      return sc.scheduled && sc.startH != null && sc.endH != null && h >= sc.startH && h < sc.endH;
-    });
-    const user = ids.find((id) => !isDefault(id));
-    const def = ids.find((id) => isDefault(id));
-    const resolved = user || def || ids[0] || s.activeScene;
+    const resolved = resolveActiveId(s.scenes) || s.activeScene;
     dispatch(editScene(resolved, ret));
   };
 
