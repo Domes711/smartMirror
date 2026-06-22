@@ -22,6 +22,20 @@ sudo apt-get update
 sudo apt-get install -y python3-picamera2 mosquitto mosquitto-clients
 sudo systemctl enable --now mosquitto
 
+# WebSocket listener so the mirrorControl app (browser) can speak MQTT directly.
+# TCP 1883 stays for the Pi-side daemons; 9001 is websockets for the phone app.
+echo "▸ mosquitto: TCP 1883 + WebSocket 9001 (for mirrorControl)…"
+sudo tee /etc/mosquitto/conf.d/smartmirror.conf >/dev/null <<'EOF'
+listener 1883
+protocol mqtt
+
+listener 9001
+protocol websockets
+
+allow_anonymous true
+EOF
+sudo systemctl restart mosquitto
+
 echo "▸ Python deps (face_recognition, mediapipe, opencv… — may take a while)…"
 pip3 install --break-system-packages -r requirements.txt
 

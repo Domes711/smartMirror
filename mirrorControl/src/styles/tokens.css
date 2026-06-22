@@ -1,0 +1,25 @@
+/* Design tokens — "Aeonik Fono": paper minimalism, monospace/geometric type,
+ * hairline rules, dark inverted panels for mirror content, one functional red,
+ * one soft butter yellow. Mirrors the prototype's C map exactly. */
+:root {
+  --paper: #e9e8dd; /* app background (warm cream-green) */
+  --paper-2: #efeee4; /* raised surface — cards */
+  --paper-3: #e2e1d5; /* recessed surface — inputs, tracks, thumbnails */
+  --ink: #1a1a17; /* primary text, rules, inverted panels, solid button */
+  --ink-2: #3a3a34; /* secondary text / body */
+  --mute: #8c8c81; /* inactive labels, captions, eyebrows */
+  --line: #cfcec2; /* hairline borders / dividers */
+  --signal: #e5482f; /* vermilion — ONLY active/selected/live pointer */
+  --butter: #ffc34d; /* pastel yellow — soft highlight / "held" state */
+  --butter-soft: #ffe6b3; /* faint butter tint for fills */
+  --butter-line: #f0ad33; /* butter border */
+  --butter-ink: #6b6212; /* legible text on butter */
+  --green: #3b8a4f; /* status "online" dot */
+
+  /* phone frame extras */
+  --frame-border: #bcbbb0;
+  --frame-ring: #f1f0e7;
+
+  --mono: "Space Mono", monospace;
+  --grotesk: "Space Grotesk", system-ui, sans-serif;
+}

@@ -1,0 +1,50 @@
+/* CSS keyframes carried over from the prototype (§12 of the handoff). */
+@keyframes scin {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toastin {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes mc-scan {
+  0% { top: 0; opacity: 0.45; }
+  50% { opacity: 1; }
+  100% { top: 99%; opacity: 0.45; }
+}
+@keyframes mc-shimmer {
+  0%, 100% { opacity: 0.22; }
+  50% { opacity: 0.5; }
+}
+@keyframes mc-blink {
+  0%, 40% { opacity: 1; }
+  60%, 100% { opacity: 0.15; }
+}
+@keyframes mc-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes mc-sheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes mc-sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes mc-wiper {
+  from { transform: rotate(-70deg); }
+  to { transform: rotate(70deg); }
+}
+@keyframes mc-ping {
+  0% { transform: scale(0.4); opacity: 0.9; }
+  80%, 100% { transform: scale(2.4); opacity: 0; }
+}
+@keyframes mc-rec {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.25; }
+}
+@keyframes mc-hscan {
+  0% { left: -32%; }
+  100% { left: 100%; }
+}
