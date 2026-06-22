@@ -68,6 +68,9 @@ const modulesSlice = createSlice({
   name: "modules",
   initialState,
   reducers: {
+    setInstalled(s, a: PayloadAction<string[]>) {
+      s.installed = a.payload;
+    },
     setFilter(s, a: PayloadAction<ModFilter>) {
       s.modFilter = a.payload;
     },

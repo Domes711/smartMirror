@@ -4,7 +4,7 @@ import mqtt, { type MqttClient } from "mqtt";
  * MQTT is the PRIMARY transport between this app and the mirror. The browser
  * connects directly to the broker over WebSocket (mosquitto `listener 9001` /
  * `protocol websockets` — see README). Only payloads MQTT can't carry well
- * (camera MJPEG stream, photo upload) go over REST — see services/rest.ts.
+ * (camera MJPEG stream, photo upload) go over REST — see services/api.ts.
  *
  * Topics mirror the ones used across the repo (ld2450/, camera/, profile.js):
  */

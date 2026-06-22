@@ -6,7 +6,7 @@ const CACHE = "mirror-control-v1";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 // never cache the REST fallback surface (proxied to the supervisor :8000)
-const BYPASS = ["/mode", "/healthz", "/stream.mjpg", "/capture", "/encode", "/dataset", "/photo", "/profiles", "/radar", "/modules", "/layout", "/store", "/api"];
+const BYPASS = ["/mode", "/healthz", "/stream.mjpg", "/capture", "/encode", "/dataset", "/photo", "/profiles", "/radar", "/modules", "/layout", "/store", "/api", "/store-assets", "/module-installed"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

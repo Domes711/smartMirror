@@ -16,6 +16,7 @@ const restProxy = Object.fromEntries(
   [
     "/mode", "/healthz", "/stream.mjpg", "/capture", "/encode", "/dataset",
     "/photo", "/profiles", "/radar", "/modules", "/layout", "/store", "/api",
+    "/store-assets", "/module-installed",
   ].map((p) => [p, MIRROR_HTTP])
 );
 

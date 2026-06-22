@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
-import { streamUrl } from "@/services/rest";
+import { streamUrl } from "@/services/api";
 
 export default function Camera() {
   const { L, en } = useT();

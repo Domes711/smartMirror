@@ -18,8 +18,23 @@ export const REGIONS: RegionDef[] = [
 /** Reported community-store size (real registry has ~1400). */
 export const BROWSE_COUNT = 1412;
 
+/** Runtime catalog injected from the live mirror (/store/catalog). When set,
+ * STORE()/fmod() transparently return real data so screens need no changes. */
+let RUNTIME: { cs: Module[]; en: Module[] } | null = null;
+export function setRuntimeCatalog(cs: Module[] | null, en: Module[] | null): void {
+  RUNTIME = cs && en ? { cs, en } : null;
+}
+export function hasRuntimeCatalog(): boolean {
+  return RUNTIME !== null;
+}
+
 /** The seed widget catalog. Localized by `en`. Ported 1:1 from the prototype. */
 export function STORE(en: boolean): Module[] {
+  if (RUNTIME) return en ? RUNTIME.en : RUNTIME.cs;
+  return SEED(en);
+}
+
+function SEED(en: boolean): Module[] {
   return [
     { n: "MMM-Brno-Transit", c: en ? "Brno public transit" : "Brněnská MHD", d: en ? "Next tram, bus and trolley departures from a Brno stop, with realtime delays." : "Příští odjezdy tramvají, autobusů a trolejbusů z brněnské zastávky, včetně zpoždění v reálném čase.", t: ["transit", "realtime", "brno"], mini: ["▭ 9 · 3 min", "▢ 67 · 7 min", "", "BRNO-TRANSIT"] },
     { n: "MMM-HA-Reminders", c: en ? "iPhone reminders" : "iPhone připomínky", d: en ? "Your iPhone reminders on the mirror via Home Assistant." : "Vaše iPhone připomínky na zrcadle přes Home Assistant.", t: ["reminders", "productivity", "iphone"], mini: ["REMINDERS", "○ " + (en ? "Call mom" : "Zavolat mámě"), "○ " + (en ? "Invoice" : "Faktura"), "○ " + (en ? "Parcel" : "Balík")] },

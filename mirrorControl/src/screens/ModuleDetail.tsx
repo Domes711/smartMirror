@@ -14,7 +14,7 @@ export default function ModuleDetail() {
   const task = useAppSelector((s) => s.ui);
   if (!detail) return null;
 
-  const isInstalled = installed.includes(detail.n);
+  const isInstalled = detail.installed ?? installed.includes(detail.n);
   const installing = task.taskKind === "install" && task.taskTarget === detail.n;
   const canInstall = !isInstalled && !installing;
   const showHint = isInstalled && !detail.own;
