@@ -12,9 +12,10 @@ body {
   height: 100%;
 }
 body {
-  background: radial-gradient(circle at 50% 38%, #e2e1d6, #cfcec2);
+  background: var(--paper);
   font-family: var(--grotesk);
   color: var(--ink);
+  overscroll-behavior: none; /* no rubber-band/pull-to-refresh in standalone PWA */
 }
 #root {
   height: 100dvh;
