@@ -1,0 +1,61 @@
+@import "./tokens.css";
+@import "./keyframes.css";
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+body {
+  background: radial-gradient(circle at 50% 38%, #e2e1d6, #cfcec2);
+  font-family: var(--grotesk);
+  color: var(--ink);
+}
+#root {
+  height: 100dvh;
+}
+
+button {
+  font-family: inherit;
+}
+input,
+textarea {
+  font-family: var(--grotesk);
+}
+
+/* scrollbars — invisible inside the horizontal strips, slim elsewhere */
+.mc-noscroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.mc-noscroll {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(140, 140, 129, 0.4);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 140, 129, 0.65);
+}
+
+/* hover lift used by many buttons (prototype style-hover) */
+.mc-lift {
+  transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease,
+    border-color 0.16s ease;
+}
+.mc-lift:hover {
+  transform: translateY(-1px);
+}
