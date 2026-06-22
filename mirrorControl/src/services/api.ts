@@ -104,8 +104,16 @@ export const aiSession = (name: string, scope: "draft" | "installed" = "draft") 
   req<{ name: string; scope: string; description: string; prepared: boolean; messages: AiMsg[]; rev: number }>(`/api/modules/session?name=${encodeURIComponent(name)}&scope=${scope}`);
 export const aiChat = (name: string, scope: "draft" | "installed", message: string) =>
   jpost("/api/modules/chat", { name, scope, message });
-export const aiFinalize = (name: string, overwrite = false) =>
-  jpost("/api/modules/finalize", { name, overwrite }) as Promise<{ ok: boolean; name?: string; message?: string; exists?: boolean; error?: string }>;
+/** Finalize returns 409 with {exists:true} when the module exists — read the
+ * body regardless of status so callers can retry with overwrite. */
+export async function aiFinalize(name: string, overwrite = false): Promise<{ ok: boolean; name?: string; message?: string; exists?: boolean; error?: string }> {
+  const res = await fetch("/api/modules/finalize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, overwrite }),
+  });
+  return res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+}
 export const aiDemoUrl = (name: string, scope: "draft" | "installed", rev: number) =>
   `${scope === "installed" ? "/module-installed" : "/module-draft"}/${encodeURIComponent(name)}/demo.html?v=${rev}`;
 
