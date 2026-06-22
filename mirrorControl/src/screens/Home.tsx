@@ -17,11 +17,12 @@ export default function Home() {
   useAppSelector((s) => s.ui.time);
   const connected = useAppSelector((s) => s.mirror.connected);
   const liveData = useAppSelector((s) => s.mirror.live);
+  const mirrorLoading = useAppSelector((s) => s.mirror.loading);
   const activeId = resolveActiveId(scenes);
   const sc = scenes[activeId];
   const regions = sc?.regions ?? {};
   const liveCount = Object.values(regions).reduce((n, a) => n + (a?.length || 0), 0);
-  const activeName = sc ? (en && sc.name_en ? sc.name_en : sc.name) : "—";
+  const activeName = mirrorLoading ? "…" : sc ? (en && sc.name_en ? sc.name_en : sc.name) : "—";
 
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 2px", borderBottom: `1px solid ${C.line}` }}>

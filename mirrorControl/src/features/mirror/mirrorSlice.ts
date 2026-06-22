@@ -2,6 +2,8 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { CatalogEntry, LayoutStore, ModuleInstance } from "@/services/api";
 
 export interface MirrorState {
+  /** initial data load in progress (show a loader instead of seed mocks) */
+  loading: boolean;
   /** backend reachable (REST) */
   connected: boolean;
   /** real data successfully loaded (else the app runs on seed mocks) */
@@ -19,6 +21,7 @@ export interface MirrorState {
 }
 
 const initialState: MirrorState = {
+  loading: true,
   connected: false,
   live: false,
   error: null,
@@ -34,6 +37,9 @@ const mirrorSlice = createSlice({
   name: "mirror",
   initialState,
   reducers: {
+    setLoading(s, a: PayloadAction<boolean>) {
+      s.loading = a.payload;
+    },
     setConnected(s, a: PayloadAction<boolean>) {
       s.connected = a.payload;
     },
