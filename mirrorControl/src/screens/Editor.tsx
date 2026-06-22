@@ -15,10 +15,14 @@ export default function Editor() {
   const s = useAppSelector((st) => st.scenes);
   const installed = useAppSelector((st) => st.modules.installed);
   const deletedMods = useAppSelector((st) => st.modules.deletedMods);
+  const catalogEntries = useAppSelector((st) => st.mirror.catalogEntries);
 
   const editing = s.editing;
   const sc = editing ? s.scenes[editing] : null;
   if (!sc) return null;
+
+  // prefer the live catalog label (Hodiny, Počasí…) for a placeable type
+  const label = (id: string) => catalogEntries.find((c) => c.type === id)?.label || fmod(id, en);
 
   const name = en && sc.name_en ? sc.name_en : sc.name;
   const editMods = Object.values(sc.regions).flat().length;
@@ -30,7 +34,7 @@ export default function Editor() {
 
   // held banner
   const held = !!(s.picked || s.selChip);
-  const heldLabel = s.picked ? `${L.heldPickA} ${fmod(s.picked, en)}` : s.selChip ? `${L.heldMoveA} ${fmod(s.selChip.mod, en)}` : "";
+  const heldLabel = s.picked ? `${L.heldPickA} ${label(s.picked)}` : s.selChip ? `${L.heldMoveA} ${label(s.selChip.mod)}` : "";
   const heldCanDelete = !!(s.selChip && s.palRemove);
 
   const onZoneTap = (rid: RegionId) => {
@@ -108,7 +112,7 @@ export default function Editor() {
                     </span>
                   )}
                 </div>
-                <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, color: used ? "#8C8C81" : picked ? C.bink : C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", maxWidth: "100%" }}>{fmod(m, en)}</span>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, color: used ? "#8C8C81" : picked ? C.bink : C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", maxWidth: "100%" }}>{label(m)}</span>
               </button>
             );
           })}

@@ -110,6 +110,9 @@ false`). `src/services/api.ts` is the typed client for every endpoint.
   the real `/api/modules/*` (Claude Agent SDK + SSE) is not yet wired.
 - The **new-profile wizard** enrolls locally (real per-shot capture under a new
   dataset name + final `/encode` is a follow-up).
-- Creating a **new configured module instance** (the console's field wizard) is
-  not ported; the editor rearranges existing instances. The Settings network
+- The editor offers the **full catalog** (built-in + installed + your own).
+  Placing a type reuses an existing instance (no duplicate) or creates a new
+  one. Types with **required config** (e.g. a calendar id) can't be filled from
+  the app yet — adding one with no existing instance fails on apply with the
+  backend's reason; configure it in the console for now. The Settings network
   **scan** is cosmetic.

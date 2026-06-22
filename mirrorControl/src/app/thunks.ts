@@ -112,6 +112,27 @@ export const confirmDelScene = (): Thunk => (dispatch, getState) => {
 };
 
 /** Region-plus: place held / move selected, with the right toast. */
+/**
+ * Resolve a palette id to a real instance id. A palette entry can be a catalog
+ * TYPE (built-in / installed / own) — placing it reuses an existing instance of
+ * that type (no duplicate), or creates a fresh one. Existing instance ids pass
+ * through unchanged. New instances are added to mirror.layout (persisted on apply).
+ */
+function resolvePlaceId(id: string, dispatch: AppDispatch, getState: () => RootState): string {
+  const m = getState().mirror;
+  if (!m.live) return id;
+  const isType = m.catalogEntries.some((c) => c.type === id);
+  if (!isType) return id; // already an instance id
+  const existing = (m.layout?.instances || []).find((i) => i.type === id)?.id || m.loadedByModule[id]?.[0];
+  if (existing) return existing;
+  const taken = new Set<string>([...(m.layout?.instances || []).map((i) => i.id), ...Object.values(m.loadedByModule).flat()]);
+  let newId = id;
+  let n = 2;
+  while (taken.has(newId)) newId = `${id}-${n++}`;
+  dispatch(mirrorActions.addInstance({ id: newId, type: id, values: {} }));
+  return newId;
+}
+
 export const regionPlus =
   (rid: import("@/types").RegionId): Thunk =>
   (dispatch, getState) => {
@@ -120,15 +141,21 @@ export const regionPlus =
       dispatch(toast(Lof(getState()).tSelect));
       return;
     }
-    const moving = !!s.selChip && !s.picked;
-    dispatch(scenesActions.placeAt(rid));
-    dispatch(toast(moving ? Lof(getState()).tMoved : Lof(getState()).tAdded));
+    if (s.picked) {
+      const id = resolvePlaceId(s.picked, dispatch, getState);
+      dispatch(scenesActions.placeSpecificAt({ rid, id }));
+      dispatch(toast(Lof(getState()).tAdded));
+    } else {
+      dispatch(scenesActions.placeAt(rid)); // moving the selected chip
+      dispatch(toast(Lof(getState()).tMoved));
+    }
   };
 
 export const addModToZone =
   (rid: import("@/types").RegionId, mod: string): Thunk =>
   (dispatch, getState) => {
-    dispatch(scenesActions.addModToZone({ rid, mod }));
+    const id = resolvePlaceId(mod, dispatch, getState);
+    dispatch(scenesActions.addModToZone({ rid, mod: id }));
     dispatch(toast(Lof(getState()).tAdded));
   };
 

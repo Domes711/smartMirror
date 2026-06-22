@@ -223,6 +223,8 @@ function ZoneSheet() {
   const { L, en } = useT();
   const s = useAppSelector((st) => st.scenes);
   const installed = useAppSelector((st) => st.modules.installed);
+  const catalogEntries = useAppSelector((st) => st.mirror.catalogEntries);
+  const label = (id: string) => catalogEntries.find((c) => c.type === id)?.label || fmod(id, en);
   const rid = s.zoneOpen as RegionId | null;
   if (!rid || !s.editing) return null;
   const reg = s.scenes[s.editing].regions[rid] || [];
@@ -241,7 +243,7 @@ function ZoneSheet() {
           {reg.map((m, i) => (
             <div key={m} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.line}` }}>
               <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, width: 22 }}>{String(i + 1).padStart(2, "0")}</span>
-              <span style={{ flex: 1, fontSize: 14 }}>{fmod(m, en)}</span>
+              <span style={{ flex: 1, fontSize: 14 }}>{label(m)}</span>
               <button onClick={() => dispatch(scenesActions.moveModInZone({ rid, idx: i, dir: -1 }))} style={arrowBtn(i === 0)}>↑</button>
               <button onClick={() => dispatch(scenesActions.moveModInZone({ rid, idx: i, dir: 1 }))} style={arrowBtn(i === reg.length - 1)}>↓</button>
               <button onClick={() => dispatch(scenesActions.removeMod({ rid, mod: m }))} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.signal, fontSize: 18, lineHeight: 1 }}>×</button>
@@ -258,7 +260,7 @@ function ZoneSheet() {
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {addable.map((m) => (
-            <button key={m} onClick={() => dispatch(fx.addModToZone(rid, m))} style={{ fontFamily: "var(--mono)", fontSize: 11, border: `1px solid ${C.line}`, borderRadius: 999, padding: "8px 13px", cursor: "pointer", background: "transparent", color: C.ink }}>+ {fmod(m, en)}</button>
+            <button key={m} onClick={() => dispatch(fx.addModToZone(rid, m))} style={{ fontFamily: "var(--mono)", fontSize: 11, border: `1px solid ${C.line}`, borderRadius: 999, padding: "8px 13px", cursor: "pointer", background: "transparent", color: C.ink }}>+ {label(m)}</button>
           ))}
         </div>
       )}
