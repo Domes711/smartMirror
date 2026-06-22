@@ -9,6 +9,9 @@ let config = {
     port: 8080,
     basePath: "/",
     ipWhitelist: [],             // [] = allow any client (private LAN); restrict if needed
+    // Allow the mirror page to be embedded (live preview in the Mirror Control app).
+    // frameguard:false drops X-Frame-Options; CSP is already off in MM defaults.
+    httpHeaders: { contentSecurityPolicy: false, crossOriginOpenerPolicy: false, crossOriginEmbedderPolicy: false, crossOriginResourcePolicy: false, originAgentCluster: false, frameguard: false },
     useHttps: false,
     httpsPrivateKey: "",
     httpsCertificate: "",

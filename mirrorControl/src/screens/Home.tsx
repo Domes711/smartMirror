@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { Mirror } from "@/components/Mirror";
+import { MirrorStream } from "@/components/MirrorStream";
 import { MirrorLoader } from "@/components/MirrorLoader";
 import { PillButton, tokens as C, h1 } from "@/components/ui";
 import * as fx from "@/app/thunks";
@@ -38,7 +39,8 @@ export default function Home() {
             <MirrorLoader />
           ) : (
             <div style={{ position: "relative", animation: "mc-fade .45s ease" }}>
-              <Mirror regions={regions} mode="preview" />
+              {/* real mirror when connected, synthetic preview as offline fallback */}
+              {connected ? <MirrorStream /> : <Mirror regions={regions} mode="preview" />}
               <div style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 6, background: "rgba(26,26,23,.55)", border: "1px solid rgba(229,72,47,.5)", borderRadius: 999, padding: "4px 9px", backdropFilter: "blur(2px)" }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.signal }} />
                 <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: C.signal }}>{L.live}</span>
