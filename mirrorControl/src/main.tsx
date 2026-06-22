@@ -6,6 +6,7 @@ import { scenesActions } from "@/features/scenes/scenesSlice";
 import { tickClock, startLiveLoad } from "@/app/thunks";
 import { connectMirror } from "@/app/connect";
 import { startMirrorBridge } from "@/services/mirrorBridge";
+import { startScenePreview } from "@/services/scenePreview";
 import App from "./App";
 import "./styles/global.css";
 
@@ -17,6 +18,7 @@ store.dispatch(tickClock());
 store.dispatch(startLiveLoad());
 setInterval(() => store.dispatch(tickClock()), 10000);
 startMirrorBridge(store);
+startScenePreview(store);
 store.dispatch(connectMirror());
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

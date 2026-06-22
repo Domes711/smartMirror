@@ -354,3 +354,42 @@
 .profile.error + .mmp-status {
     color: rgba(255,255,255,0.55);
 }
+
+/* Scene-setup mode — shown while a scene is being edited in the Mirror Control
+ * app (PROFILE_PREVIEW carries scene meta). Replaces the Face ID scanner with
+ * the scene's name + the time window it is scheduled for. */
+.mmp[data-state="editing"] { min-height: auto; }
+.mmp-edit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 16px;
+    border: 1px solid rgba(255, 195, 77, 0.55);
+    border-radius: 14px;
+    background: rgba(255, 195, 77, 0.10);
+    animation: mmp-edit-pulse 2.2s ease-in-out infinite;
+}
+.mmp-edit-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #ffc34d;
+    font-family: "Space Mono", monospace;
+}
+.mmp-edit-name {
+    font-size: 22px;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1.1;
+}
+.mmp-edit-time {
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: "Space Mono", monospace;
+}
+@keyframes mmp-edit-pulse {
+    0%, 100% { border-color: rgba(255, 195, 77, 0.45); }
+    50% { border-color: rgba(255, 195, 77, 0.9); }
+}

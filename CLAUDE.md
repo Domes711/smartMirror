@@ -304,7 +304,12 @@ unmodified upstream. Our modules (`modules/MMM-*`) are not part of this delta.
     region/`.container` named in the active layout and shows it; hides the rest
     (lockString `mm-profile`). The sole placement mechanism.
   - socket handlers **`PROFILE_STATE`** (render Face ID indicator + projectLayout)
-    and **`PROFILE_PREVIEW`** (projectLayout only, for the console live preview).
+    and **`PROFILE_PREVIEW`** (projectLayout for the live preview; when it carries
+    `scene` meta the indicator flips to **scene-setup mode** via
+    `renderSceneEditing` — shows the edited scene's name + time window. The app
+    publishes `smartmirror/profile/preview` `{layout, scene}` while a scene is
+    open in the editor and `{exit:true}` on leave; `profile.js` restores the live
+    state with `_push()`).
   - **Face ID indicator**: `buildProfileHTML` / `renderProfileIndicator` build a
     `#mm-profile` element into the `top_center` region (state → `.profile` class
     `scanning`/`success`/`error`).

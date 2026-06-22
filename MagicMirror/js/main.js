@@ -117,6 +117,34 @@ const MM = (function () {
 	};
 
 	/**
+	 * Render the indicator in "scene editing" mode: instead of the Face ID
+	 * scanner, show the scene being set up in the app (its name + when it shows).
+	 * Driven by PROFILE_PREVIEW when it carries `scene` meta.
+	 * @param {{name?:string,time?:string,eyebrow?:string}} scene scene meta
+	 */
+	const renderSceneEditing = function (scene) {
+		let el = document.getElementById("mm-profile");
+		if (!el) {
+			const wrapper = selectWrapper("top_center");
+			if (!wrapper) return;
+			el = document.createElement("div");
+			el.id = "mm-profile";
+			wrapper.prepend(el);
+		}
+		el.className = "module mmp";
+		el.dataset.state = "editing";
+		el.style.position = "";
+		const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+		el.innerHTML =
+			'<div class="mmp-edit">'
+			+ '<div class="mmp-edit-eyebrow">' + esc(scene.eyebrow || "EDITING") + '</div>'
+			+ '<div class="mmp-edit-name">' + esc(scene.name || "") + '</div>'
+			+ (scene.time ? '<div class="mmp-edit-time">' + esc(scene.time) + '</div>' : '')
+			+ '</div>';
+		updateWrapperStates();
+	};
+
+	/**
 	 * Create dom objects for all modules that are configured for a specific position.
 	 */
 	const createDomObjects = function () {
@@ -760,8 +788,9 @@ const MM = (function () {
 					projectLayout(layout || []);
 				});
 
-				socket.on("PROFILE_PREVIEW", ({ layout }) => {
+				socket.on("PROFILE_PREVIEW", ({ layout, scene }) => {
 					projectLayout(layout || []);
+					if (scene) renderSceneEditing(scene);
 				});
 
 				// Hot-load a brand-new module without a page reload.

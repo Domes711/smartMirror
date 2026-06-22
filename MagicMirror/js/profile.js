@@ -116,8 +116,10 @@ class ProfileManager {
 				this._onReset();
 			} else if (topic === TOPIC_PREVIEW) {
 				const data = JSON.parse(payload);
+				// `{exit:true}` leaves the app's scene-setup preview → restore live state
+				if (data && data.exit) { this._push(); return; }
 				const layout = Array.isArray(data) ? data : (data.layout || []);
-				this.io.emit("PROFILE_PREVIEW", { layout });
+				this.io.emit("PROFILE_PREVIEW", { layout, scene: (data && data.scene) || null });
 			} else if (topic === TOPIC_RELOAD) {
 				this._loadPages();
 				this._push();
