@@ -74,7 +74,7 @@ export const putLayout = (store: LayoutStore) => req<{ ok: boolean }>("/layout",
 export const applyLayout = () => jpost("/layout/apply") as Promise<{ ok: boolean; restarted: boolean; reload_needed: boolean }>;
 
 /* ---------- module catalog (for the layout editor) ---------- */
-export interface CatalogField { key: string; label: string; required?: boolean; type?: string; placeholder?: string; options?: { value: string; label: string }[] }
+export interface CatalogField { key: string; label: string; required?: boolean; type?: string; placeholder?: string; help?: string; options?: { value: string; label: string }[] }
 export interface CatalogEntry { type: string; module: string; label: string; fields?: CatalogField[] }
 export const getModules = () => req<{ catalog: CatalogEntry[]; registered_ids: string[]; loaded_by_module: Record<string, string[]>; positions: string[] }>("/modules");
 

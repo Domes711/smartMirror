@@ -33,6 +33,11 @@ export interface ScenesState {
   // schedule windows
   windows: TimeWindow[];
   winSeq: number;
+  // config modal (required fields when adding a new instance)
+  cfgOpen: boolean;
+  cfgType: string | null;
+  cfgRid: RegionId | null;
+  cfgValues: Record<string, string>;
 }
 
 const seedScenes: Record<string, Scene> = {
@@ -66,6 +71,10 @@ const initialState: ScenesState = {
   editBackModal: false,
   windows: [{ time: "10:00–18:00", scene: "day" }],
   winSeq: 1,
+  cfgOpen: false,
+  cfgType: null,
+  cfgRid: null,
+  cfgValues: {},
 };
 
 const scenesSlice = createSlice({
@@ -182,6 +191,26 @@ const scenesSlice = createSlice({
         s.dirty += 1;
       }
     },
+    // --- config modal (required fields for a new instance) ---
+    openCfgModal(s, a: PayloadAction<{ type: string; rid: RegionId }>) {
+      s.cfgOpen = true;
+      s.cfgType = a.payload.type;
+      s.cfgRid = a.payload.rid;
+      s.cfgValues = {};
+      s.picked = null;
+      s.selChip = null;
+      s.zoneOpen = null;
+    },
+    setCfgValue(s, a: PayloadAction<{ key: string; value: string }>) {
+      s.cfgValues[a.payload.key] = a.payload.value;
+    },
+    closeCfgModal(s) {
+      s.cfgOpen = false;
+      s.cfgType = null;
+      s.cfgRid = null;
+      s.cfgValues = {};
+    },
+
     /** Place a specific (already-resolved) id into a region; clears `picked`. */
     placeSpecificAt(s, a: PayloadAction<{ rid: RegionId; id: string }>) {
       if (!s.editing) return;

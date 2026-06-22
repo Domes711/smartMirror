@@ -21,6 +21,7 @@ export function Overlays() {
       <UninstallModal />
       <DeleteModModal />
       <ZoneSheet />
+      <ConfigModal />
       <PhotoSheet />
       <PhotoDelModal />
       <ProfileDelModal />
@@ -265,6 +266,58 @@ function ZoneSheet() {
         </div>
       )}
     </BottomSheet>
+  );
+}
+
+/* ---------- required-config modal (adding a new instance) ---------- */
+function ConfigModal() {
+  const dispatch = useAppDispatch();
+  const { L } = useT();
+  const open = useAppSelector((s) => s.scenes.cfgOpen);
+  const type = useAppSelector((s) => s.scenes.cfgType);
+  const values = useAppSelector((s) => s.scenes.cfgValues);
+  const entry = useAppSelector((s) => s.mirror.catalogEntries.find((c) => c.type === type));
+  if (!open || !type || !entry) return null;
+  const fields = entry.fields || [];
+  const missing = fields.some((f) => f.required && !(values[f.key] || "").trim());
+
+  return (
+    <Modal open onClose={() => dispatch(scenesActions.closeCfgModal())}>
+      <p style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: C.mute, margin: "0 0 4px" }}>{L.cfgTitle}</p>
+      <Title>{entry.label || type}</Title>
+      <p style={{ fontSize: 13, lineHeight: 1.5, color: C.ink2, margin: "0 0 16px" }}>{L.cfgHint}</p>
+      {fields.map((f) => {
+        const v = values[f.key] ?? "";
+        const set = (val: string) => dispatch(scenesActions.setCfgValue({ key: f.key, value: val }));
+        return (
+          <div key={f.key} style={{ marginBottom: 13 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 7, fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>
+              {f.label || f.key}
+              {f.required && <span style={{ fontSize: 9, letterSpacing: ".06em", textTransform: "uppercase", color: C.signal, border: `1px solid ${C.signal}`, borderRadius: 999, padding: "1px 7px" }}>{L.cfgReq}</span>}
+            </label>
+            {f.options && f.options.length ? (
+              <select value={v} onChange={(e) => set(e.target.value)} style={{ ...fld, marginBottom: 0 }}>
+                <option value="" disabled>—</option>
+                {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ) : (
+              <input
+                value={v}
+                onChange={(e) => set(e.target.value)}
+                placeholder={f.placeholder || ""}
+                type={f.type === "number" ? "number" : "text"}
+                style={{ ...fld, marginBottom: 0, borderColor: f.required && !v.trim() ? C.line : C.line }}
+              />
+            )}
+            {f.help && <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: C.mute, margin: "5px 0 0" }}>{f.help}</p>}
+          </div>
+        );
+      })}
+      <Actions>
+        {cancelBtn(() => dispatch(scenesActions.closeCfgModal()), L.cancel)}
+        {solidBtn(() => dispatch(fx.submitCfg()), L.cfgAdd, !missing)}
+      </Actions>
+    </Modal>
   );
 }
 
