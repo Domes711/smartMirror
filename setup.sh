@@ -5,8 +5,9 @@
 #   git clone <repo> smartMirror
 #   cd smartMirror && ./setup.sh
 #
-# Runs each component's own setup.sh (camera, radar, console, MagicMirror) and
-# installs the sudoers rule that lets the console control the daemons.
+# Runs each component's own setup.sh (camera, radar, console, MagicMirror,
+# mirrorControl app) and installs the sudoers rule that lets the console
+# control the daemons.
 #
 # NOTE: components are independent — a failure in one (e.g. a slow dlib/mediapipe
 # build in camera) must NOT abort the rest, so MagicMirror still comes up.
@@ -77,10 +78,11 @@ else
   echo "✗ mm-store clone selhal ($MM_STORE_REPO) — zkontroluj přístup (SSH klíč) / nastav MM_STORE_REPO; pokračuji"
 fi
 
-run "1/4  Camera (face recognition)" "$DIR/camera/setup.sh"
-run "2/4  Radar (LD2450)"            "$DIR/ld2450/setup.sh"
-run "3/4  Mirror console"            "$DIR/mirror-console/setup.sh"
-run "4/4  MagicMirror (+ pm2)"       "$DIR/MagicMirror/setup.sh"
+run "1/5  Camera (face recognition)" "$DIR/camera/setup.sh"
+run "2/5  Radar (LD2450)"            "$DIR/ld2450/setup.sh"
+run "3/5  Mirror console"            "$DIR/mirror-console/setup.sh"
+run "4/5  MagicMirror (+ pm2)"       "$DIR/MagicMirror/setup.sh"
+run "5/5  Mirror Control app"        "$DIR/mirrorControl/setup.sh"
 
 echo
 echo "════════════════════════════════════════════"
@@ -100,5 +102,8 @@ echo "       ~/mirror-backup-*/MagicMirror-config/config.js → MagicMirror/conf
 echo
 echo "Ověření:"
 echo "  curl -s http://127.0.0.1:8000/healthz; echo      # konzole"
-echo "  systemctl status ld2450 mirror-console-backend mirror-console-web"
+echo "  curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:8090/   # Control app"
+echo "  systemctl status ld2450 mirror-console-backend mirror-console-web mirror-control"
 echo "  pm2 status MagicMirror"
+echo
+echo "Mirror Control app:  http://<pi>:8090"
