@@ -81,12 +81,35 @@ src/
   surfaces, hairline rules, one functional red (active/selected), one butter
   yellow (held/highlight). Fonts: Space Grotesk + Space Mono.
 
-## What's still simulated
+## Real data vs. fallback
 
-Faithful to the prototype, these keep their UI states but the data is mocked
-until wired to the backend: install/retrain **progress bars** (hook
-`rest.installStatus`), the **AI agent** 4-step status (swap for a streamed LLM
-call), the widget **store** (16 seed widgets / "1412" — point at the real
-MagicMirror registry), and the network **scan** in Settings. The contract is in
-`src/services/` — replace the simulated thunks in `app/thunks.ts` with real
-MQTT/REST calls without touching the UI.
+On startup `connectMirror()` (`src/app/connect.ts`) pulls **real data** from the
+`mirror-console` backend and maps it into the existing slices, so screens need
+no changes:
+
+- **Store / widgets** ← `GET /store/catalog` + `/modules` → the runtime widget
+  catalog (`setRuntimeCatalog`), with real screenshots, `installed` flags, and
+  community/own tabs. Install/uninstall hit `/store/install` (+ status polling)
+  and `/store/uninstall`.
+- **Profiles / users** ← `GET /profiles`; opening one loads its windows and its
+  face photos from `/dataset` (real images via `/photo`). Capture/delete/retrain
+  call `/capture`, `/dataset` (DELETE), `/encode`; deletion calls `/profiles`.
+- **Scenes / layout** ← `GET /layout` (`layout_store.json`): each profile's time
+  **windows** become scenes (cron `from`/`to` → hours, `{id,position}` →
+  regions). Saving a scene / Apply serializes back via `PUT /layout` +
+  `POST /layout/apply`.
+- **Live state** ← MQTT over WebSocket (presence, radar targets, recognition).
+- **Radar** toggle also flips the `ld2450` unit via `POST /radar`.
+
+If the backend is unreachable (e.g. plain `npm run dev` with no Pi), the app
+**falls back to the seed mocks** and keeps working for demos (`mirror.live =
+false`). `src/services/api.ts` is the typed client for every endpoint.
+
+### Still local / simulated
+- The **AI module builder** (Workshop) still runs its 4-step status locally —
+  the real `/api/modules/*` (Claude Agent SDK + SSE) is not yet wired.
+- The **new-profile wizard** enrolls locally (real per-shot capture under a new
+  dataset name + final `/encode` is a follow-up).
+- Creating a **new configured module instance** (the console's field wizard) is
+  not ported; the editor rearranges existing instances. The Settings network
+  **scan** is cosmetic.

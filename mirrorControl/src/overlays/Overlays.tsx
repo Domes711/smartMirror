@@ -280,7 +280,9 @@ function PhotoSheet() {
   })();
   return (
     <BottomSheet open onClose={() => dispatch(profilesActions.closePhotoSheet())}>
-      <div style={{ width: "100%", aspectRatio: "1 / 1", maxHeight: 240, borderRadius: 16, background: `linear-gradient(150deg, hsl(${photo.hue},34%,64%), hsl(${(photo.hue + 38) % 360},40%,40%))`, marginBottom: 14 }} />
+      <div style={{ width: "100%", aspectRatio: "1 / 1", maxHeight: 240, borderRadius: 16, overflow: "hidden", background: `linear-gradient(150deg, hsl(${photo.hue},34%,64%), hsl(${(photo.hue + 38) % 360},40%,40%))`, marginBottom: 14 }}>
+        {photo.src && <img src={photo.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+      </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, fontFamily: "var(--mono)", fontSize: 12 }}>
         <span><b>{L.photoWord} {photo.n}</b><span style={{ color: C.mute }}> · {date}</span></span>
         <span style={{ color: C.mute }}>1080×1080</span>

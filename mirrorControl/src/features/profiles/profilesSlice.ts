@@ -47,6 +47,14 @@ const profilesSlice = createSlice({
   name: "profiles",
   initialState,
   reducers: {
+    /** Replace the profile list from the live mirror (/profiles). */
+    loadProfiles(s, a: PayloadAction<Profile[]>) {
+      s.profiles = a.payload;
+    },
+    /** Replace face photos for the open profile from the live dataset. */
+    loadFacePhotos(s, a: PayloadAction<FacePhoto[]>) {
+      s.facePhotos = a.payload;
+    },
     openProfile(s, a: PayloadAction<string>) {
       s.profileTab = "scenes";
       s.photoSheet = null;
@@ -88,6 +96,13 @@ const profilesSlice = createSlice({
     resetSession(s, a: PayloadAction<PhotoSource>) {
       s.photoSource = a.payload;
       s.sessionPhotos = [];
+    },
+    /** Append a real captured photo (from the live camera dataset). */
+    pushRealPhoto(s, a: PayloadAction<{ file: string; src: string }>) {
+      const n = s.facePhotos.reduce((m, p) => Math.max(m, p.n), 0) + 1;
+      const ph: FacePhoto = { id: a.payload.file, file: a.payload.file, n, hue: (n * 47 + 18) % 360, src: a.payload.src };
+      s.facePhotos.push(ph);
+      s.sessionPhotos.push(ph);
     },
     capturePhoto(s, a: PayloadAction<{ toSession: boolean }>) {
       const n = s.facePhotos.reduce((m, p) => Math.max(m, p.n), 0) + 1;

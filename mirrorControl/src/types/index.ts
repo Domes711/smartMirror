@@ -77,6 +77,11 @@ export interface Module {
   t: string[];
   own?: boolean;
   mini: string[];
+  /** Real store thumbnail/screenshot URL (when connected to a live mirror). */
+  img?: string;
+  /** Real store repo URL (for the README fetch). */
+  url?: string;
+  installed?: boolean;
 }
 
 /** Work-in-progress AI widget. c/ce + d/de carry CS/EN variants. */
@@ -102,6 +107,9 @@ export interface FacePhoto {
   id: string;
   hue: number;
   n: number;
+  /** Real photo URL + backend filename (when connected to a live mirror). */
+  src?: string;
+  file?: string;
 }
 
 export type ChatRole = "me" | "bot";

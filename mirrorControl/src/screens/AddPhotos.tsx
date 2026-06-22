@@ -35,7 +35,11 @@ export default function AddPhotos() {
         <div className="mc-noscroll" style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 0 4px" }}>
           {session.map((ph) => (
             <button key={ph.id} onClick={() => dispatch(profilesActions.openPhotoSheet(ph.id))} style={{ position: "relative", flex: "0 0 auto", width: 60, height: 60, border: "none", borderRadius: 11, background: `linear-gradient(150deg, hsl(${ph.hue},34%,64%), hsl(${(ph.hue + 38) % 360},40%,40%))`, cursor: "pointer", overflow: "hidden", padding: 0 }}>
-              <svg viewBox="0 0 24 24" style={{ position: "absolute", left: "50%", top: "54%", transform: "translate(-50%,-50%)", width: "46%", height: "46%", fill: "rgba(255,255,255,.34)" }}><circle cx="12" cy="8.4" r="4.1" /><path d="M4.5 20.5c0-4.2 3.4-6.6 7.5-6.6s7.5 2.4 7.5 6.6z" /></svg>
+              {ph.src ? (
+                <img src={ph.src} alt="" loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <svg viewBox="0 0 24 24" style={{ position: "absolute", left: "50%", top: "54%", transform: "translate(-50%,-50%)", width: "46%", height: "46%", fill: "rgba(255,255,255,.34)" }}><circle cx="12" cy="8.4" r="4.1" /><path d="M4.5 20.5c0-4.2 3.4-6.6 7.5-6.6s7.5 2.4 7.5 6.6z" /></svg>
+              )}
             </button>
           ))}
         </div>

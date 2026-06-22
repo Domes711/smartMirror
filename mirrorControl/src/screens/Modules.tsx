@@ -10,12 +10,20 @@ export default function Modules() {
   const dispatch = useAppDispatch();
   const { L, en } = useT();
   const m = useAppSelector((s) => s.modules);
+  const live = useAppSelector((s) => s.mirror.live);
 
   const all = STORE(en).filter((x) => !m.deletedMods.includes(x.n));
+  const isInstalled = (x: { n: string; installed?: boolean }) => x.installed ?? m.installed.includes(x.n);
+  const ownCount = live ? all.filter((x) => x.own).length : all.length;
+  const installedCount = live ? all.filter(isInstalled).length : m.installed.length;
+  const browseCount = live ? all.filter((x) => !x.own).length : BROWSE_COUNT;
+
   let mods = all;
-  if (m.modFilter === "installed") mods = all.filter((x) => m.installed.includes(x.n));
+  if (m.modFilter === "mine") mods = live ? all.filter((x) => x.own) : all;
+  else if (m.modFilter === "installed") mods = all.filter(isInstalled);
   else if (m.modFilter === "search") {
-    if (m.searchCat) mods = all.filter((x) => x.t.includes(m.searchCat!));
+    mods = live ? all.filter((x) => !x.own) : all;
+    if (m.searchCat) mods = mods.filter((x) => x.t.includes(m.searchCat!));
     if (m.search.trim()) {
       const q = m.search.trim().toLowerCase();
       mods = mods.filter((x) => (x.n + " " + x.c + " " + x.d + " " + x.t.join(" ")).toLowerCase().includes(q));
@@ -38,13 +46,13 @@ export default function Modules() {
           <h1 style={h1}>{L.modulesTitle}</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 9, border: `1px solid ${C.line}`, borderRadius: 999, padding: "6px 14px 6px 8px", fontFamily: "var(--mono)", fontSize: 12 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.butter, border: `1px solid ${C.bline}` }} />
-            <span>{BROWSE_COUNT}</span>
+            <span>{browseCount}</span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 20, borderBottom: `1px solid ${C.line}`, margin: "31px 0 18px" }}>
-          <Tab id="mine" label={`${L.pillMine} · ${all.length}`} />
-          <Tab id="installed" label={`${L.pillInstalled} · ${m.installed.length}`} />
-          <Tab id="search" label={`${L.pillSearch} · ${BROWSE_COUNT}`} />
+          <Tab id="mine" label={`${L.pillMine} · ${ownCount}`} />
+          <Tab id="installed" label={`${L.pillInstalled} · ${installedCount}`} />
+          <Tab id="search" label={`${L.pillSearch} · ${browseCount}`} />
         </div>
 
         {m.modFilter === "mine" && (
@@ -77,7 +85,7 @@ export default function Modules() {
               <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{x.c}</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "3px 0 5px" }}>
                 <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>{x.n}</span>
-                {m.installed.includes(x.n) && <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, letterSpacing: ".06em", textTransform: "uppercase", color: C.mute, border: `1px solid ${C.line}`, borderRadius: 999, padding: "3px 9px" }}>✓ {L.installed}</span>}
+                {isInstalled(x) && <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, letterSpacing: ".06em", textTransform: "uppercase", color: C.mute, border: `1px solid ${C.line}`, borderRadius: 999, padding: "3px 9px" }}>✓ {L.installed}</span>}
               </div>
               <p style={{ fontSize: 13, lineHeight: 1.4, color: C.ink2, margin: 0 }}>{x.d}</p>
               <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 9 }}>

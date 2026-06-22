@@ -71,6 +71,16 @@ const scenesSlice = createSlice({
   name: "scenes",
   initialState,
   reducers: {
+    /** Replace the scene set from the live mirror (per-profile windows). */
+    loadFromBackend(s, a: PayloadAction<{ scenes: Record<string, Scene>; activeScene: string; windows: TimeWindow[] }>) {
+      s.scenes = a.payload.scenes;
+      s.activeScene = a.payload.activeScene;
+      s.windows = a.payload.windows;
+      s.live = clone(s.scenes[s.activeScene]?.regions ?? {});
+      s.editing = null;
+      s.picked = null;
+      s.selChip = null;
+    },
     /** Snapshot current activeScene regions into `live`. */
     syncLiveFromActive(s) {
       s.live = clone(s.scenes[s.activeScene].regions);
