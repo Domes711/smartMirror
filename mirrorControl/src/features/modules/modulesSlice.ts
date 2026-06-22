@@ -245,7 +245,6 @@ const modulesSlice = createSlice({
     aiUserSend(s, a: PayloadAction<string>) {
       s.wsEditing = true;
       s.chat.push({ role: "me", text: a.payload });
-      s.chat.push({ role: "bot", text: "" }); // accumulator
       s.aiStreaming = true;
       s.chatDraft = "";
     },

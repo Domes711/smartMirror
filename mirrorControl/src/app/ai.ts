@@ -9,6 +9,7 @@ import { refreshStoreData } from "./connect";
 
 type Thunk = (dispatch: AppDispatch, getState: () => RootState) => void;
 const L = (s: RootState) => LABELS[s.ui.lang] as Record<string, string>;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Is the real AI builder usable right now? */
 export const aiReady = (s: RootState) => s.mirror.live && s.modules.aiAvailable;
@@ -19,45 +20,16 @@ function mapMsgs(msgs: api.AiMsg[]): ChatMsg[] {
     .map((m) => ({
       role: m.role === "user" ? "me" : "bot",
       kind: m.role === "sys" ? "status" : undefined,
-      text: (m.text || "").trim() + (m.files && m.files.length ? `\n— ${m.files.join(", ")}` : ""),
+      // keep chat plain — never expose file names / technical detail
+      text: (m.text || "").trim() || "✓",
     }));
 }
+const asstCount = (msgs: api.AiMsg[]) => msgs.filter((m) => m.role === "assistant").length;
 
-// --- single live SSE stream ---
-let es: EventSource | null = null;
-let esKey = "";
-
-function openStream(name: string, scope: "draft" | "installed", dispatch: AppDispatch, getState: () => RootState) {
-  const key = `${scope}/${name}`;
-  if (es && esKey === key) return;
-  closeAiStream();
-  esKey = key;
-  es = api.aiStream(name, scope, (ev) => {
-    if (ev.type === "text" && ev.text) {
-      dispatch(modulesActions.aiAppendText(ev.text));
-    } else if (ev.type === "error") {
-      dispatch(modulesActions.aiError(ev.text || "error"));
-      dispatch(uiActions.agentDone({ ready: false }));
-    } else if (ev.type === "done") {
-      dispatch(modulesActions.aiStreamDone({ rev: ev.rev || 0 }));
-      dispatch(uiActions.agentDone({ ready: getState().ui.screen !== "workshop" }));
-    }
-    // "connected" / "tool": no visible change
-  });
-}
-
-export function closeAiStream(): void {
-  if (es) {
-    es.close();
-    es = null;
-    esKey = "";
-  }
-}
-
-/** Open the workshop on a real draft/installed module: load session + stream. */
+/** Open the workshop on a real draft/installed module: load its session. */
 export const openAiWorkshop =
   (name: string, scope: "draft" | "installed" = "draft"): Thunk =>
-  async (dispatch, getState) => {
+  async (dispatch) => {
     dispatch(modulesActions.aiOpen({ name, scope }));
     dispatch(nav("workshop", "modules"));
     try {
@@ -66,7 +38,6 @@ export const openAiWorkshop =
     } catch (e) {
       dispatch(modulesActions.aiError(String(e)));
     }
-    openStream(name, scope, dispatch, getState);
   };
 
 /** Create a real scaffolded draft from the create form, then open it. */
@@ -84,22 +55,60 @@ export const aiCreateAndOpen = (): Thunk => async (dispatch, getState) => {
   }
 };
 
-/** Send a chat message to the agent; the reply streams in over SSE. */
+// one in-flight poll loop at a time; newer sends supersede older ones
+let pollToken = 0;
+
+/** Send a message to the agent and poll the session until the turn completes. */
 export const aiSend =
   (text?: string): Thunk =>
   async (dispatch, getState) => {
     const m = getState().modules;
     const v = (text ?? m.chatDraft).trim();
     if (!v || m.aiStreaming) return;
-    dispatch(modulesActions.aiUserSend(v));
-    dispatch(uiActions.agentStart({ status: L(getState()).agentWorking, mod: m.workshopMod }));
-    openStream(m.workshopMod, m.aiScope, dispatch, getState);
+    const name = m.workshopMod;
+    const scope = m.aiScope;
+
+    // baseline number of assistant replies before this turn
+    let baseline = -1;
     try {
-      await api.aiChat(m.workshopMod, m.aiScope, v);
+      baseline = asstCount((await api.aiSession(name, scope)).messages);
+    } catch {
+      /* fall back to first poll establishing the baseline */
+    }
+
+    dispatch(modulesActions.aiUserSend(v));
+    dispatch(uiActions.agentStart({ status: L(getState()).agentWorking, mod: name }));
+
+    try {
+      await api.aiChat(name, scope, v); // kicks the agent (runs server-side)
     } catch (e) {
       dispatch(modulesActions.aiError(String(e)));
       dispatch(uiActions.agentDone({ ready: false }));
+      return;
     }
+
+    const token = ++pollToken;
+    for (let i = 0; i < 120; i++) {
+      await sleep(1500);
+      if (token !== pollToken) return; // superseded by a newer send
+      if (getState().modules.workshopMod !== name) return; // user left this module
+      let s: Awaited<ReturnType<typeof api.aiSession>>;
+      try {
+        s = await api.aiSession(name, scope);
+      } catch {
+        continue;
+      }
+      const asst = asstCount(s.messages);
+      if (baseline < 0) baseline = asst; // couldn't get baseline → set, catch next turn
+      else if (asst > baseline) {
+        dispatch(modulesActions.aiSetSession({ messages: mapMsgs(s.messages), rev: s.rev }));
+        dispatch(uiActions.agentDone({ ready: getState().ui.screen !== "workshop" }));
+        return;
+      }
+    }
+    // timed out
+    dispatch(modulesActions.aiError(getState().ui.lang === "en" ? "The agent is taking long — try again." : "Agent běží dlouho — zkus to znovu."));
+    dispatch(uiActions.agentDone({ ready: false }));
   };
 
 /** Finalize: install the draft onto the mirror + register it in the catalog. */
@@ -107,8 +116,15 @@ export const aiInstall = (): Thunk => async (dispatch, getState) => {
   const name = getState().modules.workshopMod;
   const lab = L(getState());
   dispatch(uiActions.taskStart({ label: `${lab.taskInstall} ${name}`, kind: "install", target: name }));
+  // finalize does npm install + pm2 restart (slow) — crawl the bar so it lives
+  const crawl = setInterval(() => {
+    const p = getState().ui.taskPct;
+    dispatch(uiActions.taskProgress(Math.min(92, p + 3 + Math.random() * 6)));
+  }, 700);
   try {
-    const r = await api.aiFinalize(name, false);
+    let r = await api.aiFinalize(name, false);
+    if (!r.ok && r.exists) r = await api.aiFinalize(name, true); // overwrite a previous attempt
+    clearInterval(crawl);
     if (!r.ok) {
       dispatch(uiActions.taskClear());
       dispatch(toast(r.error || lab.tInstalled));
@@ -116,13 +132,13 @@ export const aiInstall = (): Thunk => async (dispatch, getState) => {
     }
     dispatch(uiActions.taskProgress(100));
     await dispatch(refreshStoreData());
-    closeAiStream();
     dispatch(nav("modules", "modules"));
     setTimeout(() => {
       dispatch(uiActions.taskClear());
       dispatch(toast(lab.tInstalled));
     }, 400);
   } catch (e) {
+    clearInterval(crawl);
     dispatch(uiActions.taskClear());
     dispatch(toast(String(e)));
   }
