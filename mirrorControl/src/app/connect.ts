@@ -114,16 +114,10 @@ export function scenesToStore(store: LayoutStore, userKey: string, scenes: Recor
     };
   }
   next.windows[userKey] = wins;
-
-  // every id referenced by a layout must have an instance, or PUT /layout 400s.
-  const have = new Set((next.instances || []).map((i) => i.id));
-  const referenced = new Set<string>();
-  for (const u of Object.keys(next.windows)) for (const k of Object.keys(next.windows[u])) for (const e of next.windows[u][k].layout) referenced.add(e.id);
-  for (const u of Object.keys(next.defaults)) for (const e of next.defaults[u]) referenced.add(e.id);
-  next.instances = next.instances || [];
-  for (const id of referenced) {
-    if (!have.has(id)) next.instances.push({ id, type: id, values: {} });
-  }
+  // NOTE: we never synthesize instances here. Layout entries may reference any
+  // existing module id (config.js managed entries + console instances); the
+  // backend doesn't require them in `instances`, and creating one would inject
+  // a duplicate module into config.js (two clocks in the same spot).
   return next;
 }
 
@@ -150,13 +144,14 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
     dispatch(mirrorActions.setError(String(e)));
   }
 
-  // 3. module catalog + positions (for the editor). Placeable = catalog types
-  // with no required config (can be added without the console's field modal).
-  let placeableTypes: string[] = [];
+  // 3. module catalog + positions (for the editor). registered_ids are the
+  // real module ids that already exist in config.js (+ store) — placing those
+  // just positions an existing module, so no instance is created (no dupes).
+  let registeredIds: string[] = [];
   try {
     const mods = await api.getModules();
     dispatch(mirrorActions.setModulesMeta({ positions: mods.positions, catalog: mods.catalog }));
-    placeableTypes = (mods.catalog || []).filter((c) => !(c.fields || []).some((f) => f.required)).map((c) => c.type);
+    registeredIds = mods.registered_ids || [];
   } catch (e) {
     dispatch(mirrorActions.setError(String(e)));
   }
@@ -168,8 +163,8 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
   try {
     layout = await api.getLayout();
     dispatch(mirrorActions.setLayout(layout));
-    // editor palette = existing instances + placeable catalog types
-    const ids = new Set<string>(placeableTypes);
+    // editor palette = real existing module ids (config.js + store instances)
+    const ids = new Set<string>(registeredIds);
     (layout.instances || []).forEach((i) => ids.add(i.id));
     if (ids.size) dispatch(modulesActions.setInstalled([...ids]));
     dispatch(scenesActions.loadFromBackend(buildUserScenes(layout, "default", en)));
