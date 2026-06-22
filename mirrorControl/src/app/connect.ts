@@ -150,12 +150,13 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
     dispatch(mirrorActions.setError(String(e)));
   }
 
-  // 3. module catalog + positions (for the editor)
-  let instanceIds: string[] = [];
+  // 3. module catalog + positions (for the editor). Placeable = catalog types
+  // with no required config (can be added without the console's field modal).
+  let placeableTypes: string[] = [];
   try {
     const mods = await api.getModules();
     dispatch(mirrorActions.setModulesMeta({ positions: mods.positions, catalog: mods.catalog }));
-    instanceIds = mods.registered_ids || [];
+    placeableTypes = (mods.catalog || []).filter((c) => !(c.fields || []).some((f) => f.required)).map((c) => c.type);
   } catch (e) {
     dispatch(mirrorActions.setError(String(e)));
   }
@@ -167,7 +168,8 @@ export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getSta
   try {
     layout = await api.getLayout();
     dispatch(mirrorActions.setLayout(layout));
-    const ids = new Set(instanceIds);
+    // editor palette = existing instances + placeable catalog types
+    const ids = new Set<string>(placeableTypes);
     (layout.instances || []).forEach((i) => ids.add(i.id));
     if (ids.size) dispatch(modulesActions.setInstalled([...ids]));
     dispatch(scenesActions.loadFromBackend(buildUserScenes(layout, "default", en)));
