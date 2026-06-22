@@ -1,6 +1,6 @@
 import { useAppSelector } from "@/app/hooks";
 import {
-  PhoneFrame, StatusBar, Chrome, TaskBar, TempBar, AgentBar, BottomNav, Toast,
+  PhoneFrame, Chrome, TaskBar, TempBar, AgentBar, BottomNav, Toast,
 } from "@/components/shell";
 import { Overlays } from "@/overlays/Overlays";
 
@@ -47,7 +47,6 @@ function Stage() {
 export default function App() {
   return (
     <PhoneFrame>
-      <StatusBar />
       <Chrome />
       <TaskBar />
       <TempBar />
