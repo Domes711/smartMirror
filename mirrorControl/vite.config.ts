@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
@@ -20,8 +20,23 @@ const restProxy = Object.fromEntries(
   ].map((p) => [p, MIRROR_HTTP])
 );
 
+// Never let the browser cache the HTML shell (or the SW) — so a redeploy is
+// picked up immediately instead of serving a stale index.html that points at
+// old hashed assets. Hashed assets stay immutable-cached.
+const noCacheHtml: PluginOption = {
+  name: "no-cache-html",
+  configurePreviewServer(server) {
+    server.middlewares.use((req, res, next) => {
+      const url = (req.url || "").split("?")[0];
+      const isHtml = url === "/" || url.endsWith(".html") || url === "/sw.js" || !url.includes(".");
+      if (isHtml) res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      next();
+    });
+  },
+};
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), noCacheHtml],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },
