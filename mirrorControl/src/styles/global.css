@@ -5,20 +5,27 @@
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
+/* Lock the page: the whole app is full-screen and never scrolls — only inner
+ * content areas scroll. position:fixed on body kills iOS rubber-band/page scroll. */
 html,
 body {
   margin: 0;
   padding: 0;
   height: 100%;
+  width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 body {
+  position: fixed;
+  inset: 0;
   background: var(--paper);
   font-family: var(--grotesk);
   color: var(--ink);
-  overscroll-behavior: none; /* no rubber-band/pull-to-refresh in standalone PWA */
 }
 #root {
-  height: 100dvh;
+  height: 100%;
+  overflow: hidden;
 }
 
 button {
@@ -29,7 +36,11 @@ textarea {
   font-family: var(--grotesk);
 }
 
-/* scrollbars — invisible inside the horizontal strips, slim elsewhere */
+/* scrollbars — invisible inside the horizontal strips, slim elsewhere.
+ * overscroll-behavior:contain stops inner scrolls from chaining to the page. */
+.mc-noscroll {
+  overscroll-behavior: contain;
+}
 .mc-noscroll::-webkit-scrollbar {
   width: 0;
   height: 0;

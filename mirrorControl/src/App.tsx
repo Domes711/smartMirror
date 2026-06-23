@@ -51,7 +51,7 @@ export default function App() {
       <TaskBar />
       <TempBar />
       <AgentBar />
-      <div id="mc-stage" className="mc-noscroll" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
+      <div id="mc-stage" className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         <Stage />
       </div>
       <BottomNav />
