@@ -22,7 +22,8 @@ body {
   color: var(--ink);
 }
 #root {
-  height: 100dvh;
+  position: fixed;
+  inset: 0;
   overflow: hidden;
 }
 
