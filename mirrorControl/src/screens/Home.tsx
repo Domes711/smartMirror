@@ -37,7 +37,7 @@ export default function Home() {
       <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "6px 22px 28px" }}>
         <div style={{ position: "relative" }}>
           {homeLoading ? (
-            <MirrorLoader />
+            <MirrorLoader aspect={false} height="48dvh" />
           ) : (
             <div style={{ position: "relative", animation: "mc-fade .45s ease" }}>
               {/* real mirror when connected, synthetic preview as offline fallback */}
