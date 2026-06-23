@@ -6,25 +6,23 @@
   -webkit-tap-highlight-color: transparent;
 }
 /* Lock the page: the whole app is full-screen and never scrolls — only inner
- * content areas scroll. position:fixed on body kills iOS rubber-band/page scroll. */
+ * content areas scroll. overflow:hidden on html/body + #root sized to the
+ * dynamic viewport means there is nothing for the page itself to scroll. */
 html,
 body {
   margin: 0;
   padding: 0;
   height: 100%;
-  width: 100%;
   overflow: hidden;
   overscroll-behavior: none;
 }
 body {
-  position: fixed;
-  inset: 0;
   background: var(--paper);
   font-family: var(--grotesk);
   color: var(--ink);
 }
 #root {
-  height: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
