@@ -2,7 +2,7 @@
  * Static build assets are cached (cache-first with background refresh);
  * live mirror data (REST fallback endpoints + MQTT) is always network-only.
  * Bump CACHE to invalidate old caches on deploy. */
-const CACHE = "mirror-control-v1";
+const CACHE = "mirror-control-v2";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 // never cache the REST fallback surface (proxied to the supervisor :8000)
