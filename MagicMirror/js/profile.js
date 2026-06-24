@@ -25,6 +25,11 @@ const path = require("path");
 const DEFAULT_USER = "default";
 const DEFAULT_DIM_MS = 60 * 1000;
 const DEFAULT_MQTT_BROKER = "mqtt://127.0.0.1:1883";
+// A scene-setup preview is ephemeral: if the editor tab dies without sending
+// `{exit:true}` (closed mid-edit, lost network), the mirror would be stranded on
+// the preview layout — possibly empty/black. Auto-restore the live state if no
+// further preview/exit arrives within this window.
+const PREVIEW_TTL_MS = 90 * 1000;
 
 const TOPIC_PRESENCE = "smartmirror/radar/presence";
 const TOPIC_RECOGNITION = "smartmirror/camera/recognition";
@@ -39,6 +44,7 @@ class ProfileManager {
 		this.state = "asleep";
 		this.currentUser = null;
 		this.dimTimer = null;
+		this.previewTimer = null;
 		this.mqttClient = null;
 		this.pages = null;
 	}
@@ -54,6 +60,7 @@ class ProfileManager {
 
 	stop () {
 		this._cancelDimTimer();
+		this._cancelPreviewTimer();
 		if (this.mqttClient) {
 			this.mqttClient.end();
 			this.mqttClient = null;
@@ -117,9 +124,17 @@ class ProfileManager {
 			} else if (topic === TOPIC_PREVIEW) {
 				const data = JSON.parse(payload);
 				// `{exit:true}` leaves the app's scene-setup preview → restore live state
+				this._cancelPreviewTimer();
 				if (data && data.exit) { this._push(); return; }
 				const layout = Array.isArray(data) ? data : (data.layout || []);
 				this.io.emit("PROFILE_PREVIEW", { layout, scene: (data && data.scene) || null });
+				// Fail-safe: if the editor never sends `{exit:true}` (tab closed
+				// mid-edit), restore the live layout so the mirror is never stranded.
+				this.previewTimer = setTimeout(() => {
+					this.previewTimer = null;
+					Log.warn("[Profile] Preview TTL expired — restoring live state");
+					this._push();
+				}, PREVIEW_TTL_MS);
 			} else if (topic === TOPIC_RELOAD) {
 				this._loadPages();
 				this._push();
@@ -185,6 +200,13 @@ class ProfileManager {
 		return false;
 	}
 
+	_cancelPreviewTimer () {
+		if (this.previewTimer) {
+			clearTimeout(this.previewTimer);
+			this.previewTimer = null;
+		}
+	}
+
 	_defaultUser () {
 		return this.cfg.defaultUser || DEFAULT_USER;
 	}
@@ -192,6 +214,8 @@ class ProfileManager {
 	// --- layout resolution -------------------------------------------------
 
 	_push () {
+		// A real state push supersedes any pending scene-setup preview.
+		this._cancelPreviewTimer();
 		const layout = this._resolveLayout();
 		Log.info("[Profile] push state=" + this.state + " user=" + this.currentUser
 			+ " layout=" + JSON.stringify(layout));
