@@ -10,8 +10,11 @@ let config = {
     basePath: "/",
     ipWhitelist: [],             // [] = allow any client (private LAN); restrict if needed
     // Allow the mirror page to be embedded (live preview in the Mirror Control app).
-    // frameguard:false drops X-Frame-Options; CSP is already off in MM defaults.
-    httpHeaders: { contentSecurityPolicy: false, crossOriginOpenerPolicy: false, crossOriginEmbedderPolicy: false, crossOriginResourcePolicy: false, originAgentCluster: false, frameguard: false },
+    // Helmet v7+ renamed `frameguard` → `xFrameOptions`; we set BOTH so the
+    // X-Frame-Options header is dropped regardless of the installed helmet major
+    // (v8 ignores `frameguard` and would otherwise apply its default SAMEORIGIN,
+    // which blocks the cross-origin iframe). CSP is already off in MM defaults.
+    httpHeaders: { contentSecurityPolicy: false, crossOriginOpenerPolicy: false, crossOriginEmbedderPolicy: false, crossOriginResourcePolicy: false, originAgentCluster: false, frameguard: false, xFrameOptions: false },
     useHttps: false,
     httpsPrivateKey: "",
     httpsCertificate: "",
