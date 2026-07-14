@@ -34,7 +34,7 @@ export default function Home() {
   return (
     <section style={{ height: "100%", display: "flex", flexDirection: "column", padding: "18px 22px 0", animation: "scin .28s ease" }}>
       <h1 style={{ ...h1, marginBottom: 12, flex: "0 0 auto" }}>{L.navMirror}</h1>
-      <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "6px 22px 28px" }}>
+      <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "6px 22px 0" }}>
         <div style={{ position: "relative" }}>
           {homeLoading ? (
             <MirrorLoader aspect={false} height="48dvh" />
@@ -48,11 +48,6 @@ export default function Home() {
               </div>
             </div>
           )}
-        </div>
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginTop: 16 }}>
-          <PillButton full onClick={() => dispatch(fx.editResolved("home"))}>{L.editLayout}</PillButton>
-          <PillButton variant="outline" onClick={() => dispatch(fx.wake())}>{L.wake}</PillButton>
         </div>
 
         <div style={{ marginTop: 8 }}>
@@ -72,6 +67,11 @@ export default function Home() {
             <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{liveCount}</span>
           </Row>
         </div>
+      </div>
+
+      <div style={{ flex: "0 0 auto", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", margin: "0 -22px", padding: "14px 22px calc(env(safe-area-inset-bottom) + 14px)", borderTop: `1px solid ${C.line}` }}>
+        <PillButton full onClick={() => dispatch(fx.editResolved("home"))}>{L.editLayout}</PillButton>
+        <PillButton variant="outline" onClick={() => dispatch(fx.wake())}>{L.wake}</PillButton>
       </div>
     </section>
   );
