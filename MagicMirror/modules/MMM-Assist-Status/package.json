@@ -1,0 +1,10 @@
+{
+    "name": "mmm-assist-status",
+    "version": "0.1.0",
+    "description": "MagicMirror module: colour wave visualisation of the voice-assistant state (idle/listening/processing/responding/error) over MQTT.",
+    "main": "MMM-Assist-Status.js",
+    "private": true,
+    "dependencies": {
+        "mqtt": "^5.11.2"
+    }
+}

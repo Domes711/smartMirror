@@ -50,6 +50,27 @@ let config = {
                     }
                 ]
             }
+        },
+        {
+            // Voice-assistant state indicator — sits under the user name.
+            // State arrives over MQTT (mirror/assist/state).
+            id: "assist-status",
+            module: "MMM-Assist-Status",
+            config: {
+                mqttBroker: "mqtt://127.0.0.1:1883",
+                stateTopic: "mirror/assist/state"
+            }
+        },
+        {
+            // Gemini answer panel — sanitized aid-* HTML pushed over MQTT
+            // (mirror/display/set), auto-hides after its TTL.
+            id: "ai-display",
+            module: "MMM-AI-Display",
+            config: {
+                mqttBroker: "mqtt://127.0.0.1:1883",
+                setTopic: "mirror/display/set",
+                clearTopic: "mirror/display/clear"
+            }
         }
     ]
 };

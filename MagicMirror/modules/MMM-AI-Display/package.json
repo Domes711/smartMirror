@@ -1,0 +1,10 @@
+{
+    "name": "mmm-ai-display",
+    "version": "0.1.0",
+    "description": "MagicMirror module: answer panel for the Gemini voice assistant — renders sanitized aid-* HTML pushed over MQTT, with a slide-in/out and TTL.",
+    "main": "MMM-AI-Display.js",
+    "private": true,
+    "dependencies": {
+        "mqtt": "^5.11.2"
+    }
+}

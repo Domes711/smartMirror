@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8">
+    <title>MMM-Assist-Status · live demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@200;300;400&family=Roboto+Mono:wght@300;400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./MMM-Assist-Status.css">
+    <style>
+        html, body {
+            background: #000; color: #fff;
+            font-family: "Roboto Condensed", sans-serif; font-weight: 300;
+            margin: 0; padding: 40px 50px;
+        }
+        .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 60px; }
+        .controls button {
+            font-family: "Roboto Mono", monospace; font-size: 11px;
+            letter-spacing: .14em; text-transform: uppercase;
+            background: #000; color: #8a8a8a;
+            border: 1px solid rgba(255,255,255,.16); border-radius: 2px;
+            padding: 8px 14px; cursor: pointer;
+        }
+        .controls button:hover { color: #fff; border-color: rgba(255,255,255,.42); }
+        .mock { max-width: 340px; }
+        .user { font-size: 34px; font-weight: 200; letter-spacing: .03em; line-height: 1; }
+        .user small {
+            display: block; font-size: 11px; letter-spacing: .24em;
+            text-transform: uppercase; color: #8a8a8a; margin-bottom: 8px;
+        }
+        #mount { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="controls" id="controls"></div>
+
+    <div class="mock">
+        <div class="user"><small>Rozpoznán</small>Dominik</div>
+        <div id="mount"></div>
+    </div>
+
+    <script>
+        // Stub the MagicMirror framework so the module file can register itself.
+        window.Log = console;
+        window.Module = { _def: null, register: function (n, d) { this._def = d; } };
+        window.MM = {};
+    </script>
+    <script src="./MMM-Assist-Status.js"></script>
+    <script>
+        const def = window.Module._def;
+        const mod = Object.assign({}, def);
+        mod.config = Object.assign({}, def.defaults);
+        mod.sendSocketNotification = function () {};
+
+        mod.start();
+        document.getElementById("mount").appendChild(mod.getDom());
+
+        // A hash like #listening lets the render script screenshot each state.
+        const states = ["idle", "listening", "processing", "responding", "error"];
+        const bar = document.getElementById("controls");
+        states.forEach((s) => {
+            const b = document.createElement("button");
+            b.textContent = s;
+            b.addEventListener("click", () => mod._setState(s));
+            bar.appendChild(b);
+        });
+
+        function applyHash() {
+            const hash = (location.hash || "").replace("#", "");
+            if (states.indexOf(hash) !== -1) mod._setState(hash);
+        }
+        window.addEventListener("hashchange", applyHash);
+        // Give the entrance stagger time to play out before a screenshot.
+        setTimeout(applyHash, 100);
+    </script>
+</body>
+</html>

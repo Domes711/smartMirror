@@ -1,0 +1,16 @@
+/* MMM-Assist-Status — the canvas indicator that sits under the user's name.
+ *
+ * The height stays reserved even in idle so the name above it never jumps.
+ * All colour lives in the canvas (Google palette, drawn in JS); the CSS only
+ * lays out the fixed-height strip.
+ */
+
+.mm-assist-status {
+    width: 100%;
+    display: block;
+}
+
+.mm-assist-status canvas {
+    display: block;
+    width: 100%;
+}

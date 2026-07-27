@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8">
+    <meta name="color-scheme" content="dark">
+    <title>MMM-AI-Display · live demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@200;300;400;500&family=Roboto+Mono:wght@300;400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./MMM-AI-Display.css">
+    <style>
+        html, body {
+            background: #000; color: #fff;
+            font-family: "Roboto Condensed", sans-serif; font-weight: 300;
+            margin: 0; padding: 24px;
+        }
+        .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+        .row button {
+            font-family: "Roboto Mono", monospace; font-size: 11px;
+            letter-spacing: .14em; text-transform: uppercase;
+            background: #000; color: #8a8a8a;
+            border: 1px solid rgba(255,255,255,.16); border-radius: 2px;
+            padding: 8px 14px; cursor: pointer;
+        }
+        .row button:hover { color: #fff; border-color: rgba(255,255,255,.42); }
+        .stage {
+            padding: 120px 24px 140px; display: flex; justify-content: center;
+            min-height: 620px; overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="row" id="scenes"></div>
+    <div class="row">
+        <button id="toggle">Zobrazit / skrýt</button>
+        <button id="next">Další ▸</button>
+    </div>
+
+    <div class="stage"><div id="mount"></div></div>
+
+    <script>
+        window.Log = console;
+        window.Module = { _def: null, register: function (n, d) { this._def = d; } };
+    </script>
+    <script src="./MMM-AI-Display.js"></script>
+    <script>
+        const SCENES = [
+            { key: "pocasi", tab: "Počasí", title: "POČASÍ", ttl: 900, html: `
+                <div class="aid-row">
+                    <div class="aid-big">18°</div>
+                    <div class="aid-note">Brno<br>polojasno, vítr 12 km/h</div>
+                </div>
+                <div class="aid-kv"><span>Ráno</span><b>11°</b></div>
+                <div class="aid-kv"><span>Odpoledne</span><b>21°</b></div>
+                <div class="aid-kv"><span>Večer</span><b>14°</b></div>
+                <div class="aid-note">Déšť se nečeká.</div>` },
+            { key: "mhd", tab: "MHD", title: "MHD", ttl: 900, html: `
+                <table class="aid-table">
+                    <tr><th>Linka</th><th>Směr</th><th>Odjezd</th></tr>
+                    <tr><td>9</td><td>Lesná</td><td>3 min</td></tr>
+                    <tr><td>67</td><td>Bystrc</td><td>7 min</td></tr>
+                    <tr><td>9</td><td>Lesná</td><td>13 min</td></tr>
+                </table>
+                <div class="aid-note">Linka 67 má zpoždění 2 min.</div>` },
+            { key: "spanek", tab: "Spánek", title: "SPÁNEK · 7 DNÍ", ttl: 900, html: `
+                <div class="aid-row">
+                    <div class="aid-big">6:42</div>
+                    <div class="aid-note">průměr za týden<br>o 18 min méně než minulý</div>
+                </div>
+                <svg class="aid-line" viewBox="0 0 100 40" preserveAspectRatio="none">
+                    <polyline points="0,30 16,22 33,26 50,12 66,18 83,8 100,14"/>
+                </svg>
+                <div class="aid-kv"><span>Nejdelší</span><b>Ne · 8:10</b></div>
+                <div class="aid-kv"><span>Nejkratší</span><b>St · 5:20</b></div>` },
+            { key: "den", tab: "Den", title: "VČEREJŠEK", ttl: 900, html: `
+                <div class="aid-row">
+                    <svg class="aid-donut" viewBox="0 0 42 42">
+                        <circle class="aid-slice" pathLength="100" style="--pct:38;--off:0"/>
+                        <circle class="aid-slice" pathLength="100" style="--pct:28;--off:38"/>
+                        <circle class="aid-slice" pathLength="100" style="--pct:22;--off:66"/>
+                        <circle class="aid-slice" pathLength="100" style="--pct:12;--off:88"/>
+                    </svg>
+                    <div class="aid-legend">
+                        <span>Práce 38 %</span><span>Spánek 28 %</span>
+                        <span>Volno 22 %</span><span>Cesta 12 %</span>
+                    </div>
+                </div>` },
+            { key: "kroky", tab: "Kroky", title: "KROKY · TÝDEN", ttl: 900, html: `
+                <div class="aid-bar" style="--v:42"><span>Po</span><b>4 210</b></div>
+                <div class="aid-bar" style="--v:68"><span>Út</span><b>6 840</b></div>
+                <div class="aid-bar" style="--v:31"><span>St</span><b>3 105</b></div>
+                <div class="aid-bar" style="--v:88"><span>Čt</span><b>8 790</b></div>
+                <div class="aid-bar" style="--v:55"><span>Pá</span><b>5 480</b></div>
+                <div class="aid-note">Cíl 7 000 splněn dvakrát.</div>` },
+            { key: "text", tab: "Jen text", title: "ASISTENT", ttl: 900, html: "", text:
+                "Zítra máš v 9:00 zubaře na Kounicově. Cesta tramvají 12 minut, vyraž nejpozději v 8:35." },
+            // Sanitizer torture test: a <script>, style="color:red", position:fixed,
+            // an onclick, a disallowed <a>, and a blocked <img src>. Only the
+            // aid-big number and the --v bar should survive.
+            { key: "xss", tab: "⚠ Sanitizer", title: "SANITIZER", ttl: 900, html: `
+                <script>alert('xss')<\/script>
+                <div class="aid-big secret" style="color:red;position:fixed">42</div>
+                <a href="http://evil" onclick="steal()">klikni</a>
+                <div class="aid-bar" style="--v:64;background:red"><span>OK</span><b>64</b></div>
+                <img class="aid-img" src="http://evil.example/x.png" alt="blocked">
+                <marquee>nope</marquee>` }
+        ];
+
+        const def = window.Module._def;
+        const mod = Object.assign({}, def);
+        mod.config = Object.assign({}, def.defaults);
+        mod.sendSocketNotification = function () {};
+        mod.start();
+        document.getElementById("mount").appendChild(mod.getDom());
+
+        let index = 0;
+        const bar = document.getElementById("scenes");
+        SCENES.forEach((s, i) => {
+            const b = document.createElement("button");
+            b.textContent = s.tab;
+            b.addEventListener("click", () => { index = i; play(); });
+            bar.appendChild(b);
+        });
+
+        function play() {
+            const s = SCENES[index];
+            mod.socketNotificationReceived("AID_SET", s);
+        }
+
+        document.getElementById("toggle").addEventListener("click", () => {
+            mod._open ? mod._hide() : play();
+        });
+        document.getElementById("next").addEventListener("click", () => {
+            index = (index + 1) % SCENES.length; play();
+        });
+
+        // #<key> selects a scene for the render script.
+        function applyHash() {
+            const key = (location.hash || "").replace("#", "");
+            const hit = SCENES.findIndex((s) => s.key === key);
+            if (hit !== -1) { index = hit; play(); }
+        }
+        window.addEventListener("hashchange", applyHash);
+        const key0 = (location.hash || "").replace("#", "");
+        const hit0 = SCENES.findIndex((s) => s.key === key0);
+        if (hit0 !== -1) index = hit0;
+        setTimeout(play, 350);
+    </script>
+</body>
+</html>

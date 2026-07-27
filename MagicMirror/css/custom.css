@@ -1,0 +1,18 @@
+/* custom.css — shared design tokens for the mirror.
+ *
+ * Kept here (not duplicated in each module) so MMM-Assist-Status and
+ * MMM-AI-Display draw from one source. Each module also carries local
+ * fallbacks so its standalone demo.html renders without this file.
+ */
+
+:root {
+    --aid-fg: #fff;
+    --aid-dim: #8a8a8a;
+    --aid-hair: rgba(255, 255, 255, .18);
+
+    /* Google palette — the four colours both assistant modules use. */
+    --g-blue: #4285F4;
+    --g-red: #EA4335;
+    --g-yellow: #FBBC05;
+    --g-green: #34A853;
+}
