@@ -94,16 +94,22 @@
                 <div class="aid-note">Cíl 7 000 splněn dvakrát.</div>` },
             { key: "text", tab: "Jen text", title: "ASISTENT", ttl: 900, html: "", text:
                 "Zítra máš v 9:00 zubaře na Kounicově. Cesta tramvají 12 minut, vyraž nejpozději v 8:35." },
-            // Sanitizer torture test: a <script>, style="color:red", position:fixed,
-            // an onclick, a disallowed <a>, and a blocked <img src>. Only the
-            // aid-big number and the --v bar should survive.
-            { key: "xss", tab: "⚠ Sanitizer", title: "SANITIZER", ttl: 900, html: `
-                <script>alert('xss')<\/script>
-                <div class="aid-big secret" style="color:red;position:fixed">42</div>
-                <a href="http://evil" onclick="steal()">klikni</a>
-                <div class="aid-bar" style="--v:64;background:red"><span>OK</span><b>64</b></div>
-                <img class="aid-img" src="http://evil.example/x.png" alt="blocked">
-                <marquee>nope</marquee>` }
+            // sandbox mode: live JavaScript actually runs (a ticking counter).
+            { key: "js", tab: "▸ Živý JS", title: "ŽIVÝ JS", ttl: 900, html: `
+                <div class="aid-note">Počítadlo běží ve skriptu uvnitř panelu:</div>
+                <div id="c" style="font-size:3.4em;font-weight:200">0</div>
+                <script>
+                    let n = 0;
+                    setInterval(() => { document.getElementById('c').textContent = ++n; }, 1000);
+                <\/script>` },
+            // sandbox mode: arbitrary CSS (gradient, colour) works too.
+            { key: "css", tab: "Vlastní CSS", title: "VLASTNÍ CSS", ttl: 900, html: `
+                <style>
+                    .box { padding: 22px; border-radius: 14px; color: #fff;
+                           background: linear-gradient(135deg, #4285F4, #34A853); }
+                    .box h2 { margin: 0 0 6px; font-weight: 500; }
+                </style>
+                <div class="box"><h2>Libovolné CSS</h2>Gradient, barvy, cokoli — panel to vyrenderuje.</div>` }
         ];
 
         const def = window.Module._def;

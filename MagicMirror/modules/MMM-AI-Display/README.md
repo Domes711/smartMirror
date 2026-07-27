@@ -10,27 +10,50 @@ slides back up after a TTL.
 - Slides in from **88 px above** with an overshoot (580 ms) and leaves the same
   way — the same direction things arrive from in `MMM-Assist-Status`.
 
-## The contract: Gemini supplies data, never style
+## Render modes
 
-**Gemini must not decide colour, font, size or position** — only semantics and
-numbers. All styling lives in this module's CSS (the `aid-*` classes). The only
-colourful element inside the panel is `aid-img`.
+The panel has two ways to render the `html` it receives, chosen by
+`config.renderMode`:
 
-The incoming HTML is run through a **mandatory sanitizer** before it touches
-`innerHTML`:
+### `"sandbox"` (default) — renders **any** HTML + CSS + JS
 
-1. Tags whitelist: `div span b p ul li table thead tbody tr th td img svg polyline polygon circle g text`. Anything else is dropped.
+The content is dropped into a **sandboxed `<iframe srcdoc>`** with
+`sandbox="allow-scripts"` and **no** `allow-same-origin`. Consequences:
+
+- **Scripts run, CSS is unrestricted, any HTML renders** — Gemini has full
+  freedom (charts, animations, colours, `<script>`, `<style>`, whatever).
+- The content lives in an **opaque origin**: it **cannot** reach the mirror's
+  DOM, `socket.io`, cookies or storage. So "run everything" is *not* an XSS hole
+  into the mirror — the worst the content can do is misbehave inside its own box.
+- The iframe **auto-sizes** to its content (a tiny height reporter is injected
+  into the srcdoc and `postMessage`s its `scrollHeight` up; capped at
+  `maxHeightPx`).
+- Base styling matches the panel (black background, white text, Roboto), which
+  the content's own CSS can override. The `aid-*` catalog below is still
+  available inside the iframe, so existing `aid-*` payloads keep their look.
+- When the panel hides, the iframe is blanked so its JS stops (no timers running
+  behind a dark screen).
+
+> **Trade-off:** maximum freedom, but Gemini can now produce colour/layout that
+> may not match the rest of the mirror. If you want the old visual guarantee,
+> use `"strict"`.
+
+### `"strict"` — the `aid-*` design system (no scripts, no free CSS)
+
+The HTML is run through a whitelist **sanitizer**: only the `aid-*` catalog
+survives. Gemini supplies semantics + numbers only; all styling is the module's.
+
+1. Tags whitelist: `div span b p ul li table thead tbody tr th td img svg polyline polygon circle g text`.
 2. Attributes whitelist: `class style src alt viewBox preserveAspectRatio points pathLength x y cx cy r colspan`.
-3. `class` — only `aid-*` tokens are kept.
+3. `class` — only `aid-*` tokens kept.
 4. `style` — only `--name: number[%]` declarations survive (`--v:64` ok; `color:red`, `position:fixed` dropped).
-5. `src` — only if it starts with an allowlisted prefix (`imgAllowlist`, default `mirror.local`); otherwise the `<img>` is removed.
+5. `src` — only if it starts with an allowlisted prefix (`imgAllowlist`, default `mirror.local`); else the `<img>` is removed.
 6. A leading ```` ```html ```` markdown fence is stripped first.
 
-**Fallback:** the `text` field is required. If the sanitized body is empty
-(Gemini returned something the contract can't survive), `text` is rendered as an
-`aid-note`.
+**Fallback (both modes):** the `text` field is a plain-text backup. If `html` is
+empty it is rendered (escaped) as an `aid-note`.
 
-## Class catalog (design system)
+## Class catalog (design system, available in both modes)
 
 | Class | Purpose | Controllable via style |
 |---|---|---|
@@ -69,7 +92,9 @@ npm install            # pulls in `mqtt`
         defaultTitle: "ASISTENT",
         defaultTtl: 60,          // seconds; capped at maxTtl
         maxTtl: 900,
-        imgAllowlist: ["mirror.local"],
+        renderMode: "sandbox",   // "sandbox" = any HTML/CSS/JS | "strict" = aid-* only
+        maxHeightPx: 1400,       // sandbox: cap the auto-sized iframe height
+        imgAllowlist: ["mirror.local"], // strict mode only
         shadow: true,
         language: "cs"
     }
@@ -87,7 +112,10 @@ npm install            # pulls in `mqtt`
 ## Test without Home Assistant
 
 ```bash
+# aid-* content
 mosquitto_pub -t mirror/display/set -m '{"title":"TEST","html":"<div class=\"aid-big\">42</div>","text":"42","ttl":20}'
+# sandbox mode: live JS runs
+mosquitto_pub -t mirror/display/set -m '{"title":"JS","html":"<div id=c style=\"font-size:3em\">0</div><script>let n=0;setInterval(()=>c.textContent=++n,1000)<\/script>","text":"0","ttl":20}'
 mosquitto_pub -t mirror/display/clear -m x
 ```
 
@@ -95,18 +123,18 @@ mosquitto_pub -t mirror/display/clear -m x
 
 See [`docs/home-assistant/mirror-assist.md`](../../../docs/home-assistant/mirror-assist.md)
 for the automation (assistant state → MQTT), the `zobraz_na_zrcadle` script
-(the Gemini tool, carrying the full class catalog in its `description`), and the
-expose/prompt steps.
+(the Gemini tool), and the expose/prompt steps.
 
-> **The catalog lives in two places** — this module's CSS **and** the HA script
-> `description`. Change both together: a class Gemini doesn't know about is
-> useless, and one the CSS doesn't style is broken.
+> In **strict** mode the `aid-*` catalog lives in two places — this module's CSS
+> **and** the HA script `description`. Change both together. In **sandbox** mode
+> the catalog is optional guidance (Gemini can emit anything), but keeping it in
+> the prompt still gives a consistent look.
 
 ## Preview (no Pi)
 
-Open `demo.html` — scene buttons plus a **⚠ Sanitizer** torture test that proves
-`<script>`, `style="color:red"`, `onclick`, `<a>`, `<marquee>` and a blocked
-`<img src>` are all stripped. Live URL:
+Open `demo.html` — scene buttons including a **▸ Živý JS** counter (proves
+scripts run inside the panel) and a **Vlastní CSS** gradient (proves free CSS).
+Live URL:
 
 `https://raw.githack.com/Domes711/smartMirror/claude/nove-moduly-nhfzkd/MagicMirror/modules/MMM-AI-Display/demo.html`
 
@@ -118,7 +146,12 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node demo-render.js
 
 ## Conventions
 
-- `suspend()` clears the TTL/clock timers and hides the panel so nothing runs
-  behind a dark screen.
+- `suspend()` clears the TTL/clock timers, hides the panel and blanks the
+  sandbox iframe so no content JS runs behind a dark screen.
 - Content swaps always go **through a close** (close → 360 ms → rewrite → open),
-  never a rewrite under an open panel.
+  never a rewrite under an open panel. In sandbox mode each swap builds a fresh
+  iframe, so the previous answer's JS/timers are fully torn down.
+- Security boundary: sandbox content is `allow-scripts` **without**
+  `allow-same-origin` — it can never touch the mirror. Never add
+  `allow-same-origin` (combined with `allow-scripts` it lets the content escape
+  the sandbox).

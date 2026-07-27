@@ -71,6 +71,9 @@
 
 .aid-body > * + * { margin-top: var(--aid-gap); }
 
+/* sandbox mode: the arbitrary-content iframe (auto-sized via postMessage) */
+.aid-frame { display: block; width: 100%; border: 0; background: transparent; }
+
 /* ---------- catalog: text and numbers ---------- */
 
 .aid-big { font-size: 3.4em; font-weight: 200; line-height: 1; letter-spacing: -.02em; }

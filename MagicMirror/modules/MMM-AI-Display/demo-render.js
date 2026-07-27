@@ -18,7 +18,7 @@ const path = require("path");
     const page = await context.newPage();
 
     const fileUrl = "file://" + path.resolve(__dirname, "demo.html");
-    const scenarios = ["pocasi", "mhd", "spanek", "den", "kroky", "text", "xss"];
+    const scenarios = ["pocasi", "mhd", "spanek", "den", "kroky", "text", "js", "css"];
 
     for (const s of scenarios) {
         // Cache-busting query forces a full reload per scene (a hash-only

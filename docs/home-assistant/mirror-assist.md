@@ -122,6 +122,11 @@ Then HA Developer tools → Actions → run `script.zobraz_na_zrcadle`. Finally 
 by voice, including the **negative** case ("Kolik je hodin?" → the tool must
 **not** be called).
 
-> **The class catalog lives in two places** — the module CSS
-> (`MMM-AI-Display.css`) and this script's `html` `description`. Change both
-> together, or a class is either invisible to Gemini or unstyled on the mirror.
+> **Render modes.** `MMM-AI-Display` defaults to `renderMode: "sandbox"`, which
+> renders **any HTML/CSS/JS** Gemini returns (isolated in a sandboxed iframe that
+> can't touch the mirror). There the catalog above is *optional* guidance — keep
+> it in the prompt for a consistent look, but Gemini may also emit its own
+> charts/CSS/scripts. If the module is set to `renderMode: "strict"`, only the
+> `aid-*` catalog survives a sanitizer, and then the catalog **must** stay in
+> sync between the module CSS (`MMM-AI-Display.css`) and this script's
+> `description` — a class in only one place is useless.
