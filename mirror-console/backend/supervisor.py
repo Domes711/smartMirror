@@ -1001,6 +1001,31 @@ class Supervisor:
             self.save_mode(mode)
             log.info("mode active: %s", mode)
 
+    def set_resolution(self, width: int, height: int) -> None:
+        """Change camera resolution. Requires camera restart."""
+        # Validate resolution
+        valid_resolutions = [
+            (640, 480), (1280, 720), (1920, 1080), (2592, 1944)
+        ]
+        if (width, height) not in valid_resolutions:
+            raise ValueError(f"invalid resolution: {width}x{height}")
+
+        with self.lock:
+            log.info("changing resolution: %dx%d -> %dx%d",
+                     self.args.width, self.args.height, width, height)
+            self.args.width = width
+            self.args.height = height
+
+            # If camera is currently open, restart it with new resolution
+            if self.camera_open:
+                was_capturing = self.capture_thread is not None and self.capture_thread.is_alive()
+                self._pause_capture()
+                self._release_camera()
+                if was_capturing:
+                    self._ensure_capture()
+
+            log.info("resolution changed to %dx%d", width, height)
+
     # ---- camera + capture lifecycle ----------------------------------- #
     def _ensure_camera(self) -> None:
         """Open the single persistent Picamera2 instance, or resume it."""
@@ -1643,6 +1668,10 @@ def make_handler(sup: Supervisor):
             try:
                 if path == "/mode":
                     sup.apply_mode(self._body().get("mode"))
+                    self._json(200, sup.health())
+                elif path == "/resolution":
+                    body = self._body()
+                    sup.set_resolution(body.get("width"), body.get("height"))
                     self._json(200, sup.health())
                 elif path == "/capture":
                     body = self._body()

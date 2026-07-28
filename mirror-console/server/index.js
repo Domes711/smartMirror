@@ -79,6 +79,7 @@ app.use(
     pathFilter: (p) =>
       p === "/mode" ||
       p === "/healthz" ||
+      p === "/resolution" ||
       p.startsWith("/stream.mjpg") ||
       p === "/capture" ||
       p === "/encode" ||

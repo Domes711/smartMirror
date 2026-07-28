@@ -46,6 +46,7 @@ export function mirrorDisplayUrl(): string {
 export const photoUrl = (name: string, file: string) => `/photo?name=${encodeURIComponent(name)}&file=${encodeURIComponent(file)}`;
 export const getMode = () => req<{ mode: string }>("/mode");
 export const setMode = (mode: string) => jpost("/mode", { mode });
+export const setResolution = (width: number, height: number) => jpost("/resolution", { width, height }) as Promise<{ mode: string; camera_open: boolean; fps: number; width: number; height: number }>;
 export const listDataset = (name: string) => req<{ name: string; photos: string[] }>(`/dataset?name=${encodeURIComponent(name)}`);
 export const capture = (name: string, file?: string) => jpost("/capture", { name, file }) as Promise<{ file: string; total: number }>;
 export const deletePhoto = (name: string, file: string) => req<{ ok: boolean; photos: string[] }>(`/dataset?name=${encodeURIComponent(name)}&file=${encodeURIComponent(file)}`, { method: "DELETE" });
