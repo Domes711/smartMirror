@@ -153,15 +153,12 @@ class MonitorController:
             f"{MQTT_BASE_TOPIC}/control/preset",
             f"{MQTT_BASE_TOPIC}/control/rgb",
             f"{MQTT_BASE_TOPIC}/control/e2",
-            f"{MQTT_BASE_TOPIC}/control/refresh"
+            f"{MQTT_BASE_TOPIC}/control/get_state"
         ]
 
         for topic in topics:
             client.subscribe(topic)
             logger.info(f"Subscribed to {topic}")
-
-        # Publish initial state (force to ensure it's retained)
-        self.publish_state(force=True)
 
     def on_message(self, client, userdata, msg):
         topic = msg.topic
@@ -212,12 +209,14 @@ class MonitorController:
                     hex_val = f"0x{value:02X}"
                     self.ddcutil_setvcp(VCP_CUSTOM_E2, hex_val, noverify=True)
 
-            elif topic.endswith("/refresh"):
-                pass  # Just publish state
+            elif topic.endswith("/get_state"):
+                # Respond immediately with current state
+                self.publish_state(force=True)
+                return  # Don't wait or publish again
 
-            # Publish updated state after any change
+            # Publish updated state after any change (except get_state)
             time.sleep(0.5)  # Give monitor time to update
-            self.publish_state()
+            self.publish_state(force=True)
 
         except Exception as e:
             logger.error(f"Error processing message: {e}")
@@ -230,10 +229,9 @@ class MonitorController:
         self.client.loop_start()
 
         try:
-            # Publish state every 30 seconds
+            # Just keep running and respond to messages
             while True:
-                time.sleep(30)
-                self.publish_state()
+                time.sleep(1)
         except KeyboardInterrupt:
             logger.info("Shutting down")
         finally:
