@@ -31,11 +31,11 @@ export default function Monitor() {
   const { en } = useT();
   const [state, setState] = useState<MonitorState | null>(null);
   const [draft, setDraft] = useState<MonitorState | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadState();
-    const interval = setInterval(loadState, 10000);
+    const interval = setInterval(loadState, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -45,7 +45,8 @@ export default function Monitor() {
       if (data.messages?.length) {
         const msg = JSON.parse(data.messages[0].payload);
         setState(msg);
-        if (!draft) setDraft(msg);
+        // Only update draft if we don't have one yet (initial load)
+        setDraft(prev => prev || msg);
       }
     } catch (err) {
       console.error("Failed to load monitor state:", err);
@@ -53,32 +54,33 @@ export default function Monitor() {
   };
 
   const publish = async (topic: string, value: string | number | object) => {
-    setLoading(true);
     try {
       const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
       await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
-      setTimeout(loadState, 1500);
+      // Reload state after 1 second
+      setTimeout(loadState, 1000);
     } catch (err) {
       console.error("Publish failed:", err);
-    } finally {
-      setLoading(false);
     }
   };
 
   const saveAll = async () => {
     if (!draft) return;
-    setLoading(true);
+    setSaving(true);
     try {
       await mqtt.pub("smartmirror/monitor/control/brightness", String(draft.brightness));
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
       await mqtt.pub("smartmirror/monitor/control/contrast", String(draft.contrast));
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
       await mqtt.pub("smartmirror/monitor/control/rgb", JSON.stringify({ r: draft.red, g: draft.green, b: draft.blue }));
-      setTimeout(loadState, 1500);
+      // Wait for monitor to update, then reload
+      setTimeout(() => {
+        loadState();
+        setSaving(false);
+      }, 1500);
     } catch (err) {
       console.error("Save failed:", err);
-    } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -92,14 +94,14 @@ export default function Monitor() {
         <span>{label}</span>
         <span style={{ color: C.ink }}>{value}%</span>
       </div>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => on(parseInt(e.target.value))} disabled={loading} style={{ width: "100%", accentColor: C.signal }} />
+      <input type="range" min={min} max={max} value={value} onChange={(e) => on(parseInt(e.target.value))} style={{ width: "100%", accentColor: C.signal }} />
     </div>
   );
 
   const QuickButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
     <button
       onClick={onClick}
-      disabled={loading}
+      disabled={saving}
       style={{
         flex: 1,
         padding: "10px 16px",
@@ -109,8 +111,8 @@ export default function Monitor() {
         fontFamily: "var(--mono)",
         fontSize: 11,
         color: C.ink,
-        cursor: loading ? "not-allowed" : "pointer",
-        opacity: loading ? 0.5 : 1
+        cursor: saving ? "not-allowed" : "pointer",
+        opacity: saving ? 0.5 : 1
       }}
     >
       {label}
@@ -150,16 +152,16 @@ export default function Monitor() {
 
       <div style={{ marginTop: 24, marginBottom: 8 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>{en ? "E2 Enhancement" : "E2 Vylepšení"}</div>
-        <input type="range" min={0} max={25} defaultValue={25} onChange={(e) => publish("e2", parseInt(e.target.value))} disabled={loading} style={{ width: "100%", accentColor: C.signal }} />
+        <input type="range" min={0} max={25} defaultValue={25} onChange={(e) => publish("e2", parseInt(e.target.value))} style={{ width: "100%", accentColor: C.signal }} />
       </div>
 
       <div style={{ marginTop: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Power" : "Napájení"}</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => publish("power", "on")} disabled={loading} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
+          <button onClick={() => publish("power", "on")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
             ✓ {en ? "On" : "Zapnout"}
           </button>
-          <button onClick={() => publish("power", "off")} disabled={loading} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
+          <button onClick={() => publish("power", "off")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
             ✕ {en ? "Off" : "Vypnout"}
           </button>
         </div>
@@ -167,7 +169,7 @@ export default function Monitor() {
 
       <div style={{ marginTop: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Display Mode" : "Režim zobrazení"}</div>
-        <select onChange={(e) => publish("mode", e.target.value)} disabled={loading} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
+        <select onChange={(e) => publish("mode", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
           {MODES.map((m) => (
             <option key={m.value} value={m.value}>
               {en ? m.label.en : m.label.cs}
@@ -178,7 +180,7 @@ export default function Monitor() {
 
       <div style={{ marginTop: 16 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Color Preset" : "Teplota barev"}</div>
-        <select onChange={(e) => publish("preset", e.target.value)} disabled={loading} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
+        <select onChange={(e) => publish("preset", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
           {PRESETS.map((p) => (
             <option key={p.value} value={p.value}>
               {p.label}
@@ -196,7 +198,7 @@ export default function Monitor() {
 
       <button
         onClick={saveAll}
-        disabled={loading}
+        disabled={saving}
         style={{
           width: "100%",
           marginTop: 24,
@@ -210,12 +212,12 @@ export default function Monitor() {
           fontWeight: 700,
           letterSpacing: ".06em",
           textTransform: "uppercase",
-          cursor: loading ? "not-allowed" : "pointer",
-          opacity: loading ? 0.6 : 1,
+          cursor: saving ? "not-allowed" : "pointer",
+          opacity: saving ? 0.6 : 1,
           transition: "all .2s"
         }}
       >
-        {loading ? (en ? "Saving..." : "Ukládám...") : (en ? "Save Settings" : "Uložit nastavení")}
+        {saving ? (en ? "Saving..." : "Ukládám...") : (en ? "Save Settings" : "Uložit nastavení")}
       </button>
 
       <div style={{ marginTop: 24 }}>
