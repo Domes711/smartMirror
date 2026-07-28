@@ -133,10 +133,10 @@ class MonitorController:
         }
         return state
 
-    def publish_state(self):
+    def publish_state(self, force=False):
         """Publish current monitor state to MQTT"""
         state = self.get_monitor_state()
-        if state != self.last_state:
+        if force or state != self.last_state:
             self.client.publish(f"{MQTT_BASE_TOPIC}/state", json.dumps(state), retain=True)
             self.last_state = state
             logger.info(f"Published state: {state}")
@@ -160,8 +160,8 @@ class MonitorController:
             client.subscribe(topic)
             logger.info(f"Subscribed to {topic}")
 
-        # Publish initial state
-        self.publish_state()
+        # Publish initial state (force to ensure it's retained)
+        self.publish_state(force=True)
 
     def on_message(self, client, userdata, msg):
         topic = msg.topic

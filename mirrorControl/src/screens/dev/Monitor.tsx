@@ -32,24 +32,27 @@ export default function Monitor() {
   const [state, setState] = useState<MonitorState | null>(null);
   const [draft, setDraft] = useState<MonitorState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadState();
-    const interval = setInterval(loadState, 30000);
+    const interval = setInterval(() => loadState(false), 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadState = async () => {
+  const loadState = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
-      const data = await mqtt.sub("smartmirror/monitor/state", 1, 2000);
+      const data = await mqtt.sub("smartmirror/monitor/state", 1, 3000);
       if (data.messages?.length) {
         const msg = JSON.parse(data.messages[0].payload);
         setState(msg);
-        // Only update draft if we don't have one yet (initial load)
-        setDraft(prev => prev || msg);
+        setDraft(msg);
       }
     } catch (err) {
       console.error("Failed to load monitor state:", err);
+    } finally {
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -118,6 +121,17 @@ export default function Monitor() {
       {label}
     </button>
   );
+
+  if (loading) {
+    return (
+      <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 40, height: 40, border: `3px solid ${C.line}`, borderTop: `3px solid ${C.signal}`, borderRadius: "50%", margin: "0 auto 16px", animation: "mc-sweep .8s linear infinite" }} />
+          <p style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>{en ? "Loading monitor state..." : "Načítám stav monitoru..."}</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease" }}>
