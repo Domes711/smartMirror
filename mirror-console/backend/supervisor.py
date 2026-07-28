@@ -1118,7 +1118,8 @@ class Supervisor:
                 elif overlay == "learn":
                     # snapshot the clean frame BEFORE drawing, for enrollment
                     self.last_raw = frame.copy()
-                    self._draw_facebox(cv2, frame, frame_idx)
+                    # Facebox detection disabled to save CPU
+                    # self._draw_facebox(cv2, frame, frame_idx)
 
                 now = time.monotonic()
                 dt = now - last_t
