@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
 import { mqtt } from "@/services/api";
@@ -39,6 +39,9 @@ export default function Monitor() {
   const [localBlue, setLocalBlue] = useState(100);
   const [isChanging, setIsChanging] = useState(false);
 
+  // Debounce timers
+  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+
   useEffect(() => {
     loadState();
     const interval = setInterval(loadState, 30000);
@@ -78,20 +81,39 @@ export default function Monitor() {
     }
   };
 
-  const publish = async (topic: string, value: string | number | object) => {
+  const publishDebounced = (topic: string, value: string | number | object, delay = 300) => {
+    // Clear existing timer for this topic
+    if (debounceTimers.current[topic]) {
+      clearTimeout(debounceTimers.current[topic]);
+    }
+
     setIsChanging(true);
+
+    // Set new timer
+    debounceTimers.current[topic] = setTimeout(async () => {
+      try {
+        const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
+        await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
+        // Reload state after change, then allow sync
+        setTimeout(async () => {
+          await loadState();
+          // Allow sync after state is loaded
+          setTimeout(() => setIsChanging(false), 100);
+        }, 1500);
+      } catch (err) {
+        console.error("Publish failed:", err);
+        setIsChanging(false);
+      }
+    }, delay);
+  };
+
+  const publish = async (topic: string, value: string | number | object) => {
     try {
       const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
       await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
-      // Reload state after change, then allow sync
-      setTimeout(async () => {
-        await loadState();
-        // Allow sync after state is loaded
-        setTimeout(() => setIsChanging(false), 100);
-      }, 1000);
+      setTimeout(loadState, 1000);
     } catch (err) {
       console.error("Publish failed:", err);
-      setIsChanging(false);
     }
   };
 
@@ -214,7 +236,7 @@ export default function Monitor() {
         max={100}
         on={(v) => {
           setLocalBrightness(v);
-          publish("brightness", v);
+          publishDebounced("brightness", v);
         }}
       />
       <Slider
@@ -224,7 +246,7 @@ export default function Monitor() {
         max={100}
         on={(v) => {
           setLocalContrast(v);
-          publish("contrast", v);
+          publishDebounced("contrast", v);
         }}
       />
 
@@ -264,7 +286,7 @@ export default function Monitor() {
           max={100}
           on={(v) => {
             setLocalRed(v);
-            publish("rgb", { r: v });
+            publishDebounced("rgb", { r: v });
           }}
         />
         <Slider
@@ -274,7 +296,7 @@ export default function Monitor() {
           max={100}
           on={(v) => {
             setLocalGreen(v);
-            publish("rgb", { g: v });
+            publishDebounced("rgb", { g: v });
           }}
         />
         <Slider
@@ -284,7 +306,7 @@ export default function Monitor() {
           max={100}
           on={(v) => {
             setLocalBlue(v);
-            publish("rgb", { b: v });
+            publishDebounced("rgb", { b: v });
           }}
         />
       </div>
