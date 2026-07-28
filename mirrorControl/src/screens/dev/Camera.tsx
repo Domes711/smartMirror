@@ -64,13 +64,17 @@ export default function Camera() {
             </span>
           </div>
         ) : !failed ? (
-          <>
-            <img src={streamUrl()} alt="camera" onError={() => setFailed(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            <span style={{ position: "absolute", top: 11, left: 12, display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: C.signal }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.signal, animation: "mc-rec 1.4s steps(1) infinite" }} />live
-            </span>
-            <span style={{ position: "absolute", bottom: 11, left: 12, fontFamily: "var(--mono)", fontSize: 9, color: "rgba(233,232,221,.6)" }}>1920×1080 · 30 fps</span>
-          </>
+          <img
+            src={streamUrl()}
+            alt="camera"
+            onError={() => setFailed(true)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              transform: "rotate(180deg)"
+            }}
+          />
         ) : (
           <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "rgba(233,232,221,.55)", letterSpacing: ".08em", textTransform: "uppercase" }}>{L.camPreviewHint}</span>
         )}

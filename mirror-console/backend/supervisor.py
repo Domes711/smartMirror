@@ -1096,11 +1096,7 @@ class Supervisor:
                 last_t = now
                 if dt > 0:
                     self.fps = 0.9 * self.fps + 0.1 * (1.0 / dt)
-                cv2.putText(
-                    frame,
-                    f"{self.mode}  {self.args.width}x{self.args.height}  "
-                    f"{self.fps:4.1f} fps",
-                    (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                # Text overlay removed for clean stream display
 
                 ok, jpg = cv2.imencode(".jpg", frame)
                 if ok:
@@ -1179,8 +1175,7 @@ class Supervisor:
             ]
         for (top, right, bottom, left, _name) in self._last_faces:
             cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-        cv2.putText(frame, "zarovnej oblicej", (10, self.args.height - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        # "zarovnej oblicej" text removed for clean stream display
 
     def _load_encodings(self):
         import pickle
