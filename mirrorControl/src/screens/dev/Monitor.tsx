@@ -43,12 +43,14 @@ export default function Monitor() {
   const loadState = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
+      // Start listening for response first, then send request
+      const subscribePromise = mqtt.sub("smartmirror/monitor/state", 1, 3000);
+      // Small delay to ensure subscribe is ready
+      await new Promise(resolve => setTimeout(resolve, 50));
       // Request fresh state from daemon
       await mqtt.pub("smartmirror/monitor/control/get_state", "1");
-      // Wait a bit for daemon to respond
-      await new Promise(resolve => setTimeout(resolve, 200));
-      // Subscribe to get the response
-      const data = await mqtt.sub("smartmirror/monitor/state", 1, 2000);
+      // Wait for the response
+      const data = await subscribePromise;
       if (data.messages?.length) {
         const msg = JSON.parse(data.messages[0].payload);
         setState(msg);
