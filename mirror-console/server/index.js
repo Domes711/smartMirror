@@ -110,6 +110,36 @@ app.post("/api/mqtt/publish", (req, res) => {
   });
 });
 
+app.get("/api/mqtt/subscribe", (req, res) => {
+  const { topic, count = "1", timeout = "5000" } = req.query;
+  if (!topic) return res.status(400).json({ error: "topic required" });
+
+  const maxCount = parseInt(count, 10);
+  const maxTimeout = parseInt(timeout, 10);
+  const messages = [];
+  let timer;
+
+  const handler = (t, payload) => {
+    if (t === topic || (topic.endsWith("/#") && t.startsWith(topic.slice(0, -2)))) {
+      messages.push({ topic: t, payload: payload.toString() });
+      if (messages.length >= maxCount) {
+        finish();
+      }
+    }
+  };
+
+  const finish = () => {
+    clearTimeout(timer);
+    mqttClient.off("message", handler);
+    res.json({ messages });
+  };
+
+  mqttClient.on("message", handler);
+  timer = setTimeout(finish, maxTimeout);
+
+  req.on("close", finish);
+});
+
 // --- AI module builder (chat with Claude to scaffold new modules) --------
 mountModuleAI(app, express);
 
