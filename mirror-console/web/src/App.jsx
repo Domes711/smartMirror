@@ -6,6 +6,7 @@ import MqttPanel from "./MqttPanel.jsx";
 import ProfilesPanel from "./ProfilesPanel.jsx";
 import ModuleStorePanel from "./ModuleStorePanel.jsx";
 import RadarPanel from "./RadarPanel.jsx";
+import MonitorPanel from "./MonitorPanel.jsx";
 import PinModal from "./PinModal.jsx";
 
 // PIN for developer mode. Override at build time with VITE_DEV_PIN.
@@ -20,6 +21,7 @@ const USER_TABS = [
 const DEV_TABS = [
   { id: "camera", label: "Kamera" },
   { id: "radar", label: "Radar" },
+  { id: "monitor", label: "Monitor" },
   { id: "mqtt", label: "MQTT" },
   { id: "modules", label: "Moduly (AI)" },
 ];
@@ -97,6 +99,7 @@ export default function App() {
       {tab === "store" && <ModuleStorePanel />}
       {tab === "camera" && <CameraPanel />}
       {tab === "radar" && <RadarPanel />}
+      {tab === "monitor" && <MonitorPanel />}
       {tab === "mqtt" && <MqttPanel />}
       {tab === "modules" && <ModuleCreator />}
 
