@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
-import { mqtt } from "@/app/api";
+import { mqtt } from "@/services/api";
 
 interface MonitorState {
   brightness: number;
@@ -29,8 +28,7 @@ const MODES = [
 ];
 
 export default function Monitor() {
-  const dispatch = useAppDispatch();
-  const { L, en } = useT();
+  const { en } = useT();
   const [state, setState] = useState<MonitorState | null>(null);
   const [loading, setLoading] = useState(false);
 

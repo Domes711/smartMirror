@@ -17,6 +17,7 @@ export type ScreenId =
   | "newprofile"
   | "settings"
   | "radar"
+  | "monitor"
   | "camera"
   | "comms";
 
@@ -27,6 +28,7 @@ export type TabGroup =
   | "modules"
   | "profiles"
   | "radar"
+  | "monitor"
   | "camera"
   | "comms"
   | "settings";
