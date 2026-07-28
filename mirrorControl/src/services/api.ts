@@ -94,6 +94,12 @@ export const uninstallModule = (name: string) => jpost("/store/uninstall", { nam
 /* ---------- mqtt bridge (fallback publish via backend) ---------- */
 export const mqttPublish = (topic: string, payload: unknown) => jpost("/api/mqtt/publish", { topic, payload });
 
+export const mqtt = {
+  pub: (topic: string, payload: string) => mqttPublish(topic, payload),
+  sub: (topic: string, count: number = 1, timeout: number = 5000) =>
+    req<{ messages: { topic: string; payload: string }[] }>(`/api/mqtt/subscribe?topic=${encodeURIComponent(topic)}&count=${count}&timeout=${timeout}`)
+};
+
 /* ---------- AI module builder (Claude Agent SDK + SSE) ---------- */
 export interface AiMsg { role: "user" | "assistant" | "sys"; text: string; files?: string[]; ts?: number }
 export const aiStatus = () => req<{ claudeCli: boolean; claudeVersion?: string; model?: string }>("/api/modules/ai-status");
