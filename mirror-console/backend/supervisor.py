@@ -71,6 +71,7 @@ FACE_EVERY = 10           # run face detection every Nth frame (hog is slow)
 GESTURE_EVERY = 3         # run gesture detection every Nth frame (mediapipe is slow on Pi)
 HAND_CONFIDENCE = 0.6
 JPEG_QUALITY = 75         # JPEG quality (1-100, lower = smaller file, less CPU)
+TARGET_FPS = 15           # Target FPS for stream (lower = less CPU usage)
 CAMERA_OPEN_RETRIES = 10  # wait for the daemon to release /dev after stop
 
 # "learn" is a streaming mode used by the face-enrollment flow; it is not shown
@@ -1129,6 +1130,12 @@ class Supervisor:
                 ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
                 if ok:
                     self.output.write(jpg.tobytes())
+
+                # Limit FPS to reduce CPU usage
+                frame_time = time.monotonic() - now
+                target_frame_time = 1.0 / TARGET_FPS
+                if frame_time < target_frame_time:
+                    time.sleep(target_frame_time - frame_time)
         except Exception as exc:  # noqa: BLE001
             log.exception("capture loop error: %s", exc)
         finally:
