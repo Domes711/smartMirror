@@ -18,6 +18,7 @@ import AddPhotos from "@/screens/AddPhotos";
 import NewProfile from "@/screens/NewProfile";
 import Settings from "@/screens/Settings";
 import Radar from "@/screens/dev/Radar";
+import Monitor from "@/screens/dev/Monitor";
 import Camera from "@/screens/dev/Camera";
 import Comms from "@/screens/dev/Comms";
 
@@ -38,6 +39,7 @@ function Stage() {
     case "newprofile": return <NewProfile />;
     case "settings": return <Settings />;
     case "radar": return <Radar />;
+    case "monitor": return <Monitor />;
     case "camera": return <Camera />;
     case "comms": return <Comms />;
     default: return <Home />;

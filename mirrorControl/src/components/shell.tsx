@@ -151,6 +151,7 @@ const Ico = {
   widgets: <svg viewBox="0 0 24 24" style={icoStyle()}><path d="M3 7c3-3 5 3 8 0s5 3 8 0M3 17c3-3 5 3 8 0s5 3 8 0" /></svg>,
   profiles: <svg viewBox="0 0 24 24" style={icoStyle()}><circle cx="12" cy="8" r="3.6" /><path d="M5 20c0-3.8 3.1-6 7-6s7 2.2 7 6" /></svg>,
   radar: <svg viewBox="0 0 24 24" style={icoStyle()}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></svg>,
+  monitor: <svg viewBox="0 0 24 24" style={icoStyle()}><rect x="2.5" y="3.5" width="19" height="13" rx="1.5" /><path d="M9 20.5h6M12 16.5v4" /></svg>,
   camera: <svg viewBox="0 0 24 24" style={icoStyle()}><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><circle cx="12" cy="12.5" r="3.5" /></svg>,
   comms: <svg viewBox="0 0 24 24" style={icoStyle()}><path d="M4 5h16v11H8l-4 4z" /></svg>,
 };
@@ -168,13 +169,14 @@ export function BottomNav() {
   if (screen === "settings") return null;
 
   const go = (g: TabGroup) => dispatch(fx.goTab(g));
-  const nav = (g: TabGroup, sc: "radar" | "camera" | "comms") => dispatch(fx.nav(sc, g));
+  const nav = (g: TabGroup, sc: "radar" | "monitor" | "camera" | "comms") => dispatch(fx.nav(sc, g));
 
   return (
     <div style={{ flex: "0 0 auto", display: "flex", padding: "12px 14px 10px", borderTop: `1px solid ${C.line}`, background: C.paper }}>
       {devMode ? (
         <>
           <NavItem active={tab === "radar"} label={L.navRadar} onClick={() => nav("radar", "radar")}>{Ico.radar}</NavItem>
+          <NavItem active={tab === "monitor"} label="Monitor" onClick={() => nav("monitor", "monitor")}>{Ico.monitor}</NavItem>
           <NavItem active={tab === "camera"} label={L.navCamera} onClick={() => nav("camera", "camera")}>{Ico.camera}</NavItem>
           <NavItem active={tab === "comms"} label={L.navComms} onClick={() => nav("comms", "comms")}>{Ico.comms}</NavItem>
         </>
