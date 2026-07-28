@@ -12,6 +12,7 @@ export default function Camera() {
   const [previousMode, setPreviousMode] = useState<string | null>(null);
   const [detectionMode, setDetectionMode] = useState<DetectionMode>("learn");
   const [switchingMode, setSwitchingMode] = useState(false);
+  const [streamKey, setStreamKey] = useState(0);
 
   useEffect(() => {
     // When component mounts, switch to learn mode to enable streaming
@@ -55,6 +56,7 @@ export default function Camera() {
     try {
       await setMode(mode);
       setDetectionMode(mode);
+      setStreamKey(prev => prev + 1); // Force img reload
       // Wait a bit for mode to stabilize
       await new Promise(resolve => setTimeout(resolve, 300));
     } catch (err) {
@@ -78,17 +80,19 @@ export default function Camera() {
       <h2 style={{ ...h2, marginBottom: 14 }}>{L.navCamera}</h2>
 
       <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 3", borderRadius: 16, overflow: "hidden", background: "#0c0d0b", border: "1px solid #20211d", display: "grid", placeItems: "center" }}>
-        {loading ? (
+        {loading || switchingMode ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
             <div style={{ width: 32, height: 32, border: `2px solid ${C.line}`, borderTop: `2px solid ${C.signal}`, borderRadius: "50%", animation: "mc-sweep .8s linear infinite" }} />
             <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "rgba(233,232,221,.55)", letterSpacing: ".08em", textTransform: "uppercase" }}>
-              {en ? "Initializing camera..." : "Spouštím kameru..."}
+              {switchingMode
+                ? (en ? "Switching mode..." : "Přepínám mód...")
+                : (en ? "Initializing camera..." : "Spouštím kameru...")}
             </span>
           </div>
         ) : !failed ? (
           <img
-            key={detectionMode}
-            src={`${streamUrl()}?mode=${detectionMode}`}
+            key={streamKey}
+            src={`${streamUrl()}?v=${streamKey}`}
             alt="camera"
             onError={() => !switchingMode && setFailed(true)}
             style={{
