@@ -70,6 +70,7 @@ DEFAULT_TOLERANCE = 0.6
 FACE_EVERY = 5            # run face detection every Nth frame (hog is slow)
 GESTURE_EVERY = 3         # run gesture detection every Nth frame (mediapipe is slow on Pi)
 HAND_CONFIDENCE = 0.6
+JPEG_QUALITY = 75         # JPEG quality (1-100, lower = smaller file, less CPU)
 CAMERA_OPEN_RETRIES = 10  # wait for the daemon to release /dev after stop
 
 # "learn" is a streaming mode used by the face-enrollment flow; it is not shown
@@ -1125,7 +1126,7 @@ class Supervisor:
                     self.fps = 0.9 * self.fps + 0.1 * (1.0 / dt)
                 # Text overlay removed for clean stream display
 
-                ok, jpg = cv2.imencode(".jpg", frame)
+                ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
                 if ok:
                     self.output.write(jpg.tobytes())
         except Exception as exc:  # noqa: BLE001
