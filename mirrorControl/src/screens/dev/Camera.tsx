@@ -19,15 +19,11 @@ export default function Camera() {
     let mounted = true;
     (async () => {
       try {
-        const current = await getMode();
-        if (mounted) {
-          setPreviousMode(current.mode);
-          // Switch to "learn" mode which opens camera and streams
-          await setMode("learn");
-          // Wait a bit for camera to fully initialize
-          await new Promise(resolve => setTimeout(resolve, 500));
-          if (mounted) setLoading(false);
-        }
+        // Switch to "learn" mode which opens camera and streams
+        await setMode("learn");
+        // Wait a bit for camera to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (mounted) setLoading(false);
       } catch (err) {
         console.error("Failed to switch camera mode:", err);
         if (mounted) {
@@ -37,14 +33,12 @@ export default function Camera() {
       }
     })();
 
-    // When component unmounts, restore previous mode
+    // When component unmounts, return to face_detect mode (camera off, daemon on)
     return () => {
       mounted = false;
-      if (previousMode) {
-        setMode(previousMode).catch(err =>
-          console.error("Failed to restore camera mode:", err)
-        );
-      }
+      setMode("face_detect").catch(err =>
+        console.error("Failed to restore face_detect mode:", err)
+      );
     };
   }, []);
 
