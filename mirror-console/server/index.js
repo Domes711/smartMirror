@@ -118,8 +118,10 @@ app.get("/api/mqtt/subscribe", (req, res) => {
   const maxTimeout = parseInt(timeout, 10);
   const messages = [];
   let timer;
+  let finished = false;
 
   const handler = (t, payload) => {
+    if (finished) return;
     if (t === topic || (topic.endsWith("/#") && t.startsWith(topic.slice(0, -2)))) {
       messages.push({ topic: t, payload: payload.toString() });
       if (messages.length >= maxCount) {
@@ -129,6 +131,8 @@ app.get("/api/mqtt/subscribe", (req, res) => {
   };
 
   const finish = () => {
+    if (finished) return;
+    finished = true;
     clearTimeout(timer);
     mqttClient.off("message", handler);
     res.json({ messages });
