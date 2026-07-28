@@ -67,7 +67,7 @@ DEFAULT_ENCODINGS = os.path.join(_CAMERA_DIR, "encoded_faces.pickle")
 DATASET_DIR = os.path.join(_CAMERA_DIR, "dataset")
 ENCODE_SCRIPT = os.path.join(_CAMERA_DIR, "encode_faces.py")
 DEFAULT_TOLERANCE = 0.6
-FACE_EVERY = 5            # run face detection every Nth frame (hog is slow)
+FACE_EVERY = 10           # run face detection every Nth frame (hog is slow)
 GESTURE_EVERY = 3         # run gesture detection every Nth frame (mediapipe is slow on Pi)
 HAND_CONFIDENCE = 0.6
 JPEG_QUALITY = 75         # JPEG quality (1-100, lower = smaller file, less CPU)
