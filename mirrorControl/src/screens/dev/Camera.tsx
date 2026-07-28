@@ -3,11 +3,15 @@ import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
 import { streamUrl, setMode, getMode } from "@/services/api";
 
+type DetectionMode = "learn" | "test_face" | "test_gesture";
+
 export default function Camera() {
   const { L, en } = useT();
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [previousMode, setPreviousMode] = useState<string | null>(null);
+  const [detectionMode, setDetectionMode] = useState<DetectionMode>("learn");
+  const [switchingMode, setSwitchingMode] = useState(false);
 
   useEffect(() => {
     // When component mounts, switch to learn mode to enable streaming
@@ -43,6 +47,24 @@ export default function Camera() {
     };
   }, []);
 
+  const handleModeChange = async (mode: DetectionMode) => {
+    if (mode === detectionMode || switchingMode) return;
+
+    setSwitchingMode(true);
+    setFailed(false);
+    try {
+      await setMode(mode);
+      setDetectionMode(mode);
+      // Wait a bit for mode to stabilize
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (err) {
+      console.error("Failed to switch detection mode:", err);
+      setFailed(true);
+    } finally {
+      setSwitchingMode(false);
+    }
+  };
+
   const rows = [
     { k: en ? "Detector" : "Detektor", v: "BlazeFace" },
     { k: en ? "Recognition" : "Rozpoznání", v: "MobileFaceNet" },
@@ -65,9 +87,10 @@ export default function Camera() {
           </div>
         ) : !failed ? (
           <img
-            src={streamUrl()}
+            key={detectionMode}
+            src={`${streamUrl()}?mode=${detectionMode}`}
             alt="camera"
-            onError={() => setFailed(true)}
+            onError={() => !switchingMode && setFailed(true)}
             style={{
               width: "100%",
               height: "100%",
@@ -78,6 +101,66 @@ export default function Camera() {
         ) : (
           <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "rgba(233,232,221,.55)", letterSpacing: ".08em", textTransform: "uppercase" }}>{L.camPreviewHint}</span>
         )}
+      </div>
+
+      {/* Detection mode selector */}
+      <div style={{ marginTop: 16, marginBottom: 16 }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8, textTransform: "uppercase", letterSpacing: ".08em" }}>
+          {en ? "Detection" : "Detekce"}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+          <button
+            onClick={() => handleModeChange("learn")}
+            disabled={switchingMode}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: detectionMode === "learn" ? `2px solid ${C.signal}` : `1px solid ${C.line}`,
+              background: detectionMode === "learn" ? C.p3 : "transparent",
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: switchingMode ? C.mute : C.ink,
+              cursor: switchingMode ? "wait" : "pointer",
+              opacity: switchingMode ? 0.5 : 1,
+            }}
+          >
+            {en ? "Clean" : "Čistý"}
+          </button>
+          <button
+            onClick={() => handleModeChange("test_face")}
+            disabled={switchingMode}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: detectionMode === "test_face" ? `2px solid ${C.signal}` : `1px solid ${C.line}`,
+              background: detectionMode === "test_face" ? C.p3 : "transparent",
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: switchingMode ? C.mute : C.ink,
+              cursor: switchingMode ? "wait" : "pointer",
+              opacity: switchingMode ? 0.5 : 1,
+            }}
+          >
+            {en ? "Face" : "Obličej"}
+          </button>
+          <button
+            onClick={() => handleModeChange("test_gesture")}
+            disabled={switchingMode}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: detectionMode === "test_gesture" ? `2px solid ${C.signal}` : `1px solid ${C.line}`,
+              background: detectionMode === "test_gesture" ? C.p3 : "transparent",
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: switchingMode ? C.mute : C.ink,
+              cursor: switchingMode ? "wait" : "pointer",
+              opacity: switchingMode ? 0.5 : 1,
+            }}
+          >
+            {en ? "Gesture" : "Gesta"}
+          </button>
+        </div>
       </div>
 
       <div style={{ marginTop: 16 }}>
