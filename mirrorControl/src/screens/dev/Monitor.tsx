@@ -37,6 +37,7 @@ export default function Monitor() {
   const [localRed, setLocalRed] = useState(100);
   const [localGreen, setLocalGreen] = useState(100);
   const [localBlue, setLocalBlue] = useState(100);
+  const [isChanging, setIsChanging] = useState(false);
 
   useEffect(() => {
     loadState();
@@ -45,14 +46,15 @@ export default function Monitor() {
   }, []);
 
   useEffect(() => {
-    if (state) {
+    // Only sync from server state if user is not actively changing values
+    if (state && !isChanging) {
       setLocalBrightness(state.brightness);
       setLocalContrast(state.contrast);
       setLocalRed(state.red);
       setLocalGreen(state.green);
       setLocalBlue(state.blue);
     }
-  }, [state]);
+  }, [state, isChanging]);
 
   const loadState = async () => {
     setStateLoading(true);
@@ -77,13 +79,19 @@ export default function Monitor() {
   };
 
   const publish = async (topic: string, value: string | number | object) => {
+    setIsChanging(true);
     try {
       const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
       await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
-      // Reload state after change
-      setTimeout(loadState, 800);
+      // Reload state after change, then allow sync
+      setTimeout(async () => {
+        await loadState();
+        // Allow sync after state is loaded
+        setTimeout(() => setIsChanging(false), 100);
+      }, 1000);
     } catch (err) {
       console.error("Publish failed:", err);
+      setIsChanging(false);
     }
   };
 
