@@ -9,6 +9,7 @@ interface MonitorState {
   red: number;
   green: number;
   blue: number;
+  power?: number;
 }
 
 const PRESETS = [
@@ -30,18 +31,16 @@ const MODES = [
 export default function Monitor() {
   const { en } = useT();
   const [state, setState] = useState<MonitorState | null>(null);
-  const [draft, setDraft] = useState<MonitorState | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [stateLoading, setStateLoading] = useState(true);
 
   useEffect(() => {
     loadState();
-    const interval = setInterval(() => loadState(false), 30000);
+    const interval = setInterval(loadState, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadState = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const loadState = async () => {
+    setStateLoading(true);
     try {
       // Start listening for response first, then send request
       const subscribePromise = mqtt.sub("smartmirror/monitor/state", 1, 3000);
@@ -54,12 +53,11 @@ export default function Monitor() {
       if (data.messages?.length) {
         const msg = JSON.parse(data.messages[0].payload);
         setState(msg);
-        setDraft(msg);
       }
     } catch (err) {
       console.error("Failed to load monitor state:", err);
     } finally {
-      if (showLoading) setLoading(false);
+      setStateLoading(false);
     }
   };
 
@@ -67,35 +65,11 @@ export default function Monitor() {
     try {
       const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
       await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
-      // Reload state after 1 second
-      setTimeout(loadState, 1000);
+      // Reload state after change
+      setTimeout(loadState, 800);
     } catch (err) {
       console.error("Publish failed:", err);
     }
-  };
-
-  const saveAll = async () => {
-    if (!draft) return;
-    setSaving(true);
-    try {
-      await mqtt.pub("smartmirror/monitor/control/brightness", String(draft.brightness));
-      await new Promise(resolve => setTimeout(resolve, 300));
-      await mqtt.pub("smartmirror/monitor/control/contrast", String(draft.contrast));
-      await new Promise(resolve => setTimeout(resolve, 300));
-      await mqtt.pub("smartmirror/monitor/control/rgb", JSON.stringify({ r: draft.red, g: draft.green, b: draft.blue }));
-      // Wait for monitor to update, then reload
-      setTimeout(() => {
-        loadState();
-        setSaving(false);
-      }, 1500);
-    } catch (err) {
-      console.error("Save failed:", err);
-      setSaving(false);
-    }
-  };
-
-  const updateDraft = (field: keyof MonitorState, value: number) => {
-    setDraft(prev => prev ? { ...prev, [field]: value } : null);
   };
 
   const Slider = ({ label, value, min, max, on }: { label: string; value: number; min: number; max: number; on: (v: number) => void }) => (
@@ -119,7 +93,6 @@ export default function Monitor() {
   const QuickButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
     <button
       onClick={onClick}
-      disabled={saving}
       style={{
         flex: 1,
         padding: "10px 16px",
@@ -129,24 +102,12 @@ export default function Monitor() {
         fontFamily: "var(--mono)",
         fontSize: 11,
         color: C.ink,
-        cursor: saving ? "not-allowed" : "pointer",
-        opacity: saving ? 0.5 : 1
+        cursor: "pointer"
       }}
     >
       {label}
     </button>
   );
-
-  if (loading) {
-    return (
-      <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ width: 40, height: 40, border: `3px solid ${C.line}`, borderTop: `3px solid ${C.signal}`, borderRadius: "50%", margin: "0 auto 16px", animation: "mc-sweep .8s linear infinite" }} />
-          <p style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>{en ? "Loading monitor state..." : "Načítám stav monitoru..."}</p>
-        </div>
-      </section>
-    );
-  }
 
   return (
     <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease" }}>
@@ -155,36 +116,39 @@ export default function Monitor() {
         <h2 style={h2}>{en ? "Monitor" : "Monitor"}</h2>
       </div>
 
-      {state && (
-        <div style={{ background: C.p3, borderRadius: 12, padding: "12px 16px", marginBottom: 16, border: `1px solid ${C.line}` }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, fontFamily: "var(--mono)", fontSize: 10, color: C.mute }}>
-            <div>
-              <div style={{ marginBottom: 4 }}>{en ? "Brightness" : "Jas"}</div>
-              <div style={{ color: C.ink, fontSize: 14 }}>{state.brightness}%</div>
+      {/* Current State Panel */}
+      <div style={{ background: C.p3, borderRadius: 12, padding: "12px 16px", marginBottom: 16, border: `1px solid ${C.line}`, position: "relative" }}>
+        {stateLoading && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(233, 232, 221, 0.8)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 24, height: 24, border: `2px solid ${C.line}`, borderTop: `2px solid ${C.signal}`, borderRadius: "50%", animation: "mc-sweep .8s linear infinite" }} />
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, fontFamily: "var(--mono)", fontSize: 10, color: C.mute }}>
+          <div>
+            <div style={{ marginBottom: 4 }}>{en ? "Display" : "Displej"}</div>
+            <div style={{ color: state?.power === 1 ? "#1F8A3B" : "#E5482F", fontSize: 14, fontWeight: 700 }}>
+              {state?.power === 1 ? "ON" : state?.power === 4 || state?.power === 5 ? "OFF" : "—"}
             </div>
-            <div>
-              <div style={{ marginBottom: 4 }}>{en ? "Contrast" : "Kontrast"}</div>
-              <div style={{ color: C.ink, fontSize: 14 }}>{state.contrast}%</div>
-            </div>
-            <div>
-              <div style={{ marginBottom: 4 }}>RGB</div>
-              <div style={{ color: C.ink, fontSize: 14 }}>
-                {state.red}/{state.green}/{state.blue}
-              </div>
+          </div>
+          <div>
+            <div style={{ marginBottom: 4 }}>{en ? "Brightness" : "Jas"}</div>
+            <div style={{ color: C.ink, fontSize: 14 }}>{state?.brightness ?? "—"}%</div>
+          </div>
+          <div>
+            <div style={{ marginBottom: 4 }}>{en ? "Contrast" : "Kontrast"}</div>
+            <div style={{ color: C.ink, fontSize: 14 }}>{state?.contrast ?? "—"}%</div>
+          </div>
+          <div>
+            <div style={{ marginBottom: 4 }}>RGB</div>
+            <div style={{ color: C.ink, fontSize: 14 }}>
+              {state ? `${state.red}/${state.green}/${state.blue}` : "—"}
             </div>
           </div>
         </div>
-      )}
-
-      <Slider label={en ? "Brightness" : "Jas"} value={draft?.brightness ?? 100} min={0} max={100} on={(v) => updateDraft("brightness", v)} />
-      <Slider label={en ? "Contrast" : "Kontrast"} value={draft?.contrast ?? 100} min={0} max={100} on={(v) => updateDraft("contrast", v)} />
-
-      <div style={{ marginTop: 24, marginBottom: 8 }}>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>{en ? "E2 Enhancement" : "E2 Vylepšení"}</div>
-        <input type="range" min={0} max={25} defaultValue={25} onChange={(e) => publish("e2", parseInt(e.target.value))} style={{ width: "100%", accentColor: C.signal }} />
       </div>
 
-      <div style={{ marginTop: 24 }}>
+      {/* Power Controls */}
+      <div style={{ marginBottom: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Power" : "Napájení"}</div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => publish("power", "on")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
@@ -194,6 +158,38 @@ export default function Monitor() {
             ✕ {en ? "Off" : "Vypnout"}
           </button>
         </div>
+      </div>
+
+      {/* Quick Presets */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Quick Presets" : "Rychlé předvolby"}</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <QuickButton
+            label={en ? "💡 Maximum" : "💡 Maximum"}
+            onClick={() => {
+              publish("brightness", 100);
+              publish("contrast", 100);
+              publish("e2", 25);
+              publish("mode", "games");
+            }}
+          />
+          <QuickButton
+            label={en ? "🌙 Night" : "🌙 Noční"}
+            onClick={() => {
+              publish("brightness", 50);
+              publish("contrast", 75);
+              publish("mode", "standard");
+            }}
+          />
+        </div>
+      </div>
+
+      <Slider label={en ? "Brightness" : "Jas"} value={state?.brightness ?? 100} min={0} max={100} on={(v) => publish("brightness", v)} />
+      <Slider label={en ? "Contrast" : "Kontrast"} value={state?.contrast ?? 100} min={0} max={100} on={(v) => publish("contrast", v)} />
+
+      <div style={{ marginTop: 24, marginBottom: 8 }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>{en ? "E2 Enhancement" : "E2 Vylepšení"}</div>
+        <input type="range" min={0} max={25} defaultValue={25} onChange={(e) => publish("e2", parseInt(e.target.value))} style={{ width: "100%", accentColor: C.signal, cursor: "pointer" }} />
       </div>
 
       <div style={{ marginTop: 24 }}>
@@ -220,56 +216,9 @@ export default function Monitor() {
 
       <div style={{ marginTop: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 12 }}>RGB Gain</div>
-        <Slider label="Red" value={draft?.red ?? 100} min={0} max={100} on={(v) => updateDraft("red", v)} />
-        <Slider label="Green" value={draft?.green ?? 100} min={0} max={100} on={(v) => updateDraft("green", v)} />
-        <Slider label="Blue" value={draft?.blue ?? 100} min={0} max={100} on={(v) => updateDraft("blue", v)} />
-      </div>
-
-      <button
-        onClick={saveAll}
-        disabled={saving}
-        style={{
-          width: "100%",
-          marginTop: 24,
-          padding: "14px 20px",
-          borderRadius: 12,
-          border: "none",
-          background: C.signal,
-          color: C.paper,
-          fontFamily: "var(--mono)",
-          fontSize: 13,
-          fontWeight: 700,
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
-          cursor: saving ? "not-allowed" : "pointer",
-          opacity: saving ? 0.6 : 1,
-          transition: "all .2s"
-        }}
-      >
-        {saving ? (en ? "Saving..." : "Ukládám...") : (en ? "Save Settings" : "Uložit nastavení")}
-      </button>
-
-      <div style={{ marginTop: 24 }}>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Quick Presets" : "Rychlé předvolby"}</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <QuickButton
-            label={en ? "💡 Maximum" : "💡 Maximum"}
-            onClick={() => {
-              publish("brightness", 100);
-              publish("contrast", 100);
-              publish("e2", 25);
-              publish("mode", "games");
-            }}
-          />
-          <QuickButton
-            label={en ? "🌙 Night" : "🌙 Noční"}
-            onClick={() => {
-              publish("brightness", 50);
-              publish("contrast", 75);
-              publish("mode", "standard");
-            }}
-          />
-        </div>
+        <Slider label="Red" value={state?.red ?? 100} min={0} max={100} on={(v) => publish("rgb", { r: v })} />
+        <Slider label="Green" value={state?.green ?? 100} min={0} max={100} on={(v) => publish("rgb", { g: v })} />
+        <Slider label="Blue" value={state?.blue ?? 100} min={0} max={100} on={(v) => publish("rgb", { b: v })} />
       </div>
     </section>
   );

@@ -129,6 +129,7 @@ class MonitorController:
             "red": self.ddcutil_getvcp(VCP_RED_GAIN),
             "green": self.ddcutil_getvcp(VCP_GREEN_GAIN),
             "blue": self.ddcutil_getvcp(VCP_BLUE_GAIN),
+            "power": self.ddcutil_getvcp(VCP_POWER),
             "timestamp": time.time()
         }
         return state
