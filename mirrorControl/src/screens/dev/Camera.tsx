@@ -92,7 +92,8 @@ export default function Camera() {
           </div>
         ) : !failed ? (
           <img
-            src={streamUrl()}
+            key={`${currentResolution.width}x${currentResolution.height}`}
+            src={`${streamUrl()}?v=${currentResolution.width}x${currentResolution.height}`}
             alt="camera"
             onError={() => setFailed(true)}
             style={{
