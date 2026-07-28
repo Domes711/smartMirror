@@ -97,7 +97,15 @@ export default function Monitor() {
         <span>{label}</span>
         <span style={{ color: C.ink }}>{value}%</span>
       </div>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => on(parseInt(e.target.value))} style={{ width: "100%", accentColor: C.signal }} />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => on(parseInt(e.target.value))}
+        onInput={(e) => on(parseInt((e.target as HTMLInputElement).value))}
+        style={{ width: "100%", accentColor: C.signal, cursor: "pointer" }}
+      />
     </div>
   );
 
