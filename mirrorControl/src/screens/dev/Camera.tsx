@@ -83,11 +83,13 @@ export default function Camera() {
       <h2 style={{ ...h2, marginBottom: 14 }}>{L.navCamera}</h2>
 
       <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 3", borderRadius: 16, overflow: "hidden", background: "#0c0d0b", border: "1px solid #20211d", display: "grid", placeItems: "center" }}>
-        {loading ? (
+        {loading || changingResolution ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
             <div style={{ width: 32, height: 32, border: `2px solid ${C.line}`, borderTop: `2px solid ${C.signal}`, borderRadius: "50%", animation: "mc-sweep .8s linear infinite" }} />
             <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "rgba(233,232,221,.55)", letterSpacing: ".08em", textTransform: "uppercase" }}>
-              {en ? "Initializing camera..." : "Spouštím kameru..."}
+              {changingResolution
+                ? (en ? "Changing resolution..." : "Měním rozlišení...")
+                : (en ? "Initializing camera..." : "Spouštím kameru...")}
             </span>
           </div>
         ) : !failed ? (
@@ -95,7 +97,7 @@ export default function Camera() {
             key={`${currentResolution.width}x${currentResolution.height}`}
             src={`${streamUrl()}?v=${currentResolution.width}x${currentResolution.height}`}
             alt="camera"
-            onError={() => setFailed(true)}
+            onError={() => !changingResolution && setFailed(true)}
             style={{
               width: "100%",
               height: "100%",
@@ -139,11 +141,6 @@ export default function Camera() {
             </button>
           ))}
         </div>
-        {changingResolution && (
-          <div style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 10, color: C.mute, textAlign: "center" }}>
-            {en ? "Reinitializing camera..." : "Restartuju kameru..."}
-          </div>
-        )}
       </div>
 
       <div style={{ marginTop: 16 }}>
