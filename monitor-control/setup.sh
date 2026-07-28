@@ -10,7 +10,8 @@ echo "▸ Installing monitor-control daemon..."
 
 # Install Python dependencies
 echo "  Installing Python dependencies..."
-pip3 install --user paho-mqtt
+pip3 install --user --break-system-packages paho-mqtt 2>/dev/null || \
+  sudo apt-get install -y python3-paho-mqtt
 
 # Make monitor_control.py executable
 chmod +x "$MONITOR_DIR/monitor_control.py"
