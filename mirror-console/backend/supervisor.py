@@ -61,8 +61,8 @@ FACE_SERVICE = "face_reco"
 RADAR_SERVICE = "ld2450"
 SYSTEMCTL = "/usr/bin/systemctl"
 
-DEFAULT_WIDTH = 640
-DEFAULT_HEIGHT = 480
+DEFAULT_WIDTH = 800
+DEFAULT_HEIGHT = 600
 DEFAULT_ENCODINGS = os.path.join(_CAMERA_DIR, "encoded_faces.pickle")
 DATASET_DIR = os.path.join(_CAMERA_DIR, "dataset")
 ENCODE_SCRIPT = os.path.join(_CAMERA_DIR, "encode_faces.py")
