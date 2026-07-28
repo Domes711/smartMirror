@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
 import { mqtt } from "@/services/api";
