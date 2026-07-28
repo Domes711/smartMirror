@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
-import { streamUrl, setMode, getMode } from "@/services/api";
+import { streamUrl, setMode } from "@/services/api";
 
 type DetectionMode = "learn" | "test_face" | "test_gesture";
 
@@ -9,7 +9,6 @@ export default function Camera() {
   const { L, en } = useT();
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [previousMode, setPreviousMode] = useState<string | null>(null);
   const [detectionMode, setDetectionMode] = useState<DetectionMode>("learn");
   const [switchingMode, setSwitchingMode] = useState(false);
   const [streamKey, setStreamKey] = useState(0);
