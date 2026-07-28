@@ -32,12 +32,27 @@ export default function Monitor() {
   const { en } = useT();
   const [state, setState] = useState<MonitorState | null>(null);
   const [stateLoading, setStateLoading] = useState(true);
+  const [localBrightness, setLocalBrightness] = useState(100);
+  const [localContrast, setLocalContrast] = useState(100);
+  const [localRed, setLocalRed] = useState(100);
+  const [localGreen, setLocalGreen] = useState(100);
+  const [localBlue, setLocalBlue] = useState(100);
 
   useEffect(() => {
     loadState();
     const interval = setInterval(loadState, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (state) {
+      setLocalBrightness(state.brightness);
+      setLocalContrast(state.contrast);
+      setLocalRed(state.red);
+      setLocalGreen(state.green);
+      setLocalBlue(state.blue);
+    }
+  }, [state]);
 
   const loadState = async () => {
     setStateLoading(true);
@@ -149,13 +164,13 @@ export default function Monitor() {
 
       {/* Power Controls */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Power" : "Napájení"}</div>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Display" : "Displej"}</div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => publish("power", "on")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
-            ✓ {en ? "On" : "Zapnout"}
+            ✓ {en ? "Wake Up" : "Probudit"}
           </button>
-          <button onClick={() => publish("power", "off")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
-            ✕ {en ? "Off" : "Vypnout"}
+          <button onClick={() => publish("power", "standby")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
+            ⏾ {en ? "Standby" : "Standby"}
           </button>
         </div>
       </div>
@@ -184,8 +199,26 @@ export default function Monitor() {
         </div>
       </div>
 
-      <Slider label={en ? "Brightness" : "Jas"} value={state?.brightness ?? 100} min={0} max={100} on={(v) => publish("brightness", v)} />
-      <Slider label={en ? "Contrast" : "Kontrast"} value={state?.contrast ?? 100} min={0} max={100} on={(v) => publish("contrast", v)} />
+      <Slider
+        label={en ? "Brightness" : "Jas"}
+        value={localBrightness}
+        min={0}
+        max={100}
+        on={(v) => {
+          setLocalBrightness(v);
+          publish("brightness", v);
+        }}
+      />
+      <Slider
+        label={en ? "Contrast" : "Kontrast"}
+        value={localContrast}
+        min={0}
+        max={100}
+        on={(v) => {
+          setLocalContrast(v);
+          publish("contrast", v);
+        }}
+      />
 
       <div style={{ marginTop: 24, marginBottom: 8 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>{en ? "E2 Enhancement" : "E2 Vylepšení"}</div>
@@ -216,9 +249,36 @@ export default function Monitor() {
 
       <div style={{ marginTop: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 12 }}>RGB Gain</div>
-        <Slider label="Red" value={state?.red ?? 100} min={0} max={100} on={(v) => publish("rgb", { r: v })} />
-        <Slider label="Green" value={state?.green ?? 100} min={0} max={100} on={(v) => publish("rgb", { g: v })} />
-        <Slider label="Blue" value={state?.blue ?? 100} min={0} max={100} on={(v) => publish("rgb", { b: v })} />
+        <Slider
+          label="Red"
+          value={localRed}
+          min={0}
+          max={100}
+          on={(v) => {
+            setLocalRed(v);
+            publish("rgb", { r: v });
+          }}
+        />
+        <Slider
+          label="Green"
+          value={localGreen}
+          min={0}
+          max={100}
+          on={(v) => {
+            setLocalGreen(v);
+            publish("rgb", { g: v });
+          }}
+        />
+        <Slider
+          label="Blue"
+          value={localBlue}
+          min={0}
+          max={100}
+          on={(v) => {
+            setLocalBlue(v);
+            publish("rgb", { b: v });
+          }}
+        />
       </div>
     </section>
   );
