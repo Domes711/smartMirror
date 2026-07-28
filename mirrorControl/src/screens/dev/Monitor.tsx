@@ -30,11 +30,12 @@ const MODES = [
 export default function Monitor() {
   const { en } = useT();
   const [state, setState] = useState<MonitorState | null>(null);
+  const [draft, setDraft] = useState<MonitorState | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadState();
-    const interval = setInterval(loadState, 5000);
+    const interval = setInterval(loadState, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -44,6 +45,7 @@ export default function Monitor() {
       if (data.messages?.length) {
         const msg = JSON.parse(data.messages[0].payload);
         setState(msg);
+        if (!draft) setDraft(msg);
       }
     } catch (err) {
       console.error("Failed to load monitor state:", err);
@@ -55,12 +57,33 @@ export default function Monitor() {
     try {
       const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
       await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
-      setTimeout(loadState, 1000);
+      setTimeout(loadState, 1500);
     } catch (err) {
       console.error("Publish failed:", err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveAll = async () => {
+    if (!draft) return;
+    setLoading(true);
+    try {
+      await mqtt.pub("smartmirror/monitor/control/brightness", String(draft.brightness));
+      await new Promise(resolve => setTimeout(resolve, 200));
+      await mqtt.pub("smartmirror/monitor/control/contrast", String(draft.contrast));
+      await new Promise(resolve => setTimeout(resolve, 200));
+      await mqtt.pub("smartmirror/monitor/control/rgb", JSON.stringify({ r: draft.red, g: draft.green, b: draft.blue }));
+      setTimeout(loadState, 1500);
+    } catch (err) {
+      console.error("Save failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateDraft = (field: keyof MonitorState, value: number) => {
+    setDraft(prev => prev ? { ...prev, [field]: value } : null);
   };
 
   const Slider = ({ label, value, min, max, on }: { label: string; value: number; min: number; max: number; on: (v: number) => void }) => (
@@ -122,8 +145,8 @@ export default function Monitor() {
         </div>
       )}
 
-      <Slider label={en ? "Brightness" : "Jas"} value={state?.brightness ?? 100} min={0} max={100} on={(v) => publish("brightness", v)} />
-      <Slider label={en ? "Contrast" : "Kontrast"} value={state?.contrast ?? 100} min={0} max={100} on={(v) => publish("contrast", v)} />
+      <Slider label={en ? "Brightness" : "Jas"} value={draft?.brightness ?? 100} min={0} max={100} on={(v) => updateDraft("brightness", v)} />
+      <Slider label={en ? "Contrast" : "Kontrast"} value={draft?.contrast ?? 100} min={0} max={100} on={(v) => updateDraft("contrast", v)} />
 
       <div style={{ marginTop: 24, marginBottom: 8 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>{en ? "E2 Enhancement" : "E2 Vylepšení"}</div>
@@ -166,10 +189,34 @@ export default function Monitor() {
 
       <div style={{ marginTop: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 12 }}>RGB Gain</div>
-        <Slider label="Red" value={state?.red ?? 100} min={0} max={100} on={(v) => publish("rgb", { r: v })} />
-        <Slider label="Green" value={state?.green ?? 100} min={0} max={100} on={(v) => publish("rgb", { g: v })} />
-        <Slider label="Blue" value={state?.blue ?? 100} min={0} max={100} on={(v) => publish("rgb", { b: v })} />
+        <Slider label="Red" value={draft?.red ?? 100} min={0} max={100} on={(v) => updateDraft("red", v)} />
+        <Slider label="Green" value={draft?.green ?? 100} min={0} max={100} on={(v) => updateDraft("green", v)} />
+        <Slider label="Blue" value={draft?.blue ?? 100} min={0} max={100} on={(v) => updateDraft("blue", v)} />
       </div>
+
+      <button
+        onClick={saveAll}
+        disabled={loading}
+        style={{
+          width: "100%",
+          marginTop: 24,
+          padding: "14px 20px",
+          borderRadius: 12,
+          border: "none",
+          background: C.signal,
+          color: C.paper,
+          fontFamily: "var(--mono)",
+          fontSize: 13,
+          fontWeight: 700,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          cursor: loading ? "not-allowed" : "pointer",
+          opacity: loading ? 0.6 : 1,
+          transition: "all .2s"
+        }}
+      >
+        {loading ? (en ? "Saving..." : "Ukládám...") : (en ? "Save Settings" : "Uložit nastavení")}
+      </button>
 
       <div style={{ marginTop: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Quick Presets" : "Rychlé předvolby"}</div>
