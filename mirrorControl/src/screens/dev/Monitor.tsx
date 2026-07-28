@@ -94,12 +94,12 @@ export default function Monitor() {
       try {
         const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
         await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
-        // Reload state after change, then allow sync
+        // Wait for daemon to: setvcp (300ms) + sleep (500ms) + getvcp (3000ms) = ~4s
         setTimeout(async () => {
           await loadState();
           // Allow sync after state is loaded
-          setTimeout(() => setIsChanging(false), 100);
-        }, 1500);
+          setIsChanging(false);
+        }, 4000);
       } catch (err) {
         console.error("Publish failed:", err);
         setIsChanging(false);
