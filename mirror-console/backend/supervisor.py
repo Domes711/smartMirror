@@ -68,6 +68,7 @@ DATASET_DIR = os.path.join(_CAMERA_DIR, "dataset")
 ENCODE_SCRIPT = os.path.join(_CAMERA_DIR, "encode_faces.py")
 DEFAULT_TOLERANCE = 0.6
 FACE_EVERY = 5            # run face detection every Nth frame (hog is slow)
+GESTURE_EVERY = 3         # run gesture detection every Nth frame (mediapipe is slow on Pi)
 HAND_CONFIDENCE = 0.6
 CAMERA_OPEN_RETRIES = 10  # wait for the daemon to release /dev after stop
 
@@ -947,6 +948,7 @@ class Supervisor:
         self._known_encodings = None
         self._known_names = None
         self._last_faces = []
+        self._last_hands = []  # cached hand landmarks + finger count
 
     # ---- persistence -------------------------------------------------- #
     def load_mode(self) -> str:
@@ -1108,7 +1110,7 @@ class Supervisor:
                 frame_idx += 1
                 overlay = self.overlay
                 if overlay == "gesture":
-                    self._draw_gesture(cv2, frame)
+                    self._draw_gesture(cv2, frame, frame_idx)
                 elif overlay == "face":
                     self._draw_face(cv2, frame, frame_idx)
                 elif overlay == "learn":
@@ -1133,7 +1135,7 @@ class Supervisor:
             log.info("capture loop stopped")
 
     # ---- overlays (lazy-initialized, cached across switches) ---------- #
-    def _draw_gesture(self, cv2, frame) -> None:
+    def _draw_gesture(self, cv2, frame, frame_idx) -> None:
         if self._hands is None:
             from gesture_reco_once import count_fingers
             import mediapipe as mp
@@ -1145,19 +1147,26 @@ class Supervisor:
                 min_tracking_confidence=HAND_CONFIDENCE,
             )
         mp = self._mp
-        results = self._hands.process(frame)
-        if results.multi_hand_landmarks:
-            for lm, handed in zip(results.multi_hand_landmarks,
-                                  results.multi_handedness):
-                mp.solutions.drawing_utils.draw_landmarks(
-                    frame, lm, mp.solutions.hands.HAND_CONNECTIONS,
-                    mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
-                    mp.solutions.drawing_styles.get_default_hand_connections_style(),
-                )
-                n = self._count_fingers(lm, handed)
-                cv2.putText(frame, f"fingers: {n}",
-                            (10, self.args.height - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        # Only run detection every GESTURE_EVERY frames
+        if frame_idx % GESTURE_EVERY == 0:
+            results = self._hands.process(frame)
+            self._last_hands = []
+            if results.multi_hand_landmarks:
+                for lm, handed in zip(results.multi_hand_landmarks,
+                                      results.multi_handedness):
+                    n = self._count_fingers(lm, handed)
+                    self._last_hands.append((lm, handed, n))
+
+        # Draw cached results every frame
+        for lm, handed, n in self._last_hands:
+            mp.solutions.drawing_utils.draw_landmarks(
+                frame, lm, mp.solutions.hands.HAND_CONNECTIONS,
+                mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
+                mp.solutions.drawing_styles.get_default_hand_connections_style(),
+            )
+            cv2.putText(frame, f"fingers: {n}",
+                        (10, self.args.height - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
     def _draw_face(self, cv2, frame, frame_idx) -> None:
         if self._fr is None:
