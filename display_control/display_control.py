@@ -80,6 +80,52 @@ def init_monitor():
         log.warning("Monitor init error: %s", e)
 
 
+def power_on():
+    """Turn on monitor via DDC/CI and reinitialize to Standard mode."""
+    try:
+        # VCP D6 = 01: Power on
+        subprocess.run(
+            ["ddcutil", "--noverify", "setvcp", "d6", "01"],
+            check=True,
+            capture_output=True,
+            timeout=5,
+        )
+        log.info("Monitor power ON")
+        # Wait for monitor to fully power on before reinitializing
+        time.sleep(2)
+        # Reinitialize to Standard mode after power on
+        init_monitor()
+    except FileNotFoundError:
+        log.warning("ddcutil not found - power control disabled")
+    except subprocess.CalledProcessError as e:
+        log.error("Failed to power on monitor: %s", e.stderr.decode())
+    except subprocess.TimeoutExpired:
+        log.error("ddcutil timeout - display may not support DDC/CI")
+    except Exception as e:
+        log.error("Power on error: %s", e)
+
+
+def power_standby():
+    """Put monitor into standby via DDC/CI."""
+    try:
+        # VCP D6 = 05: Standby
+        subprocess.run(
+            ["ddcutil", "--noverify", "setvcp", "d6", "05"],
+            check=True,
+            capture_output=True,
+            timeout=5,
+        )
+        log.info("Monitor power STANDBY")
+    except FileNotFoundError:
+        log.warning("ddcutil not found - power control disabled")
+    except subprocess.CalledProcessError as e:
+        log.error("Failed to set monitor standby: %s", e.stderr.decode())
+    except subprocess.TimeoutExpired:
+        log.error("ddcutil timeout - display may not support DDC/CI")
+    except Exception as e:
+        log.error("Power standby error: %s", e)
+
+
 def set_brightness(value: int):
     """Set display brightness via DDC/CI.
 
@@ -130,8 +176,14 @@ def main() -> int:
             command = payload.get("command")
 
             if command == "toggle":
-                log.info("Received toggle command")
+                log.info("Received toggle command (GPIO)")
                 pulse_button(GPIO)
+            elif command == "power_on":
+                log.info("Received power ON command")
+                power_on()
+            elif command == "power_standby":
+                log.info("Received power STANDBY command")
+                power_standby()
             elif command == "brightness":
                 value = payload.get("value", 50)
                 # Clamp to 0-100

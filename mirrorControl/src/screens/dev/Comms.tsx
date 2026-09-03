@@ -29,21 +29,20 @@ export default function Comms() {
     }).catch(() => {});
   }, [dispatch, name]);
 
-  // presets publish to the REAL broker topics used across the repo.
-  const commonPresets: { label: string; topic: string; payload: string; dot: string }[] = [
+  // User mode presets: radar, mirror control, and face recognition
+  const userModePresets: { label: string; topic: string; payload: string; dot: string }[] = [
     { label: en ? "Motion detected by radar" : "Pohyb detekován radarem", topic: TOPICS.radarPresence, payload: "present", dot: "#3bd17a" },
     { label: en ? "Absence" : "Nepřítomnost", topic: TOPICS.radarPresence, payload: "absent", dot: "#8C8C81" },
     { label: en ? "Reset / sleep" : "Reset / uspání", topic: TOPICS.controlReset, payload: "1", dot: "#E5482F" },
     { label: en ? "Wake mirror" : "Probudit zrcadlo", topic: TOPICS.wake, payload: "1", dot: "#E5482F" },
-  ];
-
-  const userPresets: { label: string; topic: string; payload: string; dot: string }[] = [
     { label: (en ? "Face recognised: " : "Obličej rozpoznán: ") + name, topic: TOPICS.cameraRecognition, payload: JSON.stringify({ user: name }), dot: "#4aa8ff" },
     { label: en ? "Unknown face" : "Neznámý obličej", topic: TOPICS.cameraRecognition, payload: JSON.stringify({ user: null }), dot: "#ffc34d" },
   ];
 
-  const monitorPresets: { label: string; topic: string; payload: string; dot: string }[] = [
-    { label: en ? "Monitor: Wake / Standby" : "Monitor: Probudit / Standby", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "toggle" }), dot: "#4aa8ff" },
+  // Monitor mode presets: ONLY monitor control (power, brightness)
+  const monitorModePresets: { label: string; topic: string; payload: string; dot: string }[] = [
+    { label: en ? "💡 Power ON" : "💡 Zapnout", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "power_on" }), dot: "#3bd17a" },
+    { label: en ? "⏾ Standby" : "⏾ Standby", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "power_standby" }), dot: "#8C8C81" },
     { label: en ? "Brightness: 100%" : "Jas: 100%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 100 }), dot: "#3bd17a" },
     { label: en ? "Brightness: 75%" : "Jas: 75%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 75 }), dot: "#3bd17a" },
     { label: en ? "Brightness: 50%" : "Jas: 50%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 50 }), dot: "#ffc34d" },
@@ -51,7 +50,7 @@ export default function Comms() {
     { label: en ? "Brightness: 0%" : "Jas: 0%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 0 }), dot: "#8C8C81" },
   ];
 
-  const presets = [...commonPresets, ...(selectedTarget === "user" ? userPresets : monitorPresets)];
+  const presets = selectedTarget === "user" ? userModePresets : monitorModePresets;
 
   const links = [
     { name: "MQTT broker", sub: resolveMqttUrl().replace(/^wss?:\/\//, ""), dot: connected ? C.green : C.signal, stat: connected ? (en ? "connected" : "připojeno") : en ? "offline" : "odpojeno", statColor: connected ? C.green : C.signal },
