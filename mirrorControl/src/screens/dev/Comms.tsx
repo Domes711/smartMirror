@@ -4,6 +4,8 @@ import { BottomSheet, Segmented, tokens as C, h2, eyebrow } from "@/components/u
 import { devActions } from "@/features/dev/devSlice";
 import { TOPICS, isConnected, resolveMqttUrl } from "@/services/mqtt";
 import * as fx from "@/app/thunks";
+import { listProfiles, type ApiProfile } from "@/services/api";
+import { useEffect, useState } from "react";
 
 export default function Comms() {
   const dispatch = useAppDispatch();
@@ -12,16 +14,44 @@ export default function Comms() {
   const name = useAppSelector((s) => s.dev.commsName);
   const panel = useAppSelector((s) => s.dev.commsPanel);
   const connected = isConnected();
+  const [profiles, setProfiles] = useState<ApiProfile[]>([]);
+  const [selectedTarget, setSelectedTarget] = useState<"user" | "monitor">("user");
+
+  // Load user profiles
+  useEffect(() => {
+    listProfiles().then((data) => {
+      const userProfiles = data.profiles.filter((p) => p.name !== "default");
+      setProfiles(userProfiles);
+      // Set first profile as default if available
+      if (userProfiles.length > 0 && !name) {
+        dispatch(devActions.setCommsName(userProfiles[0].name));
+      }
+    }).catch(() => {});
+  }, [dispatch, name]);
 
   // presets publish to the REAL broker topics used across the repo.
-  const presets: { label: string; topic: string; payload: string; dot: string }[] = [
+  const commonPresets: { label: string; topic: string; payload: string; dot: string }[] = [
     { label: en ? "Motion detected by radar" : "Pohyb detekován radarem", topic: TOPICS.radarPresence, payload: "present", dot: "#3bd17a" },
     { label: en ? "Absence" : "Nepřítomnost", topic: TOPICS.radarPresence, payload: "absent", dot: "#8C8C81" },
-    { label: (en ? "Face recognised: " : "Obličej rozpoznán: ") + name, topic: TOPICS.cameraRecognition, payload: JSON.stringify({ user: name }), dot: "#4aa8ff" },
-    { label: en ? "Unknown face" : "Neznámý obličej", topic: TOPICS.cameraRecognition, payload: JSON.stringify({ user: null }), dot: "#ffc34d" },
     { label: en ? "Reset / sleep" : "Reset / uspání", topic: TOPICS.controlReset, payload: "1", dot: "#E5482F" },
     { label: en ? "Wake mirror" : "Probudit zrcadlo", topic: TOPICS.wake, payload: "1", dot: "#E5482F" },
   ];
+
+  const userPresets: { label: string; topic: string; payload: string; dot: string }[] = [
+    { label: (en ? "Face recognised: " : "Obličej rozpoznán: ") + name, topic: TOPICS.cameraRecognition, payload: JSON.stringify({ user: name }), dot: "#4aa8ff" },
+    { label: en ? "Unknown face" : "Neznámý obličej", topic: TOPICS.cameraRecognition, payload: JSON.stringify({ user: null }), dot: "#ffc34d" },
+  ];
+
+  const monitorPresets: { label: string; topic: string; payload: string; dot: string }[] = [
+    { label: en ? "Monitor: Wake / Standby" : "Monitor: Probudit / Standby", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "toggle" }), dot: "#4aa8ff" },
+    { label: en ? "Brightness: 100%" : "Jas: 100%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 100 }), dot: "#3bd17a" },
+    { label: en ? "Brightness: 75%" : "Jas: 75%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 75 }), dot: "#3bd17a" },
+    { label: en ? "Brightness: 50%" : "Jas: 50%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 50 }), dot: "#ffc34d" },
+    { label: en ? "Brightness: 25%" : "Jas: 25%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 25 }), dot: "#8C8C81" },
+    { label: en ? "Brightness: 0%" : "Jas: 0%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 0 }), dot: "#8C8C81" },
+  ];
+
+  const presets = [...commonPresets, ...(selectedTarget === "user" ? userPresets : monitorPresets)];
 
   const links = [
     { name: "MQTT broker", sub: resolveMqttUrl().replace(/^wss?:\/\//, ""), dot: connected ? C.green : C.signal, stat: connected ? (en ? "connected" : "připojeno") : en ? "offline" : "odpojeno", statColor: connected ? C.green : C.signal },
@@ -67,10 +97,48 @@ export default function Comms() {
       <BottomSheet open={panel} onClose={() => dispatch(devActions.closeComms())}>
         <p style={{ ...eyebrow, margin: "0 0 4px" }}>{en ? "Send MQTT message" : "Odeslat MQTT zprávu"}</p>
         <p style={{ fontSize: 13, color: C.ink2, margin: "0 0 14px" }}>{en ? "Presets · publishes to broker" : "Předvolby · odešle na broker"}</p>
+
+        {/* Target selector: User or Monitor */}
         <div style={{ marginBottom: 14 }}>
-          <p style={{ ...eyebrow, margin: "0 0 7px" }}>{en ? "Recognised person" : "Rozpoznaná osoba"}</p>
-          <Segmented options={["Eliška", "Marek", "Host"].map((n) => ({ value: n, label: n }))} value={name} onChange={(v) => dispatch(devActions.setCommsName(v))} />
+          <p style={{ ...eyebrow, margin: "0 0 7px" }}>{en ? "Target" : "Cíl"}</p>
+          <Segmented
+            options={[
+              { value: "user", label: en ? "👤 User" : "👤 Uživatel" },
+              { value: "monitor", label: en ? "🖥️ Monitor" : "🖥️ Monitor" }
+            ]}
+            value={selectedTarget}
+            onChange={(v) => setSelectedTarget(v as "user" | "monitor")}
+          />
         </div>
+
+        {/* User selector (only shown when target is "user") */}
+        {selectedTarget === "user" && profiles.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ ...eyebrow, margin: "0 0 7px" }}>{en ? "Recognised person" : "Rozpoznaná osoba"}</p>
+            <select
+              value={name || profiles[0]?.name || ""}
+              onChange={(e) => dispatch(devActions.setCommsName(e.target.value))}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: `1px solid ${C.line}`,
+                background: C.p3,
+                fontFamily: "var(--mono)",
+                fontSize: 13,
+                color: C.ink,
+                cursor: "pointer",
+              }}
+            >
+              {profiles.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {presets.map((p, i) => (
           <button key={i} onClick={() => dispatch(fx.sendMqtt(p.topic, p.payload))} className="mc-lift" style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 11, border: `1px solid ${C.line}`, borderRadius: 12, background: C.p2, padding: "13px 14px", cursor: "pointer", marginBottom: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.dot, flex: "0 0 auto" }} />
