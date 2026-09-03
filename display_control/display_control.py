@@ -67,8 +67,9 @@ def set_brightness(value: int):
     try:
         # ddcutil setvcp 10 <value> sets brightness
         # Note: value for ddcutil is also 0-100
+        # --noverify: Some Dell monitors (like U2515H) fail verification
         subprocess.run(
-            ["ddcutil", "setvcp", "10", str(value)],
+            ["ddcutil", "--noverify", "setvcp", "10", str(value)],
             check=True,
             capture_output=True,
             timeout=5,
