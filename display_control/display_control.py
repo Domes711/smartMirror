@@ -58,6 +58,28 @@ def pulse_button(GPIO):
     log.info("Display power button pulsed")
 
 
+def init_monitor():
+    """Initialize monitor - set to Standard mode to enable brightness control.
+
+    Dell monitors with dynamic contrast enabled block manual brightness changes.
+    Setting Display Mode to Standard (VCP DC = 0x00) disables dynamic contrast.
+    """
+    try:
+        subprocess.run(
+            ["ddcutil", "--noverify", "setvcp", "dc", "00"],
+            check=True,
+            capture_output=True,
+            timeout=5,
+        )
+        log.info("Monitor set to Standard mode (dynamic contrast disabled)")
+    except FileNotFoundError:
+        log.debug("ddcutil not found - skipping monitor init")
+    except subprocess.CalledProcessError as e:
+        log.warning("Failed to set monitor mode: %s", e.stderr.decode())
+    except Exception as e:
+        log.warning("Monitor init error: %s", e)
+
+
 def set_brightness(value: int):
     """Set display brightness via DDC/CI.
 
@@ -88,6 +110,9 @@ def set_brightness(value: int):
 def main() -> int:
     """Main daemon loop."""
     GPIO = setup_gpio()
+
+    # Initialize monitor - set to Standard mode to enable brightness control
+    init_monitor()
 
     mqtt_client = mqtt.Client(client_id="display_control_daemon")
 
