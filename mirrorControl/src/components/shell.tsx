@@ -172,7 +172,7 @@ export function BottomNav() {
   const nav = (g: TabGroup, sc: "radar" | "monitor" | "camera" | "comms") => dispatch(fx.nav(sc, g));
 
   return (
-    <div style={{ flex: "0 0 auto", display: "flex", padding: "12px 14px 10px", paddingBottom: "max(10px, env(safe-area-inset-bottom))", borderTop: `1px solid ${C.line}`, background: C.paper }}>
+    <div style={{ flex: "0 0 auto", display: "flex", padding: "12px 14px 10px", borderTop: `1px solid ${C.line}`, background: C.paper }}>
       {devMode ? (
         <>
           <NavItem active={tab === "radar"} label={L.navRadar} onClick={() => nav("radar", "radar")}>{Ico.radar}</NavItem>

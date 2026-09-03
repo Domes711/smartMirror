@@ -26,13 +26,9 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: env(safe-area-inset-bottom, 0);
   width: 100vw;
-  height: 100vh;
-  height: 100dvh;
   overflow: hidden;
-  padding-bottom: env(safe-area-inset-bottom);
-  box-sizing: border-box;
 }
 
 button {
