@@ -1,22 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// All MQTT messages the mirror currently uses. Buttons publish these verbatim
-// so you can simulate the radar/camera without the real hardware.
-const GROUPS = [
+// Static MQTT groups (radar, gestures, control)
+const STATIC_GROUPS = [
   {
     title: "Přítomnost (radar)",
     topic: "smartmirror/radar/presence",
     buttons: [
       { label: "Detekován pohyb", payload: "present", kind: "ok" },
       { label: "Prostor prázdný", payload: "absent", kind: "muted" },
-    ],
-  },
-  {
-    title: "Rozpoznání obličeje",
-    topic: "smartmirror/camera/recognition",
-    buttons: [
-      { label: "Rozpoznán: Domes", payload: { user: "Domes" }, kind: "ok" },
-      { label: "Neznámý / nikdo", payload: { user: null }, kind: "muted" },
     ],
   },
   {
@@ -36,18 +27,6 @@ const GROUPS = [
     topic: "smartmirror/control/reset",
     buttons: [{ label: "Reset stavu", payload: "", kind: "warn" }],
   },
-  {
-    title: "Ovládání monitoru",
-    topic: "smartmirror/display/control",
-    buttons: [
-      { label: "Probudit / Stand-by", payload: { command: "toggle" }, kind: "ok" },
-      { label: "Jas: 100%", payload: { command: "brightness", value: 100 }, compact: true },
-      { label: "Jas: 75%", payload: { command: "brightness", value: 75 }, compact: true },
-      { label: "Jas: 50%", payload: { command: "brightness", value: 50 }, compact: true },
-      { label: "Jas: 25%", payload: { command: "brightness", value: 25 }, compact: true },
-      { label: "Jas: 0%", payload: { command: "brightness", value: 0 }, compact: true },
-    ],
-  },
 ];
 
 const fmtPayload = (p) => (typeof p === "string" ? p : JSON.stringify(p));
@@ -57,7 +36,31 @@ export default function MqttPanel() {
   const [status, setStatus] = useState(null); // {connected}
   const [log, setLog] = useState([]); // {ts, dir, topic, payload}
   const [busy, setBusy] = useState(false);
+  const [profiles, setProfiles] = useState([]); // user profiles from API
+  const [selectedProfile, setSelectedProfile] = useState("monitor"); // "monitor" or profile name
   const esRef = useRef(null);
+
+  // Load user profiles
+  useEffect(() => {
+    let alive = true;
+    fetch("/profiles")
+      .then((r) => r.json())
+      .then((data) => {
+        if (alive && data.profiles) {
+          // Filter out "default" profile
+          const userProfiles = data.profiles.filter((p) => p.name !== "default");
+          setProfiles(userProfiles);
+          // Set first profile as default if available
+          if (userProfiles.length > 0) {
+            setSelectedProfile(userProfiles[0].name);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // connection status
   useEffect(() => {
@@ -122,6 +125,34 @@ export default function MqttPanel() {
 
   const connected = status?.connected;
 
+  // Generate buttons based on selected profile
+  const getDynamicButtons = () => {
+    if (selectedProfile === "monitor") {
+      return {
+        topic: "smartmirror/display/control",
+        buttons: [
+          { label: "Probudit / Stand-by", payload: { command: "toggle" }, kind: "ok" },
+          { label: "Jas: 100%", payload: { command: "brightness", value: 100 }, compact: true },
+          { label: "Jas: 75%", payload: { command: "brightness", value: 75 }, compact: true },
+          { label: "Jas: 50%", payload: { command: "brightness", value: 50 }, compact: true },
+          { label: "Jas: 25%", payload: { command: "brightness", value: 25 }, compact: true },
+          { label: "Jas: 0%", payload: { command: "brightness", value: 0 }, compact: true },
+        ],
+      };
+    } else {
+      // User profile selected
+      return {
+        topic: "smartmirror/camera/recognition",
+        buttons: [
+          { label: `Rozpoznán: ${selectedProfile}`, payload: { user: selectedProfile }, kind: "ok" },
+          { label: "Neznámý / nikdo", payload: { user: null }, kind: "muted" },
+        ],
+      };
+    }
+  };
+
+  const dynamicSection = getDynamicButtons();
+
   return (
     <div className="panel">
       <div className="panel-head">
@@ -131,7 +162,8 @@ export default function MqttPanel() {
       </div>
 
       <div className="mqtt-groups">
-        {GROUPS.map((g) => (
+        {/* Static groups */}
+        {STATIC_GROUPS.map((g) => (
           <section key={g.topic} className="card mqtt-group">
             <div className="mqtt-group-head">
               <h3>{g.title}</h3>
@@ -156,6 +188,54 @@ export default function MqttPanel() {
             </div>
           </section>
         ))}
+
+        {/* Dynamic section: User recognition or Monitor control */}
+        <section className="card mqtt-group">
+          <div className="mqtt-group-head">
+            <h3>Rozpoznání / Ovládání</h3>
+            <code className="topic">{dynamicSection.topic}</code>
+          </div>
+          <div style={{ padding: "0 1rem 0.5rem" }}>
+            <select
+              value={selectedProfile}
+              onChange={(e) => setSelectedProfile(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.5rem",
+                fontSize: "0.95rem",
+                borderRadius: "4px",
+                border: "1px solid #555",
+                background: "#2a2a2a",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              <option value="monitor">🖥️ Monitor</option>
+              {profiles.map((p) => (
+                <option key={p.name} value={p.name}>
+                  👤 {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mqtt-btns">
+            {dynamicSection.buttons.map((b, i) => (
+              <button
+                key={i}
+                className={
+                  "mqtt-btn" +
+                  (b.kind ? ` k-${b.kind}` : "") +
+                  (b.compact ? " compact" : "")
+                }
+                disabled={busy}
+                onClick={() => publish(dynamicSection.topic, b.payload)}
+                title={fmtPayload(b.payload)}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       <section className="card monitor">
