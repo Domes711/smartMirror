@@ -197,7 +197,7 @@ export function PhoneFrame({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        height: "100%", width: "100%", background: C.paper,
+        height: "calc(100% - env(safe-area-inset-bottom, 0))", width: "100%", background: C.paper,
         position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
         fontFamily: "var(--grotesk)", color: C.ink,
       }}
