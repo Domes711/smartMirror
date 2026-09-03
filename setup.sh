@@ -78,11 +78,12 @@ else
   echo "✗ mm-store clone selhal ($MM_STORE_REPO) — zkontroluj přístup (SSH klíč) / nastav MM_STORE_REPO; pokračuji"
 fi
 
-run "1/5  Camera (face recognition)" "$DIR/camera/setup.sh"
-run "2/5  Radar (LD2450)"            "$DIR/ld2450/setup.sh"
-run "3/5  Mirror console"            "$DIR/mirror-console/setup.sh"
-run "4/5  MagicMirror (+ pm2)"       "$DIR/MagicMirror/setup.sh"
-run "5/5  Mirror Control app"        "$DIR/mirrorControl/setup.sh"
+run "1/6  Camera (face recognition)" "$DIR/camera/setup.sh"
+run "2/6  Radar (LD2450)"            "$DIR/ld2450/setup.sh"
+run "3/6  Display control"           "$DIR/display_control/setup.sh"
+run "4/6  Mirror console"            "$DIR/mirror-console/setup.sh"
+run "5/6  MagicMirror (+ pm2)"       "$DIR/MagicMirror/setup.sh"
+run "6/6  Mirror Control app"        "$DIR/mirrorControl/setup.sh"
 
 echo
 echo "════════════════════════════════════════════"
@@ -103,7 +104,7 @@ echo
 echo "Ověření:"
 echo "  curl -s http://127.0.0.1:8000/healthz; echo      # konzole"
 echo "  curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:8090/   # Control app"
-echo "  systemctl status ld2450 mirror-console-backend mirror-console-web mirror-control"
+echo "  systemctl status ld2450 display-control mirror-console-backend mirror-console-web mirror-control"
 echo "  pm2 status MagicMirror"
 echo
 echo "Mirror Control app:  http://<pi>:8090"

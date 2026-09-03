@@ -36,6 +36,18 @@ const GROUPS = [
     topic: "smartmirror/control/reset",
     buttons: [{ label: "Reset stavu", payload: "", kind: "warn" }],
   },
+  {
+    title: "Ovládání monitoru",
+    topic: "smartmirror/display/control",
+    buttons: [
+      { label: "Probudit / Stand-by", payload: { command: "toggle" }, kind: "ok" },
+      { label: "Jas: 100%", payload: { command: "brightness", value: 100 }, compact: true },
+      { label: "Jas: 75%", payload: { command: "brightness", value: 75 }, compact: true },
+      { label: "Jas: 50%", payload: { command: "brightness", value: 50 }, compact: true },
+      { label: "Jas: 25%", payload: { command: "brightness", value: 25 }, compact: true },
+      { label: "Jas: 0%", payload: { command: "brightness", value: 0 }, compact: true },
+    ],
+  },
 ];
 
 const fmtPayload = (p) => (typeof p === "string" ? p : JSON.stringify(p));
