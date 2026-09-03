@@ -127,7 +127,7 @@ export function Toast() {
   const toast = useAppSelector((s) => s.ui.toast);
   if (!toast) return null;
   return (
-    <div style={{ position: "absolute", left: "50%", bottom: "calc(92px + env(safe-area-inset-bottom))", zIndex: 60, transform: "translateX(-50%)", display: "inline-flex", alignItems: "center", gap: 8, background: C.ink, color: C.paper, fontFamily: "var(--mono)", fontSize: 11.5, padding: "10px 16px", borderRadius: 999, animation: "toastin .25s ease", whiteSpace: "nowrap" }}>
+    <div style={{ position: "absolute", left: "50%", bottom: 92, zIndex: 60, transform: "translateX(-50%)", display: "inline-flex", alignItems: "center", gap: 8, background: C.ink, color: C.paper, fontFamily: "var(--mono)", fontSize: 11.5, padding: "10px 16px", borderRadius: 999, animation: "toastin .25s ease", whiteSpace: "nowrap" }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.signal }} />
       {toast}
     </div>
@@ -172,7 +172,7 @@ export function BottomNav() {
   const nav = (g: TabGroup, sc: "radar" | "monitor" | "camera" | "comms") => dispatch(fx.nav(sc, g));
 
   return (
-    <div style={{ flex: "0 0 auto", display: "flex", padding: "12px 14px calc(10px + env(safe-area-inset-bottom))", borderTop: `1px solid ${C.line}`, background: C.paper }}>
+    <div style={{ flex: "0 0 auto", display: "flex", padding: "12px 14px 10px", borderTop: `1px solid ${C.line}`, background: C.paper }}>
       {devMode ? (
         <>
           <NavItem active={tab === "radar"} label={L.navRadar} onClick={() => nav("radar", "radar")}>{Ico.radar}</NavItem>
