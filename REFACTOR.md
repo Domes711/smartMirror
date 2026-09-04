@@ -474,12 +474,12 @@ const getDetectionInfo = () => {
 ```
 
 ### Deploy checklist
-- [ ] Git push změn
-- [ ] SSH na Pi: `git pull`
-- [ ] Rebuild mirrorControl: `cd ~/smartMirror/mirrorControl && npm run build`
-- [ ] Restart backend: `sudo systemctl restart mirror-console-backend`
-- [ ] Restart web: `sudo systemctl restart mirror-console-web`
-- [ ] Test: http://10.0.0.249:8090 → Dev mode → Camera tab → přepínat módy
+- [x] Git push změn
+- [x] SSH na Pi: `git pull`
+- [x] Rebuild mirrorControl: `cd ~/smartMirror/mirrorControl && npm run build`
+- [x] Restart backend: `sudo systemctl restart mirror-console-backend`
+- [x] Restart web: `sudo systemctl restart mirror-console-web`
+- [x] Test: http://10.0.0.249:8090 → Dev mode → Camera tab → přepínat módy
 
 ---
 
