@@ -14,7 +14,8 @@ const MIRROR_HTTP = process.env.VITE_MIRROR_HTTP || "http://10.0.0.249:8000";
 // WebSocket (ws://<host>:9001) — no proxy needed. See src/services/mqtt.ts.
 const restProxy = Object.fromEntries(
   [
-    "/mode", "/healthz", "/stream.mjpg", "/capture", "/encode", "/dataset",
+    "/mode", "/healthz", "/stream.mjpg", "/mirror.mjpg", "/mirror.jpg",
+    "/capture", "/encode", "/dataset",
     "/photo", "/profiles", "/radar", "/modules", "/layout", "/store", "/api",
     "/store-assets", "/module-installed", "/module-draft",
   ].map((p) => [p, MIRROR_HTTP])

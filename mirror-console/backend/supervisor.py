@@ -16,6 +16,8 @@ Node/Express front-end, which proxies to it):
     POST /mode          -> body {"mode": "..."}; switches mode, returns state
     GET  /healthz       -> {"mode","camera_open","daemon_active","fps", ...}
     GET  /stream.mjpg   -> multipart MJPEG (only meaningful in a test_* mode)
+    GET  /mirror.mjpg   -> multipart MJPEG of the REAL mirror screen (CDP screencast)
+    GET  /mirror.jpg    -> single JPEG of the REAL mirror screen
 
 The mode is persisted to `mode.state` next to this file, so the supervisor
 restores it on boot. Default (no state file) is `face_detect` so the mirror
@@ -47,6 +49,14 @@ _CAMERA_DIR = os.environ.get(
 )
 if _CAMERA_DIR not in sys.path:
     sys.path.insert(0, _CAMERA_DIR)
+
+from mirror_capture import MirrorCapture
+
+# Live screencast of the physical mirror's Electron window (CDP on the
+# --remote-debugging-port that start-magicmirror.sh passes to Electron). This
+# is the *real* screen, unlike an iframe of :8080 which is a second, separate
+# MagicMirror client. Lazy: no CDP session until somebody watches.
+mirror_capture = MirrorCapture()
 
 # count_fingers() is imported lazily inside the gesture capture branch (see
 # _capture_loop) so the supervisor — and the face/daemon modes — start even if
@@ -1436,6 +1446,7 @@ class Supervisor:
             "height": self.args.height,
             "detected_face": detected_face,
             "finger_count": finger_count,
+            "mirror_capture": mirror_capture.status(),
         }
 
     # ---- radar control ------------------------------------------------ #
@@ -1677,6 +1688,10 @@ def make_handler(sup: Supervisor):
                 self._json(200, {"mode": sup.mode})
             elif path == "/stream.mjpg":
                 self._stream()
+            elif path == "/mirror.mjpg":
+                self._mirror_stream()
+            elif path == "/mirror.jpg":
+                self._mirror_shot()
             elif path == "/dataset":
                 try:
                     q = self._query()
@@ -1812,6 +1827,59 @@ def make_handler(sup: Supervisor):
                     self.wfile.write(b"\r\n")
             except (BrokenPipeError, ConnectionResetError):
                 pass
+
+        def _mirror_stream(self):
+            """MJPEG of the REAL mirror screen (live Electron window over CDP).
+
+            Unlike an iframe of :8080 — which spins up a *second*, independent
+            MagicMirror client — this is a screencast of the window actually on
+            the glass."""
+            # Prove the session works before committing to a 200: MagicMirror
+            # started without --remote-debugging-port would otherwise leave the
+            # client staring at an open, frameless response until it times out.
+            # The session stays warm (idle grace), so frames() reuses it.
+            if mirror_capture.snapshot() is None:
+                self._json(503, {"error": "mirror screencast unavailable",
+                                 "capture": mirror_capture.status()})
+                return
+            self.send_response(200)
+            self.send_header("Age", "0")
+            self.send_header("Cache-Control", "no-cache, private")
+            self.send_header("Pragma", "no-cache")
+            self.send_header(
+                "Content-Type",
+                "multipart/x-mixed-replace; boundary=FRAME")
+            self.end_headers()
+            # Explicit close(): the generator holds a viewer refcount on the CDP
+            # session, and leaking one on a client disconnect would keep the
+            # screencast running forever.
+            gen = mirror_capture.frames()
+            try:
+                for frame in gen:
+                    self.wfile.write(b"--FRAME\r\n")
+                    self.send_header("Content-Type", "image/jpeg")
+                    self.send_header("Content-Length", str(len(frame)))
+                    self.end_headers()
+                    self.wfile.write(frame)
+                    self.wfile.write(b"\r\n")
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            finally:
+                gen.close()
+
+        def _mirror_shot(self):
+            """Single JPEG of the real mirror screen (cheap poll / fallback)."""
+            frame = mirror_capture.snapshot()
+            if frame is None:
+                self._json(503, {"error": "mirror screencast unavailable",
+                                 "capture": mirror_capture.status()})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(frame)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(frame)
 
     return Handler
 

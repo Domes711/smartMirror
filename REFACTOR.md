@@ -4,6 +4,55 @@ Evidence větších refactorů a architektonických změn v projektu.
 
 ---
 
+## 2026-09-04: Živý náhled zrcadla = skutečná obrazovka (CDP screencast)
+
+### Problém
+Home v `mirrorControl` zobrazoval náhled zrcadla jako `<iframe src="http://<pi>:8080">`.
+To ale **není zrcadlo** — je to *druhý, nezávislý* klient MagicMirroru, který si
+stránku vyrenderuje od nuly. Neukazuje, co je reálně na skle.
+
+Navíc byl náhled prázdný: jádro (`MagicMirror/js/main.js`) ignoruje `position`
+z `config.js` a staví DOM modulů do skrytého `#mm-hot-staging`. Do regionů je
+přesune až `projectLayout()` z eventu `PROFILE_STATE`. Když `profile.js` vrátí
+prázdný layout (chybí `config/pages.js`, nebo profil `default` nemá aktivní okno
+ani `defaults.default`), zůstane **celá stránka černá** — bez chyby v konzoli.
+Iframe tedy poctivě zobrazoval černo.
+
+Vedle toho iframe vyžadoval, aby byl na klientovi dostupný port `:8080`
+(přes Tailscale/LAN zvlášť) a aby MagicMirror vypnul `X-Frame-Options`.
+
+### Řešení
+Streamovat **reálné okno Electronu**, ne stránku znovu renderovat.
+
+**Přidáno:**
+- `mirror-console/backend/mirror_capture.py` — CDP klient (čistá stdlib, vlastní
+  minimální WebSocket dle RFC 6455). Připojí se na `--remote-debugging-port`
+  Electronu, pustí `Page.startScreencast` a přeposílá JPEG snímky.
+  - `Page.captureScreenshot` navíc primuje první snímek a slouží jako keepalive
+    (screencast posílá snímky jen při překreslení, zrcadlo je většinou statické).
+  - Líné a refcountované (`acquire`/`release`) — bez diváka žádná CDP session.
+  - Snímek starší než 15 s = `503`, ne tiše zmrazený obraz vydávaný za živý.
+- Endpointy supervisoru: `GET /mirror.mjpg` (MJPEG), `GET /mirror.jpg` (1 snímek),
+  stav v `/healthz` pod `mirror_capture`.
+
+**Změněno:**
+- `MagicMirror/start-magicmirror.sh` — předává Electronu
+  `--remote-debugging-port=${MM_DEBUG_PORT:-9222}` (Chromium ho váže jen na
+  127.0.0.1; `MM_DEBUG_PORT=0` vypíná). `config.electronSwitches` použít nešlo —
+  upstream `js/electron.js` má na řádku 47 chybu `new Set(a, b)`, druhý argument
+  zahodí, takže se switche z configu nikdy neaplikují.
+- `mirror-console/server/index.js` + `mirrorControl/vite.config.ts` — proxy pro
+  `/mirror.mjpg` a `/mirror.jpg`.
+- `mirrorControl/src/components/MirrorStream.tsx` — `<img src="/mirror.mjpg">`
+  jako primární zdroj; iframe `:8080` zůstává jako fallback (po 3 neúspěších).
+
+### Přínos
+- Náhled ukazuje **skutečnou obrazovku zrcadla**, včetně stavu profilu.
+- Same-origin přes `:8090` → funguje přes Tailscale bez otevírání `:8080`.
+- Nezávislé na `X-Frame-Options` / frameguard.
+
+---
+
 ## 2026-09-04: Display Control Consolidation & Event-Driven Monitor UI
 
 ### Problém

@@ -1,7 +1,8 @@
 // Express API gateway for the smart mirror camera console.
 //
 // Provides REST API gateway:
-//   - proxies the camera supervisor (/mode, /healthz, /stream.mjpg) on :8001
+//   - proxies the camera supervisor (/mode, /healthz, /stream.mjpg,
+//     /mirror.mjpg = live screencast of the real mirror screen) on :8001
 //   - bridges MQTT: publish test messages (/api/mqtt/publish) and stream all
 //     smartmirror/# traffic to the browser over SSE (/api/mqtt/stream)
 //   - AI module builder (Claude Agent SDK)
@@ -81,6 +82,9 @@ app.use(
       p === "/healthz" ||
       p === "/resolution" ||
       p.startsWith("/stream.mjpg") ||
+      // live screencast of the real mirror screen (see backend/mirror_capture.py)
+      p.startsWith("/mirror.mjpg") ||
+      p.startsWith("/mirror.jpg") ||
       p === "/capture" ||
       p === "/encode" ||
       p.startsWith("/dataset") ||

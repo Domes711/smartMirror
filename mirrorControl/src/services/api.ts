@@ -30,8 +30,19 @@ export const health = () => req<{ mode: string; modes: string[]; camera_open: bo
 /* ---------- camera / dataset ---------- */
 export const streamUrl = () => "/stream.mjpg";
 
+/** MJPEG screencast of the REAL mirror screen — a live capture of the Electron
+ * window actually on the glass, served by the supervisor over CDP. Same-origin
+ * (proxied to the backend), so it works over Tailscale/LAN without exposing
+ * :8080. Prefer this over mirrorDisplayUrl(): an iframe of :8080 is a *second*,
+ * independent MagicMirror client and does not show the real screen. */
+export const mirrorStreamUrl = () => "/mirror.mjpg";
+
+/** Single JPEG of the real mirror screen (503 when the screencast is down). */
+export const mirrorShotUrl = () => "/mirror.jpg";
+
 /** URL of the live MagicMirror display (its own web server, default :8080).
- * Same host as the app, port 8080; override with VITE_MIRROR_DISPLAY_URL. */
+ * Only the offline fallback for the preview — this re-renders the page in a
+ * fresh client rather than showing the real screen. See mirrorStreamUrl(). */
 export function mirrorDisplayUrl(): string {
   const env = import.meta.env.VITE_MIRROR_DISPLAY_URL as string | undefined;
   if (env) return env;

@@ -8,6 +8,15 @@ windows** — plus a hidden **dev mode** (radar / camera / MQTT comms).
 
 > The home screen **is** the mirror: a live preview of the current state.
 
+The Home preview is a **live screencast of the physical mirror's own Electron
+window** (`<img src="/mirror.mjpg">`, MJPEG proxied to the mirror-console
+supervisor, which captures it over the Chrome DevTools Protocol). It shows the
+real screen — the same pixels, the same profile state, the same resolved layout.
+If the screencast is unavailable (MagicMirror started without
+`--remote-debugging-port`, or an older backend) it falls back to the previous
+behaviour: an iframe of `http://<pi>:8080`, which is a *second, independent*
+MagicMirror client and only approximates the mirror.
+
 ## Transport: MQTT-first
 
 Communication with the mirror goes over **MQTT** wherever possible. The browser

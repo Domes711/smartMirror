@@ -21,6 +21,16 @@ done
 # schováme kurzor (běží v dané session)
 unclutter -idle 0 >/dev/null 2>&1 &
 
+# Chromium remote-debugging port. Umožňuje mirror-console streamovat SKUTEČNOU
+# obrazovku zrcadla (CDP screencast běžícího Electron okna) do appky —
+# mirror-console/backend/mirror_capture.py, endpoint /mirror.mjpg. Chromium ho
+# váže jen na 127.0.0.1, ven se nedostane. Vypnout: MM_DEBUG_PORT=0.
+MM_DEBUG_PORT="${MM_DEBUG_PORT:-9222}"
+DEBUG_ARGS=()
+if [ "$MM_DEBUG_PORT" != "0" ]; then
+  DEBUG_ARGS=(--remote-debugging-port="$MM_DEBUG_PORT")
+fi
+
 cd "$(cd "$(dirname "$0")" && pwd)"
 
 # vyber Wayland nebo X11 podle toho, co reálně běží, a nastav správné prostředí
@@ -28,10 +38,10 @@ WL="$(ls "$XDG_RUNTIME_DIR"/wayland-* 2>/dev/null | head -1)"
 if [ -n "$WL" ]; then
   export WAYLAND_DISPLAY="$(basename "$WL")"
   echo "start-magicmirror: Wayland session ($WAYLAND_DISPLAY)"
-  exec npm run start:wayland
+  exec npm run start:wayland -- "${DEBUG_ARGS[@]}"
 else
   export DISPLAY="${DISPLAY:-:0}"
   export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
   echo "start-magicmirror: X11 session ($DISPLAY)"
-  exec npm run start:x11
+  exec npm run start:x11 -- "${DEBUG_ARGS[@]}"
 fi

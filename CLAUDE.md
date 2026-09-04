@@ -75,14 +75,19 @@ and the **`mirrorControl`** React UI app.
   dataset mgmt. Requires `pip3 install --break-system-packages "PyTurboJPEG<2.0"`.
   (2) **Express API gateway** (`server/index.js`, `:8000`) — proxies supervisor,
   bridges MQTT (SSE + publish), hosts AI module builder. **No UI** — UI is
-  `mirrorControl/` on `:8090`. `setup.sh` installs `mirror-console-backend` and
+  `mirrorControl/` on `:8090`. (3) **`backend/mirror_capture.py`** — live
+  screencast of the **real** mirror screen (`/mirror.mjpg`): attaches to the
+  running Electron window over CDP (`--remote-debugging-port`, passed by
+  `MagicMirror/start-magicmirror.sh`; `MM_DEBUG_PORT=0` disables). The app's
+  Home preview uses this; an iframe of `:8080` is a *second* MagicMirror client
+  and is only the fallback. `setup.sh` installs `mirror-console-backend` and
   `mirror-console-web` systemd units. See `mirror-console/README.md`.
 - `mirrorControl/` — **primary UI app** (React + TypeScript + Redux + Vite) on
   `http://<pi>:8090`. Mobile-first PWA for controlling the mirror from a phone.
   Communicates with the mirror over **MQTT** (WebSocket `:9001`) for live state
   (presence, radar targets, recognition, layout reload) and falls back to REST
   (proxied to `mirror-console` backend on `:8000`) for MJPEG streams, photo
-  upload, and layout/store operations. Screens: **Home** (live mirror preview),
+  upload, and layout/store operations. Screens: **Home** (live screencast of the real mirror screen),
   **Scenes** (layout editor with time windows), **Modules** (store + AI builder),
   **Profiles** (face enrollment + per-profile layouts), **Dev** (radar/camera/MQTT
   debug). Installed as `mirror-control` systemd unit (`vite preview`). See

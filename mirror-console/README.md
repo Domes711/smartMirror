@@ -29,18 +29,32 @@ mode is persisted to `backend/mode.state` and restored on boot (default
 ## Components
 
 - `backend/supervisor.py` — **Python camera arbiter** + HTTP API (`/mode`, `/healthz`,
-  `/stream.mjpg`, `/capture`, `/dataset`, `/profiles`, `/encode`) on `127.0.0.1:8001`.
+  `/stream.mjpg`, `/mirror.mjpg`, `/capture`, `/dataset`, `/profiles`, `/encode`)
+  on `127.0.0.1:8001`.
   Rotates frames 180° (camera mounted upside down), uses TurboJPEG encoder (TJPF_RGB)
   for fast JPEG. Reuses `count_fingers()` from `../camera/gesture_reco_once.py` and
   face encodings from `../camera/encoded_faces.pickle`. Installed as
   `mirror-console-backend` systemd unit.
 
+- `backend/mirror_capture.py` — **live screencast of the real mirror screen**
+  (`/mirror.mjpg` MJPEG, `/mirror.jpg` single frame). Attaches to the running
+  MagicMirror **Electron window** over the Chrome DevTools Protocol
+  (`--remote-debugging-port`, default 9222, passed by
+  `../MagicMirror/start-magicmirror.sh`; `MM_DEBUG_PORT=0` disables it) and
+  relays `Page.startScreencast` frames. This is the **actual screen** — the app's
+  Home preview used to iframe `:8080`, which is a *second, independent*
+  MagicMirror client and never shows the mirror's real state. Pure stdlib
+  (its own minimal WebSocket client), lazy and refcounted: no CDP session while
+  nobody is watching, and a frame older than 15 s is reported as unavailable
+  (503) rather than served as if it were live.
+
 - `server/` — **Express API gateway** on `0.0.0.0:8000`: proxies supervisor,
   bridges MQTT (publish + SSE stream of `smartmirror/#` traffic), hosts AI module
   builder. **Does NOT serve UI** (UI is `../mirrorControl/` on :8090).
   Endpoints:
-  - Supervisor proxy: `/mode`, `/healthz`, `/stream.mjpg`, `/capture`, `/dataset`,
-    `/profiles`, `/radar`, `/layout`, `/store`, `/modules`
+  - Supervisor proxy: `/mode`, `/healthz`, `/stream.mjpg`, `/mirror.mjpg`,
+    `/mirror.jpg`, `/capture`, `/dataset`, `/profiles`, `/radar`, `/layout`,
+    `/store`, `/modules`
   - MQTT: `POST /api/mqtt/publish`, `GET /api/mqtt/subscribe`, `GET /api/mqtt/stream` (SSE),
     `GET /api/mqtt/status`
   - AI: `/api/modules/*` (AI module builder using Claude Agent SDK)
