@@ -1168,16 +1168,13 @@ class Supervisor:
                     n = self._count_fingers(lm, handed)
                     self._last_hands.append((lm, handed, n))
 
-        # Draw cached results every frame
+        # Draw cached results every frame (no text overlay)
         for lm, handed, n in self._last_hands:
             mp.solutions.drawing_utils.draw_landmarks(
                 frame, lm, mp.solutions.hands.HAND_CONNECTIONS,
                 mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
                 mp.solutions.drawing_styles.get_default_hand_connections_style(),
             )
-            cv2.putText(frame, f"fingers: {n}",
-                        (10, self.args.height - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
     def _draw_face(self, cv2, frame, frame_idx) -> None:
         if self._fr is None:
@@ -1202,10 +1199,9 @@ class Supervisor:
                             break
                 faces.append((top, right, bottom, left, name))
             self._last_faces = faces
+        # Draw red rectangles only (no text overlay)
         for (top, right, bottom, left, name) in self._last_faces:
-            cv2.rectangle(frame, (left, top), (right, bottom), (255, 128, 0), 2)
-            cv2.putText(frame, name, (left, max(top - 8, 12)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 128, 0), 2)
+            cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 1)
 
     def _draw_facebox(self, cv2, frame, frame_idx) -> None:
         """Lightweight face box (no recognition) to help framing while learning."""
@@ -1395,6 +1391,20 @@ class Supervisor:
 
     # ---- status ------------------------------------------------------- #
     def health(self) -> dict:
+        # Extract detection data based on current mode
+        detected_face = None
+        finger_count = None
+
+        if self.mode in ("test_face", "learn") and self._last_faces:
+            # Get the first detected face name (if any)
+            # _last_faces format: [(top, right, bottom, left, name), ...]
+            detected_face = self._last_faces[0][4] if self._last_faces[0][4] else "unknown"
+
+        if self.mode == "test_gesture" and self._last_hands:
+            # Get the first hand's finger count (if any)
+            # _last_hands format: [(lm, handed, n), ...]
+            finger_count = self._last_hands[0][2]
+
         return {
             "mode": self.mode,
             "modes": list(MODES),
@@ -1403,6 +1413,8 @@ class Supervisor:
             "fps": round(self.fps, 1),
             "width": self.args.width,
             "height": self.args.height,
+            "detected_face": detected_face,
+            "finger_count": finger_count,
         }
 
     # ---- radar control ------------------------------------------------ #

@@ -374,6 +374,115 @@ ok, jpg = cv2.imencode(".jpg", frame, ...)
 
 ---
 
+## 2026-09-04e: Camera Detection UI - Remove Text Overlays, Add Detection Info
+
+### Problém
+- **Text v camera streamu**: Jména a "fingers: N" text překrývaly video
+- **Chybějící detection info v UI**: Uživatel neviděl co kamera detekovala
+- **Statické info řádky**: Zobrazovaly pevné hodnoty místo live detekce
+
+### Řešení
+
+#### 1. Odstranění text overlays (supervisor.py)
+**_draw_face:**
+```python
+# PŘED
+cv2.putText(frame, name, (left + 6, bottom - 6), ...)
+cv2.rectangle(frame, (left, top), (right, bottom), (255, 128, 0), 2)
+
+# PO
+cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 1)
+# Žádný text - pouze červený tenký obdélník
+```
+
+**_draw_gesture:**
+```python
+# PŘED
+cv2.putText(frame, f"fingers: {n}", ...)
+
+# PO
+# Pouze landmarks + connections, žádný text
+mp.solutions.drawing_utils.draw_landmarks(frame, lm, ...)
+```
+
+#### 2. Expozice detection dat přes API (supervisor.py)
+```python
+def health(self) -> dict:
+    detected_face = None
+    finger_count = None
+
+    if self.mode in ("test_face", "learn") and self._last_faces:
+        detected_face = self._last_faces[0][4] if self._last_faces[0][4] else "unknown"
+
+    if self.mode == "test_gesture" and self._last_hands:
+        finger_count = self._last_hands[0][2]
+
+    return {
+        # ... existující fields ...
+        "detected_face": detected_face,
+        "finger_count": finger_count,
+    }
+```
+
+#### 3. Dynamické info řádky v UI (Camera.tsx)
+**PŘED:**
+```tsx
+const rows = [
+  { k: "Detector", v: "BlazeFace" },
+  { k: "Recognition", v: "MobileFaceNet" },
+  { k: "Latency", v: "38 ms" },
+  { k: "Exposure", v: "auto · +0.3 EV" },
+];
+```
+
+**PO:**
+```tsx
+// Poll /api/healthz každých 500ms
+useEffect(() => {
+  const interval = setInterval(async () => {
+    const data = await fetch("/api/healthz").then(r => r.json());
+    setDetectedFace(data.detected_face || null);
+    setFingerCount(data.finger_count);
+  }, 500);
+  return () => clearInterval(interval);
+}, []);
+
+// Dynamické řádky podle módu
+const getDetectionInfo = () => {
+  if (detectionMode === "test_face" || detectionMode === "learn") {
+    return [{ k: "Osoba", v: detectedFace || "—" }];
+  } else if (detectionMode === "test_gesture") {
+    return [{ k: "Prsty", v: fingerCount !== null ? String(fingerCount) : "—" }];
+  }
+  return [];
+};
+```
+
+### Výhody
+- ✅ Čistý video stream bez text overlays
+- ✅ Červené tenké obdélníky kolem obličejů (lépe viditelné)
+- ✅ Live detection info v UI místo statických hodnot
+- ✅ Reaktivní - aktualizuje se každých 500ms
+- ✅ Mód-aware - zobrazuje relevantní info podle režimu (osoba/prsty)
+
+### Změněné soubory
+```
+ mirror-console/backend/supervisor.py      | 19 ++++++++++++++
+ mirrorControl/src/screens/dev/Camera.tsx  | 38 ++++++++++++++++++--------
+ REFACTOR.md                               | 85 ++++++++++++++++++++++++++++++
+ 3 files changed, 130 insertions(+), 12 deletions(-)
+```
+
+### Deploy checklist
+- [ ] Git push změn
+- [ ] SSH na Pi: `git pull`
+- [ ] Rebuild mirrorControl: `cd ~/smartMirror/mirrorControl && npm run build`
+- [ ] Restart backend: `sudo systemctl restart mirror-console-backend`
+- [ ] Restart web: `sudo systemctl restart mirror-console-web`
+- [ ] Test: http://10.0.0.249:8090 → Dev mode → Camera tab → přepínat módy
+
+---
+
 ## Template pro další refactory
 
 ### Problém

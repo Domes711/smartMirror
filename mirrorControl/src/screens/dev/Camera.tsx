@@ -13,6 +13,8 @@ export default function Camera() {
   const [switchingMode, setSwitchingMode] = useState(false);
   const [streamKey, setStreamKey] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
+  const [detectedFace, setDetectedFace] = useState<string | null>(null);
+  const [fingerCount, setFingerCount] = useState<number | null>(null);
 
   useEffect(() => {
     // When component mounts, switch to learn mode to enable streaming
@@ -42,6 +44,24 @@ export default function Camera() {
     };
   }, []);
 
+  // Poll healthz endpoint for detection data
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/healthz");
+        if (res.ok) {
+          const data = await res.json();
+          setDetectedFace(data.detected_face || null);
+          setFingerCount(data.finger_count !== undefined && data.finger_count !== null ? data.finger_count : null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch detection data:", err);
+      }
+    }, 500); // Poll every 500ms for responsive updates
+
+    return () => clearInterval(interval);
+  }, []);
+
   const handleModeChange = async (mode: DetectionMode) => {
     if (mode === detectionMode || switchingMode) return;
 
@@ -61,12 +81,27 @@ export default function Camera() {
     }
   };
 
-  const rows = [
-    { k: en ? "Detector" : "Detektor", v: "BlazeFace" },
-    { k: en ? "Recognition" : "Rozpoznání", v: "MobileFaceNet" },
-    { k: en ? "Latency" : "Latence", v: "38 ms" },
-    { k: en ? "Exposure" : "Expozice", v: "auto · +0.3 EV" },
-  ];
+  // Generate detection info rows based on current mode
+  const getDetectionInfo = () => {
+    if (detectionMode === "test_face" || detectionMode === "learn") {
+      return [
+        {
+          k: en ? "Person" : "Osoba",
+          v: detectedFace || (en ? "—" : "—")
+        }
+      ];
+    } else if (detectionMode === "test_gesture") {
+      return [
+        {
+          k: en ? "Fingers" : "Prsty",
+          v: fingerCount !== null ? String(fingerCount) : (en ? "—" : "—")
+        }
+      ];
+    }
+    return [];
+  };
+
+  const rows = getDetectionInfo();
 
   return (
     <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease" }}>
