@@ -613,14 +613,15 @@ jpg_bytes = encoder.encode(frame, quality=75)  # očekává RGB ✅
 ```
 
 ### Deploy checklist
-- [ ] Nainstalovat PyTurboJPEG na Pi: `pip3 install PyTurboJPEG`
-- [ ] Git push změn
-- [ ] SSH na Pi: `git pull`
-- [ ] Restart backend: `sudo systemctl restart mirror-console-backend`
-- [ ] Test: http://10.0.0.249:8090 → Dev mode → Camera tab
-  - [ ] Stream by měl být plynulejší
-  - [ ] Check logs: `journalctl -u mirror-console-backend -f` → mělo by být "TurboJPEG encoder initialized"
-  - [ ] Zkontrolovat FPS v /healthz endpoint
+- [x] Nainstalovat PyTurboJPEG na Pi: `pip3 install --break-system-packages "PyTurboJPEG<2.0"`
+  - **Poznámka**: Pi má libjpeg-turbo 2.x, který vyžaduje PyTurboJPEG 1.x (ne 2.x)
+- [x] Git push změn
+- [x] SSH na Pi: `git pull`
+- [x] Restart backend: `sudo systemctl restart mirror-console-backend`
+- [x] Test: http://10.0.0.249:8090 → Dev mode → Camera tab
+  - [x] Stream by měl být plynulejší
+  - [x] Check logs: `journalctl -u mirror-console-backend -f` → mělo by být "TurboJPEG encoder initialized" ✅
+  - [x] Zkontrolovat FPS v /healthz endpoint → **11.8 FPS** ✅
 
 ---
 
