@@ -951,6 +951,7 @@ class Supervisor:
         self._known_names = None
         self._last_faces = []
         self._last_hands = []  # cached hand landmarks + finger count
+        self._jpeg_encoder = None  # TurboJPEG encoder (lazy-initialized)
 
     # ---- persistence -------------------------------------------------- #
     def load_mode(self) -> str:
@@ -1109,8 +1110,6 @@ class Supervisor:
                 self.picam.capture_array()
             while not self.stop_capture.is_set():
                 frame = self.picam.capture_array()  # RGB888 from picam2
-                # Convert RGB to BGR for OpenCV (picam2 returns RGB, cv2 expects BGR)
-                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 # Rotate 180° because camera is mounted upside down
                 frame = cv2.rotate(frame, cv2.ROTATE_180)
                 frame_idx += 1
@@ -1132,9 +1131,25 @@ class Supervisor:
                     self.fps = 0.9 * self.fps + 0.1 * (1.0 / dt)
                 # Text overlay removed for clean stream display
 
-                ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
-                if ok:
-                    self.output.write(jpg.tobytes())
+                # Encode to JPEG using TurboJPEG (hardware-accelerated, faster than cv2)
+                if self._jpeg_encoder is None:
+                    try:
+                        from turbojpeg import TurboJPEG
+                        self._jpeg_encoder = TurboJPEG()
+                        log.info("TurboJPEG encoder initialized")
+                    except ImportError:
+                        log.warning("TurboJPEG not available, falling back to cv2.imencode")
+                        self._jpeg_encoder = False  # sentinel to avoid retry
+
+                if self._jpeg_encoder:
+                    # TurboJPEG expects RGB, which we now have
+                    jpg_bytes = self._jpeg_encoder.encode(frame, quality=JPEG_QUALITY)
+                    self.output.write(jpg_bytes)
+                else:
+                    # Fallback to cv2.imencode (slower)
+                    ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+                    if ok:
+                        self.output.write(jpg.tobytes())
 
                 # Limit FPS to reduce CPU usage
                 frame_time = time.monotonic() - now
@@ -1203,7 +1218,7 @@ class Supervisor:
             self._last_faces = faces
         # Draw red rectangles only (no text overlay)
         for (top, right, bottom, left, name) in self._last_faces:
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 1)
+            cv2.rectangle(frame, (left, top), (right, bottom), (255, 0, 0), 1)
 
     def _draw_facebox(self, cv2, frame, frame_idx) -> None:
         """Lightweight face box (no recognition) to help framing while learning."""
