@@ -1134,20 +1134,24 @@ class Supervisor:
                 # Encode to JPEG using TurboJPEG (hardware-accelerated, faster than cv2)
                 if self._jpeg_encoder is None:
                     try:
-                        from turbojpeg import TurboJPEG
+                        from turbojpeg import TurboJPEG, TJPF_RGB
                         self._jpeg_encoder = TurboJPEG()
+                        self._tjpf_rgb = TJPF_RGB
                         log.info("TurboJPEG encoder initialized")
                     except ImportError:
                         log.warning("TurboJPEG not available, falling back to cv2.imencode")
                         self._jpeg_encoder = False  # sentinel to avoid retry
 
                 if self._jpeg_encoder:
-                    # TurboJPEG expects RGB, which we now have
-                    jpg_bytes = self._jpeg_encoder.encode(frame, quality=JPEG_QUALITY)
+                    # TurboJPEG: specify pixel_format=TJPF_RGB since frame is RGB
+                    jpg_bytes = self._jpeg_encoder.encode(
+                        frame, quality=JPEG_QUALITY, pixel_format=self._tjpf_rgb)
                     self.output.write(jpg_bytes)
                 else:
-                    # Fallback to cv2.imencode (slower)
-                    ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+                    # Fallback to cv2.imencode (slower, expects BGR)
+                    # Convert RGB to BGR for cv2
+                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    ok, jpg = cv2.imencode(".jpg", frame_bgr, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
                     if ok:
                         self.output.write(jpg.tobytes())
 
