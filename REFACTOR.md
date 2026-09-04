@@ -631,6 +631,97 @@ jpg_bytes = encoder.encode(frame, quality=75)  # očekává RGB ✅
 
 ---
 
+## 2026-09-04h: Mirror Console Cleanup - Odstranění Legacy UI
+
+### Problém
+- **Dva UI systémy**: `mirror-console/web/` (starý React) a `mirrorControl/` (nový PWA)
+- **Záměna**: uživatelé nevěděli, kde dělat změny v UI
+- **Nepoužívané soubory**: `mirror-console/web/` se nepoužívalo (mirrorControl je primary UI)
+- **Express server servíroval mrtvý UI**: `:8000` servíroval starý build, ale nikdo to neotevíral
+
+### Kontext
+Express server (`mirror-console/server/index.js`) na `:8000` měl dva účely:
+1. **API gateway** - proxy na supervisor (`:8001`), MQTT bridge, AI module builder
+2. **UI serving** - servíroval `web/dist` (starý React app)
+
+MirrorControl (`:8090`) komunikuje:
+- **REST** → Vite proxy → Express `:8000` → supervisor `:8001`
+- **MQTT** → přímo WebSocket `:9001`
+
+Takže Express server je potřebný jako **API gateway**, ale **ne** jako UI server.
+
+### Řešení
+
+#### 1. Smazání `mirror-console/web/`
+```bash
+rm -rf mirror-console/web/
+```
+
+#### 2. Úprava Express serveru (server/index.js)
+```javascript
+// PŘED - servíroval UI:
+const DIST = path.join(__dirname, "..", "web", "dist");
+app.use(express.static(DIST));
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(DIST, "index.html"));
+});
+
+// PO - jen health check:
+app.get("/", (_req, res) => {
+  res.json({
+    service: "mirror-console-web",
+    description: "REST API gateway for smart mirror (UI on :8090)",
+    endpoints: { /* ... */ },
+    mqtt: { connected: mqttConnected, url: MQTT_URL }
+  });
+});
+```
+
+#### 3. Aktualizace systemd service
+```ini
+# PŘED:
+Description=Smart Mirror camera console — web front-end (Express + React)
+
+# PO:
+Description=Smart Mirror camera console — API gateway (Express, proxies supervisor + MQTT bridge)
+```
+
+### Výhody
+- ✅ **Jeden UI systém** - pouze `mirrorControl/` (jasné kde dělat změny)
+- ✅ **Čistší architektura** - Express je API gateway, Vite servíruje UI
+- ✅ **Menší repo** - žádný mrtvý kód ve `web/`
+- ✅ **Jasná dokumentace** - CLAUDE.md explicitně říká "UI is mirrorControl/"
+
+### Architektura po cleanup
+
+```
+:8090 (mirrorControl)     → primary UI (PWA, Vite)
+  ↓ Vite proxy
+:8000 (mirror-console-web) → API gateway (Express)
+  ↓ supervisor proxy + MQTT bridge + AI builder
+:8001 (supervisor)        → Python backend (camera, dataset, face reco)
+:9001 (mosquitto)         → MQTT broker (WebSocket)
+```
+
+### Změněné soubory
+```
+ mirror-console/web/                          | celá složka smazána
+ mirror-console/server/index.js               | 10 ++++----
+ mirror-console/systemd/...web.service        |  2 +-
+ CLAUDE.md                                    | 12 ++++++---
+ REFACTOR.md                                  | 75 ++++++++++++++
+ 5 files changed, 90 insertions(+), 9 deletions(-)
+```
+
+### Deploy checklist
+- [ ] Git push změn
+- [ ] SSH na Pi: `git pull`
+- [ ] Restart API gateway: `sudo systemctl restart mirror-console-web`
+- [ ] Test API gateway: `curl http://127.0.0.1:8000/ | python3 -m json.tool`
+- [ ] Test UI: http://10.0.0.249:8090 (mělo by fungovat stejně)
+
+---
+
 ## Template pro další refactory
 
 ### Problém

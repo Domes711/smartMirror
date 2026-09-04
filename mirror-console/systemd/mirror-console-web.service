@@ -1,5 +1,5 @@
 [Unit]
-Description=Smart Mirror camera console — web front-end (Express + React)
+Description=Smart Mirror camera console — API gateway (Express, proxies supervisor + MQTT bridge)
 After=network.target mirror-console-backend.service
 Wants=mirror-console-backend.service
 

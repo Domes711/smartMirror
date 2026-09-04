@@ -1,16 +1,17 @@
 # mirror-console
 
-Web console for the smart mirror's camera. The RPi camera is **exclusive**
-(one process at a time), so this app is the single **arbiter**: from a phone or
-laptop on the LAN you pick which consumer owns the camera, and in the test
-modes you get a live view with detection overlays.
+Backend + API gateway for the smart mirror. The RPi camera is **exclusive**
+(one process at a time), so the Python supervisor is the single **arbiter**.
+The Express server provides an API gateway that mirrorControl UI (on :8090)
+uses to control the camera, manage profiles, and access MQTT bridge + AI tools.
 
 ```
-Browser (Mac / mobile)  ──►  Node/Express :8000  ──►  Python supervisor :8001  ──►  RPi camera
-   mode switch + stream        serves React,            arbitrates the camera,
-                               proxies /mode,/healthz,   runs overlays, toggles
-                               /stream.mjpg              the face_reco daemon
+mirrorControl :8090     ──►  Express API :8000    ──►  Python supervisor :8001  ──►  RPi camera
+  (Vite UI, React PWA)       (gateway, MQTT bridge,   (camera arbiter, overlays,
+                              AI builder, proxy)       face reco, dataset mgmt)
 ```
+
+**UI is in `../mirrorControl/`** (port 8090). This folder contains only backend/API code.
 
 ## Modes
 
@@ -27,59 +28,33 @@ mode is persisted to `backend/mode.state` and restored on boot (default
 
 ## Components
 
-- `backend/supervisor.py` — camera arbiter + HTTP API (`/mode`, `/healthz`,
-  `/stream.mjpg`) on `127.0.0.1:8001`. Reuses `count_fingers()` from
-  `../camera/gesture_reco_once.py` and the face encodings pickle used by
-  `../camera/face_reco_daemon.py`.
-- `server/` — Express app on `0.0.0.0:8000`: serves the React build, proxies
-  the supervisor, and bridges MQTT (publish test messages + a live SSE feed of
-  all `smartmirror/#` traffic). Endpoints: `POST /api/mqtt/publish`
-  (`{topic, payload}`), `GET /api/mqtt/stream` (SSE), `GET /api/mqtt/status`.
-  MQTT broker via `MQTT_URL` (default `mqtt://127.0.0.1:1883`).
-- `web/` — React + Vite front-end (responsive, mobile-friendly), tabbed:
-  - **Kamera** — mode switcher + live stream (the camera arbiter UI).
-  - **Profily** — one profile per learned face (`dataset/<name>/`). A grid of
-    cards (sample photo, name, count); **＋ Přidat profil** opens a step
-    **wizard**, and clicking a card opens the **profile detail**.
-    - *Wizard* — Krok 1: name + base photo count. Krok 2: `FaceCaptureSession`
-      (auto-capture every 3 s, **＋ Přidat další** to capture beyond the base
-      set, enlargeable thumbnails with replace/delete), then **Dokončit a
-      natrénovat** runs `camera/encode_faces.py`.
-    - *Detail* — card-style tabs (more to come); **Fotky** shows all thumbnails
-      (enlarge + delete), **＋ Přidat další fotky** (modal asks how many →
-      capture session → **Přidat a přetrénovat**), **Přetrénovat**, and
-      **Odebrat profil** (deletes the folder + rebuilds the pickle; empty
-      dataset → empty pickle).
+- `backend/supervisor.py` — **Python camera arbiter** + HTTP API (`/mode`, `/healthz`,
+  `/stream.mjpg`, `/capture`, `/dataset`, `/profiles`, `/encode`) on `127.0.0.1:8001`.
+  Rotates frames 180° (camera mounted upside down), uses TurboJPEG encoder (TJPF_RGB)
+  for fast JPEG. Reuses `count_fingers()` from `../camera/gesture_reco_once.py` and
+  face encodings from `../camera/encoded_faces.pickle`. Installed as
+  `mirror-console-backend` systemd unit.
 
-    `FaceCaptureSession` is the shared capture component used by both the wizard
-    and the detail. Long operations (training, removal) show a full-screen
-    loading overlay. The profile detail also has a **Rozložení** tab — see
-    *Layout editor* below.
-  - **Radar** — live LD2450 view: an SVG map (radar at top center, range rings,
-    the detection **target zone** ±X/Y where `presence: present` is sent) with
-    live target dots, a presence indicator, and an **Aktivní/Vypnuto** switch
-    that starts/stops the `ld2450` service (off ⇒ no MQTT at all). Live targets
-    come from a new `smartmirror/radar/targets` topic published by the daemon
-    and read via the MQTT SSE feed.
-  - **MQTT** — buttons that publish every message the mirror uses (presence
-    `present`/`absent`, recognition `{user}`, gesture finger counts, reset),
-    plus a live monitor of the bus.
-  - **Moduly (AI)** — build a brand-new MagicMirror module by chatting with
-    Claude. Krok 1: name + description → scaffolds a standard 6-file module
-    draft under `module-drafts/<name>/` (gitignored). Krok 2: a chat where
-    **Claude runs on the Pi** (via the Claude Agent SDK — the Claude Code engine
-    as a library) and edits the draft files in place; a side button reveals a
-    live `<iframe>` preview of the module's `demo.html` that reloads after each
-    change. **Nainstalovat na zrcadlo** copies the draft into
-    `MagicMirror/modules/`, runs `npm install` if it has deps, and
-    `pm2 restart MagicMirror`. The agent is constrained to file tools inside the
-    draft dir (no Bash). See *AI module builder* below for setup requirements.
+- `server/` — **Express API gateway** on `0.0.0.0:8000`: proxies supervisor,
+  bridges MQTT (publish + SSE stream of `smartmirror/#` traffic), hosts AI module
+  builder. **Does NOT serve UI** (UI is `../mirrorControl/` on :8090).
+  Endpoints:
+  - Supervisor proxy: `/mode`, `/healthz`, `/stream.mjpg`, `/capture`, `/dataset`,
+    `/profiles`, `/radar`, `/layout`, `/store`, `/modules`
+  - MQTT: `POST /api/mqtt/publish`, `GET /api/mqtt/subscribe`, `GET /api/mqtt/stream` (SSE),
+    `GET /api/mqtt/status`
+  - AI: `/api/modules/*` (AI module builder using Claude Agent SDK)
+  - Assets: `/store-assets/*` (module screenshots from `../../store/modules/`)
+  - Health: `GET /` (API status + endpoint list)
 
-Enrollment endpoints (on the supervisor, proxied by Node): `POST /capture`
-(`{name}`), `GET /dataset?name=`, `DELETE /dataset?name=&file=`,
-`GET /photo?name=&file=`, `POST /encode`. Photos are saved with the same
-RGB→BGR convention as `camera/capture_photos.py` so they stay consistent with
-the existing dataset and encoder.
+  Installed as `mirror-console-web` systemd unit. MQTT broker via `MQTT_URL`
+  (default `mqtt://127.0.0.1:1883`).
+
+**UI features (in `../mirrorControl/`):** Camera mode switcher + live stream,
+Profile management (face enrollment wizard, photo grid, training), Radar live
+view + control, Layout editor (Scenes with time windows), Module store + AI
+builder, MQTT monitor. See `../mirrorControl/README.md`.
+
 - `systemd/` — autostart units. `sudoers.d/` — lets `admin` toggle `face_reco`.
 
 ## AI module builder (Moduly → AI)
@@ -176,8 +151,7 @@ After that the console manages everything else. `pm2 restart MagicMirror` runs a
 # 1. copy the folder to the Pi (from the repo root on your Mac)
 scp -r mirror-console admin@10.0.0.249:/home/admin/smartMirror/
 
-# 2. build the front-end + install the server deps (on the Pi)
-cd ~/smartMirror/mirror-console/web    && npm install && npm run build
+# 2. install the server deps (on the Pi)
 cd ~/smartMirror/mirror-console/server && npm install
 
 # 3. let the supervisor control the daemon, and make it the sole camera authority
@@ -187,8 +161,9 @@ sudo systemctl disable face_reco                  # supervisor manages it now
 
 # 4. try it manually
 cd ~/smartMirror/mirror-console/backend && python3 supervisor.py &
-cd ~/smartMirror/mirror-console/server  && node index.js
-#   open http://10.0.0.249:8000 from your Mac or phone
+cd ~/smartMirror/mirror-console/server  && node index.js &
+#   API gateway on http://10.0.0.249:8000
+#   UI is ../mirrorControl/ on http://10.0.0.249:8090
 ```
 
 ## Autostart
@@ -206,17 +181,19 @@ Check the node path in `mirror-console-web.service` matches the Pi
 
 ```bash
 cd ~/smartMirror/mirror-console/backend && python3 supervisor.py
-cd ~/smartMirror/mirror-console/web     && npm run dev   # Vite proxies to :8001
+cd ~/smartMirror/mirror-console/server  && node index.js
+# UI dev server is in ../mirrorControl/ (npm run dev on port 5173)
 ```
 
 ## Notes
 
 - **Single authority:** keep `face_reco` autostart **disabled** — otherwise it
   and the supervisor fight over the camera.
-- **Color:** Picamera2 `RGB888` arrays are treated as BGR by OpenCV, so JPEG
-  colors come out right with no conversion. If colors look swapped, add a
-  `cv2.cvtColor` in `_capture_loop`.
-- **Performance:** gesture overlay is light; face recognition (hog) is heavier
-  and is throttled to every 5th frame.
+- **Camera rotation:** Camera is mounted upside down, frames are rotated 180°
+  in `_capture_loop` before detection/encoding.
+- **Color:** Picamera2 returns `RGB888`. TurboJPEG encoder uses `TJPF_RGB` pixel
+  format. No BGR conversion needed.
+- **Performance:** TurboJPEG encoding ~3-5× faster than cv2.imencode(). Gesture
+  detection runs every 3rd frame, face recognition every 10th (hog is slow).
 - **Security:** no auth / TLS — LAN use only. The sudoers grant is limited to
   three `systemctl` calls on `face_reco`.

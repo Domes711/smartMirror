@@ -68,17 +68,15 @@ and the **`mirrorControl`** React UI app.
   (Standard/Movie/Games), and custom features via MQTT. Publishes current state
   to `smartmirror/display/state` (retained). See `display_control/README.md` and
   `REFACTOR.md` (2026-09-04 consolidation).
-- `mirror-console/` — **backend server** (Express + Python supervisor) on
-  `http://<pi>:8000`. Provides REST API for operations MQTT can't handle: camera
-  MJPEG stream, photo upload/download, layout store CRUD (`/layout`, `/store/*`),
-  profile/dataset management (`/profiles`, `/dataset`, `/capture`, `/encode`),
-  and the AI module builder endpoints. **NOT a UI** — the UI is `mirrorControl/`.
-  Backend `supervisor.py` is the single camera arbiter (rotates frames 180° in the
-  capture loop to handle upside-down camera mount, uses TurboJPEG encoder with
-  `TJPF_RGB` pixel format for 3-5× faster JPEG encoding than cv2); `setup.sh`
-  installs it as `mirror-console-backend`/`-web` systemd units. Requires
-  `pip3 install --break-system-packages "PyTurboJPEG<2.0"` (1.x for libjpeg-turbo 2.x).
-  See `mirror-console/README.md`.
+- `mirror-console/` — **backend server + API gateway** on `http://<pi>:8000`.
+  Two components: (1) **Python supervisor** (`backend/supervisor.py`, `:8001`) —
+  camera arbiter (rotates frames 180° for upside-down mount, uses TurboJPEG with
+  `TJPF_RGB` for 3-5× faster encoding), provides MJPEG stream, face enrollment,
+  dataset mgmt. Requires `pip3 install --break-system-packages "PyTurboJPEG<2.0"`.
+  (2) **Express API gateway** (`server/index.js`, `:8000`) — proxies supervisor,
+  bridges MQTT (SSE + publish), hosts AI module builder. **No UI** — UI is
+  `mirrorControl/` on `:8090`. `setup.sh` installs `mirror-console-backend` and
+  `mirror-console-web` systemd units. See `mirror-console/README.md`.
 - `mirrorControl/` — **primary UI app** (React + TypeScript + Redux + Vite) on
   `http://<pi>:8090`. Mobile-first PWA for controlling the mirror from a phone.
   Communicates with the mirror over **MQTT** (WebSocket `:9001`) for live state
@@ -88,8 +86,8 @@ and the **`mirrorControl`** React UI app.
   **Scenes** (layout editor with time windows), **Modules** (store + AI builder),
   **Profiles** (face enrollment + per-profile layouts), **Dev** (radar/camera/MQTT
   debug). Installed as `mirror-control` systemd unit (`vite preview`). See
-  `mirrorControl/README.md` for architecture. **When working on UI/frontend,
-  edit `mirrorControl/`, not `mirror-console/web/`** (which is legacy/unused).
+  `mirrorControl/README.md` for architecture. **All UI work happens in
+  `mirrorControl/`** (mirror-console is backend/API only, no UI).
 
 Deploy is **git pull**: the user pushes to git, then `git pull` on the Pi.
 Per-Pi runtime state (`radar_config.json`, `layout_store.json`,
@@ -256,13 +254,16 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/
 # Access from phone/laptop: http://10.0.0.249:8090
 ```
 
-### Mirror console (backend)
+### Mirror console (backend + API gateway)
 
 ```bash
-cd ~/smartMirror/mirror-console && ./setup.sh   # (re)install backend + web services
+cd ~/smartMirror/mirror-console && ./setup.sh   # (re)install backend + API gateway
 sudo systemctl restart mirror-console-backend mirror-console-web
 journalctl -u mirror-console-backend -f
-curl -s http://127.0.0.1:8000/healthz; echo
+# Test supervisor (via gateway proxy):
+curl -s http://127.0.0.1:8000/healthz | python3 -m json.tool
+# Test gateway directly:
+curl -s http://127.0.0.1:8000/ | python3 -m json.tool
 ```
 
 ### LD2450 daemon

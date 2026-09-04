@@ -1,10 +1,11 @@
-// Express front-end for the smart mirror camera console.
+// Express API gateway for the smart mirror camera console.
 //
-// Serves the built React app (../web/dist) and:
+// Provides REST API gateway:
 //   - proxies the camera supervisor (/mode, /healthz, /stream.mjpg) on :8001
 //   - bridges MQTT: publish test messages (/api/mqtt/publish) and stream all
 //     smartmirror/# traffic to the browser over SSE (/api/mqtt/stream)
-// Everything is reachable on a single LAN port (default 8000).
+//   - AI module builder (Claude Agent SDK)
+// The UI is served separately by mirrorControl on :8090.
 
 const path = require("path");
 const fs = require("fs");
@@ -37,7 +38,6 @@ const PORT = parseInt(process.env.PORT || "8000", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 const BACKEND = process.env.BACKEND || "http://127.0.0.1:8001";
 const MQTT_URL = process.env.MQTT_URL || "mqtt://127.0.0.1:1883";
-const DIST = path.join(__dirname, "..", "web", "dist");
 
 const app = express();
 
@@ -167,12 +167,25 @@ app.get("/api/mqtt/stream", (req, res) => {
 const REPO_ROOT = path.join(__dirname, "..", "..");
 app.use("/store-assets", express.static(path.join(REPO_ROOT, "store", "modules")));
 
-// --- static React build + SPA fallback ----------------------------------
-app.use(express.static(DIST));
-app.get("*", (_req, res) => {
-  res.sendFile(path.join(DIST, "index.html"));
+// --- health check / API status -------------------------------------------
+app.get("/", (_req, res) => {
+  res.json({
+    service: "mirror-console-web",
+    description: "REST API gateway for smart mirror (UI on :8090)",
+    endpoints: {
+      supervisor: `${BACKEND} (proxied: /mode, /healthz, /stream.mjpg, /capture, /dataset, /profiles, /radar, /layout, /store, /modules)`,
+      mqtt: "/api/mqtt/* (status, publish, subscribe, stream)",
+      ai: "/api/modules/* (AI module builder)",
+      storeAssets: "/store-assets/* (module screenshots)"
+    },
+    mqtt: {
+      connected: mqttConnected,
+      url: MQTT_URL
+    }
+  });
 });
 
 app.listen(PORT, HOST, () => {
-  console.log(`mirror-console web on http://${HOST}:${PORT} -> ${BACKEND}`);
+  console.log(`mirror-console API gateway on http://${HOST}:${PORT} -> ${BACKEND}`);
+  console.log(`UI served on http://${HOST}:8090 (mirrorControl)`);
 });
