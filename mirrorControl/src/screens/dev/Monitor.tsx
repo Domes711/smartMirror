@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
-import { mqtt } from "@/services/api";
+import { getClient, publish } from "@/services/mqtt";
 
 interface MonitorState {
   brightness: number;
@@ -45,33 +45,34 @@ export default function Monitor() {
 
   // Subscribe to monitor state updates (event-driven, not polling)
   useEffect(() => {
-    const handleStateUpdate = (topic: string, payload: string) => {
-      try {
-        const newState = JSON.parse(payload);
-        setState(newState);
-        setStateLoading(false);
-      } catch (err) {
-        console.error("Failed to parse monitor state:", err);
+    const client = getClient();
+    if (!client) {
+      console.warn("MQTT client not connected yet");
+      setStateLoading(false);
+      return;
+    }
+
+    const handleMessage = (topic: string, payload: Buffer) => {
+      if (topic === "smartmirror/display/state") {
+        try {
+          const newState = JSON.parse(payload.toString());
+          setState(newState);
+          setStateLoading(false);
+        } catch (err) {
+          console.error("Failed to parse monitor state:", err);
+        }
       }
     };
 
-    // Subscribe to state topic
-    mqtt.sub("smartmirror/display/state", handleStateUpdate);
+    // Subscribe to MQTT messages
+    client.on("message", handleMessage);
 
     // Request initial state
-    const loadInitialState = async () => {
-      try {
-        await mqtt.pub("smartmirror/display/control/get_state", "1");
-      } catch (err) {
-        console.error("Failed to request initial state:", err);
-        setStateLoading(false);
-      }
-    };
-    loadInitialState();
+    publish("smartmirror/display/control/get_state", "1");
 
-    // Cleanup: unsubscribe on unmount
+    // Cleanup: remove listener on unmount
     return () => {
-      mqtt.unsub("smartmirror/display/state", handleStateUpdate);
+      client.off("message", handleMessage);
     };
   }, []);
 
@@ -95,32 +96,23 @@ export default function Monitor() {
     setIsChanging(true);
 
     // Set new timer
-    debounceTimers.current[topic] = setTimeout(async () => {
-      try {
-        const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
-        await mqtt.pub(`smartmirror/display/control/${topic}`, payload);
+    debounceTimers.current[topic] = setTimeout(() => {
+      const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
+      publish(`smartmirror/display/control/${topic}`, payload);
 
-        // Daemon will publish updated state → our subscription will handle it
-        // Allow UI sync 1s after last publish (daemon publishes after 500ms)
-        if (changingTimer.current) clearTimeout(changingTimer.current);
-        changingTimer.current = setTimeout(() => {
-          setIsChanging(false);
-        }, 1000);
-      } catch (err) {
-        console.error("Publish failed:", err);
+      // Daemon will publish updated state → our subscription will handle it
+      // Allow UI sync 1s after last publish (daemon publishes after 500ms)
+      if (changingTimer.current) clearTimeout(changingTimer.current);
+      changingTimer.current = setTimeout(() => {
         setIsChanging(false);
-      }
+      }, 1000);
     }, delay);
   };
 
-  const publish = async (topic: string, value: string | number | object) => {
-    try {
-      const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
-      await mqtt.pub(`smartmirror/display/control/${topic}`, payload);
-      // Daemon will publish updated state → our subscription will handle it
-    } catch (err) {
-      console.error("Publish failed:", err);
-    }
+  const publishControl = (topic: string, value: string | number | object) => {
+    const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
+    publish(`smartmirror/display/control/${topic}`, payload);
+    // Daemon will publish updated state → our subscription will handle it
   };
 
   const Slider = ({ label, value, min, max, on }: { label: string; value: number; min: number; max: number; on: (v: number) => void }) => (
@@ -194,10 +186,10 @@ export default function Monitor() {
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Display" : "Displej"}</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => publish("power", "on")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
+          <button onClick={() => publishControl("power", "on")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
             ✓ {en ? "Wake Up" : "Probudit"}
           </button>
-          <button onClick={() => publish("power", "standby")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
+          <button onClick={() => publishControl("power", "standby")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}>
             ⏾ {en ? "Standby" : "Standby"}
           </button>
         </div>
@@ -210,18 +202,18 @@ export default function Monitor() {
           <QuickButton
             label={en ? "💡 Maximum" : "💡 Maximum"}
             onClick={() => {
-              publish("brightness", 100);
-              publish("contrast", 100);
-              publish("e2", 25);
-              publish("mode", "games");
+              publishControl("brightness", 100);
+              publishControl("contrast", 100);
+              publishControl("e2", 25);
+              publishControl("mode", "games");
             }}
           />
           <QuickButton
             label={en ? "🌙 Night" : "🌙 Noční"}
             onClick={() => {
-              publish("brightness", 50);
-              publish("contrast", 75);
-              publish("mode", "standard");
+              publishControl("brightness", 50);
+              publishControl("contrast", 75);
+              publishControl("mode", "standard");
             }}
           />
         </div>
@@ -250,12 +242,12 @@ export default function Monitor() {
 
       <div style={{ marginTop: 24, marginBottom: 8 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>{en ? "E2 Enhancement" : "E2 Vylepšení"}</div>
-        <input type="range" min={0} max={25} defaultValue={25} onChange={(e) => publish("e2", parseInt(e.target.value))} style={{ width: "100%", accentColor: C.signal, cursor: "pointer" }} />
+        <input type="range" min={0} max={25} defaultValue={25} onChange={(e) => publishControl("e2", parseInt(e.target.value))} style={{ width: "100%", accentColor: C.signal, cursor: "pointer" }} />
       </div>
 
       <div style={{ marginTop: 24 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Display Mode" : "Režim zobrazení"}</div>
-        <select onChange={(e) => publish("mode", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
+        <select onChange={(e) => publishControl("mode", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
           {MODES.map((m) => (
             <option key={m.value} value={m.value}>
               {en ? m.label.en : m.label.cs}
@@ -266,7 +258,7 @@ export default function Monitor() {
 
       <div style={{ marginTop: 16 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>{en ? "Color Preset" : "Teplota barev"}</div>
-        <select onChange={(e) => publish("preset", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
+        <select onChange={(e) => publishControl("preset", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
           {PRESETS.map((p) => (
             <option key={p.value} value={p.value}>
               {p.label}
