@@ -65,8 +65,8 @@ DISPLAY_MODES = {
 }
 
 POWER_MODES = {
-    "on": "0x01",
-    "standby": "0x05"
+    "on": "0x01",      # DPM: On, DPMS: Off
+    "standby": "0x04"  # DPM: Off, DPMS: Off
 }
 
 
