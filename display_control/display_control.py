@@ -135,12 +135,20 @@ class DisplayController:
             if result.returncode != 0:
                 return None
 
-            # Parse output like: "VCP code 0x10 (Brightness): current value = 100, max value = 100"
+            # Parse output
+            # Standard: "VCP code 0x10 (Brightness): current value = 100, max value = 100"
+            # Power: "VCP code 0xd6 (Power mode): DPM: On, DPMS: Off (sl=0x01)"
             for line in result.stdout.split('\n'):
                 if "current value" in line:
                     parts = line.split("current value")[1].split(",")[0]
                     value = int(parts.strip().replace("=", "").strip())
                     return value
+                elif "(sl=" in line:
+                    # Parse power mode format: extract hex value from (sl=0xNN)
+                    import re
+                    match = re.search(r'\(sl=(0x[0-9a-fA-F]+)\)', line)
+                    if match:
+                        return int(match.group(1), 16)
 
             return None
         except FileNotFoundError:
