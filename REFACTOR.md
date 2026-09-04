@@ -714,11 +714,15 @@ Description=Smart Mirror camera console — API gateway (Express, proxies superv
 ```
 
 ### Deploy checklist
-- [ ] Git push změn
-- [ ] SSH na Pi: `git pull`
-- [ ] Restart API gateway: `sudo systemctl restart mirror-console-web`
-- [ ] Test API gateway: `curl http://127.0.0.1:8000/ | python3 -m json.tool`
-- [ ] Test UI: http://10.0.0.249:8090 (mělo by fungovat stejně)
+- [x] Git push změn
+- [x] SSH na Pi: `git pull`
+- [x] Restart API gateway: `sudo systemctl restart mirror-console-web`
+- [x] Test API gateway: `curl http://127.0.0.1:8000/ | python3 -m json.tool` ✅
+  - Vrací health check s API status + endpoint list
+- [x] Test supervisor proxy: `curl http://127.0.0.1:8000/healthz` ✅
+  - Správně proxuje na :8001
+- [x] Test UI: http://10.0.0.249:8090 ✅
+  - UI funguje stejně (komunikuje přes gateway)
 
 ---
 
