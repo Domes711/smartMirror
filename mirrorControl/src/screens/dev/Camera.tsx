@@ -12,6 +12,7 @@ export default function Camera() {
   const [detectionMode, setDetectionMode] = useState<DetectionMode>("learn");
   const [switchingMode, setSwitchingMode] = useState(false);
   const [streamKey, setStreamKey] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     // When component mounts, switch to learn mode to enable streaming
@@ -69,7 +70,7 @@ export default function Camera() {
 
   return (
     <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease" }}>
-      <p style={{ ...eyebrow, margin: "0 0 6px" }}>RGB 1080p · IR · face-rec</p>
+      <p style={{ ...eyebrow, margin: "0 0 6px" }}>USB RGB · 640x480 · BlazeFace</p>
       <h2 style={{ ...h2, marginBottom: 14 }}>{L.navCamera}</h2>
 
       <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 3", borderRadius: 16, overflow: "hidden", background: "#0c0d0b", border: "1px solid #20211d", display: "grid", placeItems: "center" }}>
@@ -87,7 +88,21 @@ export default function Camera() {
             key={streamKey}
             src={`${streamUrl()}?v=${streamKey}`}
             alt="camera"
-            onError={() => !switchingMode && setFailed(true)}
+            onError={() => {
+              if (switchingMode) return;
+              console.warn("Stream error, retry attempt:", retryCount + 1);
+              // Auto-retry up to 3 times with exponential backoff
+              if (retryCount < 3) {
+                const delay = Math.min(1000 * Math.pow(2, retryCount), 4000);
+                setTimeout(() => {
+                  setRetryCount(prev => prev + 1);
+                  setStreamKey(prev => prev + 1);
+                }, delay);
+              } else {
+                setFailed(true);
+              }
+            }}
+            onLoad={() => setRetryCount(0)}
             style={{
               width: "100%",
               height: "100%",
@@ -96,7 +111,28 @@ export default function Camera() {
             }}
           />
         ) : (
-          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "rgba(233,232,221,.55)", letterSpacing: ".08em", textTransform: "uppercase" }}>{L.camPreviewHint}</span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "rgba(233,232,221,.55)", letterSpacing: ".08em", textTransform: "uppercase" }}>{L.camPreviewHint}</span>
+            <button
+              onClick={() => {
+                setFailed(false);
+                setRetryCount(0);
+                setStreamKey(prev => prev + 1);
+              }}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 12,
+                border: `1px solid ${C.line}`,
+                background: C.p3,
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                color: C.ink,
+                cursor: "pointer"
+              }}
+            >
+              {en ? "Retry" : "Zkusit znovu"}
+            </button>
+          </div>
         )}
       </div>
 
