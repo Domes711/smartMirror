@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
 import { getClient, publish } from "@/services/mqtt";
+import { Spinner } from "@/components/shell";
 
 interface MonitorState {
   brightness: number;
@@ -32,6 +33,7 @@ export default function Monitor() {
   const { en } = useT();
   const [state, setState] = useState<MonitorState | null>(null);
   const [stateLoading, setStateLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [localBrightness, setLocalBrightness] = useState(100);
   const [localContrast, setLocalContrast] = useState(100);
   const [localRed, setLocalRed] = useState(100);
@@ -82,6 +84,8 @@ export default function Monitor() {
       setLocalRed(state.red);
       setLocalGreen(state.green);
       setLocalBlue(state.blue);
+      // Turn off loader when new state arrives
+      setIsUpdating(false);
     }
   }, [state]);
 
@@ -93,6 +97,7 @@ export default function Monitor() {
 
     // Set new timer
     debounceTimers.current[topic] = setTimeout(() => {
+      setIsUpdating(true);
       const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
       publish(`smartmirror/display/control/${topic}`, payload);
       // Daemon will publish updated state → our subscription will handle it
@@ -100,6 +105,7 @@ export default function Monitor() {
   };
 
   const publishControl = (topic: string, value: string | number | object) => {
+    setIsUpdating(true);
     const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
     publish(`smartmirror/display/control/${topic}`, payload);
     // Daemon will publish updated state → our subscription will handle it
@@ -143,7 +149,31 @@ export default function Monitor() {
   );
 
   return (
-    <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease" }}>
+    <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease", position: "relative" }}>
+      {/* Loading overlay */}
+      {isUpdating && (
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(255, 255, 255, 0.85)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+          zIndex: 10,
+          animation: "scin .2s ease"
+        }}>
+          <Spinner color={C.signal} track="#f3c9c0" size={24} />
+          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>
+            {en ? "Updating..." : "Aktualizuji..."}
+          </span>
+        </div>
+      )}
+
       <p style={{ ...eyebrow, margin: "0 0 6px" }}>DDC/CI · Dell U2515H</p>
       <h2 style={{ ...h2, margin: "0 0 24px" }}>{en ? "Monitor Control" : "Ovládání monitoru"}</h2>
 
