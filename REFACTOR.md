@@ -237,6 +237,20 @@ useEffect(() => {
 4. **Žádné problikávání**: Lokální state se mění okamžitě, server state přijde až s novou hodnotou
 5. **Power zobrazení**: Panel stavu ukazuje ON (zelená) / STANDBY (šedá)
 
+### ⚠️ TODO: Opravit slider behavior
+**Problém:** Slidery stále nefungují správně hlasně (smooth sliding není ideální).
+
+**Co je špatně:**
+- `onInput` + `onChange` separace není dostatečná
+- Debouncing při slidingu způsobuje delay
+- Server state sync může přepsat lokální hodnotu během tažení
+
+**Potřebné řešení:**
+- [ ] Přepracovat na controlled slider s lepší state management
+- [ ] Možná použít `onMouseDown`/`onMouseUp` místo `onChange` pro detekci konce tažení
+- [ ] Nebo použít `onPointerDown`/`onPointerUp` pro touch i mouse
+- [ ] Zvážit optimistický update pattern (nesynovat ze serveru pokud je slider aktivní)
+
 ---
 
 ## 2026-09-04c: Monitor Updating Loader
