@@ -115,13 +115,127 @@ publishDebounced → mqtt.pub → daemon publishes → UI updates
 ```
 
 ### Deploy checklist
-- [ ] Git push změn
-- [ ] SSH na Pi: `git pull`
-- [ ] Restart display-control: `sudo systemctl restart display-control`
-- [ ] Rebuild mirrorControl: `cd ~/smartMirror/mirrorControl && npm run build`
-- [ ] Restart mirror-control: `sudo systemctl restart mirror-control`
-- [ ] Test MQTT: `mosquitto_sub -t smartmirror/display/state`
-- [ ] Test UI: http://10.0.0.249:8090 → Dev mode → Monitor tab
+- [x] Git push změn
+- [x] SSH na Pi: `git pull`
+- [x] Restart display-control: `sudo systemctl restart display-control`
+- [x] Rebuild mirrorControl: `cd ~/smartMirror/mirrorControl && npm run build`
+- [x] Restart mirror-control: `sudo systemctl restart mirror-control`
+- [x] Test MQTT: `mosquitto_sub -t smartmirror/display/state`
+- [x] Test UI: http://10.0.0.249:8090 → Dev mode → Monitor tab
+
+---
+
+## 2026-09-04b: Monitor UI Improvements - Smooth Sliders & Power Status
+
+### Problém
+- **Slider lag**: Slider se nedal táhnout plynule, pouze cca 5 hodnot najednou
+- **Problikávání**: Po kliknutí na novou hodnotu se problikla stará hodnota
+- **Chybějící power state**: Panel stavu neukazoval jestli je display zapnutý nebo vypnutý
+- **Špatný VCP kód**: Standby používal 0x05 místo správné 0x04
+
+### Řešení
+
+#### 1. Oprava VCP power kódů
+**display_control.py:**
+```python
+# PŘED (nefungovalo)
+POWER_MODES = {
+    "on": "0x01",
+    "standby": "0x05"  # ❌ nevalidní hodnota
+}
+
+# PO (funguje)
+POWER_MODES = {
+    "on": "0x01",      # DPM: On, DPMS: Off
+    "standby": "0x04"  # DPM: Off, DPMS: Off  ✅
+}
+```
+
+#### 2. Plynulé slidery (Monitor.tsx)
+**PŘED:**
+```tsx
+// onChange i onInput volaly stejnou funkci → lag
+<input onChange={(e) => on(parseInt(e.target.value))}
+       onInput={(e) => on(parseInt(e.target.value))} />
+// on() volalo setLocal + publishDebounced → blokovalo UI
+```
+
+**PO:**
+```tsx
+// Slider komponenta má oddělené onChange a onCommit
+<Slider
+  onChange={(v) => setLocalBrightness(v)}  // okamžitá změna UI
+  onCommit={(v) => publishDebounced("brightness", v)}  // debounced MQTT
+/>
+
+// Input má správné rozdělení:
+<input
+  onInput={(e) => onChange(parseInt(e.target.value))}   // plynulé tažení
+  onChange={(e) => onCommit(parseInt(e.target.value))}  // commit po puštění
+/>
+```
+
+#### 3. Odstranění problikávání
+**PŘED:**
+```tsx
+const [isChanging, setIsChanging] = useState(false);
+
+// publishDebounced nastavila isChanging = true
+// → blokovala sync ze serveru 1000ms
+// → problikávání když server publikoval starou hodnotu
+
+useEffect(() => {
+  if (state && !isChanging) {  // ❌ blokovalo sync
+    setLocalBrightness(state.brightness);
+  }
+}, [state, isChanging]);
+```
+
+**PO:**
+```tsx
+// Žádný isChanging flag
+// onChange okamžitě mění lokální state
+// onCommit triggeruje debounced publish
+// Server state se syncne až když daemon publikuje novou hodnotu
+
+useEffect(() => {
+  if (state) {  // ✅ vždy sync
+    setLocalBrightness(state.brightness);
+  }
+}, [state]);
+```
+
+#### 4. Zobrazení power state
+**PŘED:**
+```tsx
+// Panel stavu: Brightness, Contrast, RGB (3 sloupce)
+```
+
+**PO:**
+```tsx
+// Panel stavu: Power, Brightness, Contrast, RGB (2x2 grid)
+<div>
+  <div>Power</div>
+  <div style={{ color: state?.power === 1 ? C.green : C.mute }}>
+    {state?.power === 1 ? "ON" : state?.power === 4 ? "STANDBY" : "—"}
+  </div>
+</div>
+```
+
+### Změněné soubory
+```
+ display_control/display_control.py        |  4 +-
+ mirrorControl/src/screens/dev/Monitor.tsx | 87 ++++++++++-----------
+ REFACTOR.md                               | 95 +++++++++++++++++++++++
+ 3 files changed, 140 insertions(+), 46 deletions(-)
+```
+
+### Jak to funguje teď
+1. **Slider tažení**: `onInput` → okamžitá změna lokálního stavu (plynulé)
+2. **Slider puštění**: `onChange` → debounced MQTT publish (300ms)
+3. **Server update**: Daemon publikuje → MQTT subscription → sync lokálního stavu
+4. **Žádné problikávání**: Lokální state se mění okamžitě, server state přijde až s novou hodnotou
+5. **Power zobrazení**: Panel stavu ukazuje ON (zelená) / STANDBY (šedá)
 
 ---
 

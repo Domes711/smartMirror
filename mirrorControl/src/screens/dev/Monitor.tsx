@@ -37,11 +37,9 @@ export default function Monitor() {
   const [localRed, setLocalRed] = useState(100);
   const [localGreen, setLocalGreen] = useState(100);
   const [localBlue, setLocalBlue] = useState(100);
-  const [isChanging, setIsChanging] = useState(false);
 
   // Debounce timers
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
-  const changingTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Subscribe to monitor state updates (event-driven, not polling)
   useEffect(() => {
@@ -77,15 +75,15 @@ export default function Monitor() {
   }, []);
 
   useEffect(() => {
-    // Only sync from server state if user is not actively changing values
-    if (state && !isChanging) {
+    // Sync from server state when it changes
+    if (state) {
       setLocalBrightness(state.brightness);
       setLocalContrast(state.contrast);
       setLocalRed(state.red);
       setLocalGreen(state.green);
       setLocalBlue(state.blue);
     }
-  }, [state, isChanging]);
+  }, [state]);
 
   const publishDebounced = (topic: string, value: string | number | object, delay = 300) => {
     // Clear existing timer for this topic
@@ -93,19 +91,11 @@ export default function Monitor() {
       clearTimeout(debounceTimers.current[topic]);
     }
 
-    setIsChanging(true);
-
     // Set new timer
     debounceTimers.current[topic] = setTimeout(() => {
       const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
       publish(`smartmirror/display/control/${topic}`, payload);
-
       // Daemon will publish updated state → our subscription will handle it
-      // Allow UI sync 1s after last publish (daemon publishes after 500ms)
-      if (changingTimer.current) clearTimeout(changingTimer.current);
-      changingTimer.current = setTimeout(() => {
-        setIsChanging(false);
-      }, 1000);
     }, delay);
   };
 
@@ -115,7 +105,7 @@ export default function Monitor() {
     // Daemon will publish updated state → our subscription will handle it
   };
 
-  const Slider = ({ label, value, min, max, on }: { label: string; value: number; min: number; max: number; on: (v: number) => void }) => (
+  const Slider = ({ label, value, min, max, onChange, onCommit }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; onCommit: (v: number) => void }) => (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>
         <span>{label}</span>
@@ -126,8 +116,8 @@ export default function Monitor() {
         min={min}
         max={max}
         value={value}
-        onChange={(e) => on(parseInt(e.target.value))}
-        onInput={(e) => on(parseInt((e.target as HTMLInputElement).value))}
+        onInput={(e) => onChange(parseInt((e.target as HTMLInputElement).value))}
+        onChange={(e) => onCommit(parseInt(e.target.value))}
         style={{ width: "100%", accentColor: C.signal, cursor: "pointer" }}
       />
     </div>
@@ -163,7 +153,13 @@ export default function Monitor() {
         {stateLoading ? (
           <div style={{ color: C.mute, fontSize: 13 }}>{en ? "Loading..." : "Načítání..."}</div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>
+            <div>
+              <div style={{ marginBottom: 4 }}>{en ? "Power" : "Napájení"}</div>
+              <div style={{ color: state?.power === 1 ? C.green : C.mute, fontSize: 14 }}>
+                {state?.power === 1 ? "ON" : state?.power === 4 ? "STANDBY" : "—"}
+              </div>
+            </div>
             <div>
               <div style={{ marginBottom: 4 }}>{en ? "Brightness" : "Jas"}</div>
               <div style={{ color: C.ink, fontSize: 14 }}>{state?.brightness ?? "—"}%</div>
@@ -224,20 +220,16 @@ export default function Monitor() {
         value={localBrightness}
         min={0}
         max={100}
-        on={(v) => {
-          setLocalBrightness(v);
-          publishDebounced("brightness", v);
-        }}
+        onChange={(v) => setLocalBrightness(v)}
+        onCommit={(v) => publishDebounced("brightness", v)}
       />
       <Slider
         label={en ? "Contrast" : "Kontrast"}
         value={localContrast}
         min={0}
         max={100}
-        on={(v) => {
-          setLocalContrast(v);
-          publishDebounced("contrast", v);
-        }}
+        onChange={(v) => setLocalContrast(v)}
+        onCommit={(v) => publishDebounced("contrast", v)}
       />
 
       <div style={{ marginTop: 24, marginBottom: 8 }}>
@@ -272,30 +264,24 @@ export default function Monitor() {
         value={localRed}
         min={0}
         max={100}
-        on={(v) => {
-          setLocalRed(v);
-          publishDebounced("rgb", { r: v, g: localGreen, b: localBlue });
-        }}
+        onChange={(v) => setLocalRed(v)}
+        onCommit={(v) => publishDebounced("rgb", { r: v, g: localGreen, b: localBlue })}
       />
       <Slider
         label="Green"
         value={localGreen}
         min={0}
         max={100}
-        on={(v) => {
-          setLocalGreen(v);
-          publishDebounced("rgb", { r: localRed, g: v, b: localBlue });
-        }}
+        onChange={(v) => setLocalGreen(v)}
+        onCommit={(v) => publishDebounced("rgb", { r: localRed, g: v, b: localBlue })}
       />
       <Slider
         label="Blue"
         value={localBlue}
         min={0}
         max={100}
-        on={(v) => {
-          setLocalBlue(v);
-          publishDebounced("rgb", { r: localRed, g: localGreen, b: v });
-        }}
+        onChange={(v) => setLocalBlue(v)}
+        onCommit={(v) => publishDebounced("rgb", { r: localRed, g: localGreen, b: v })}
       />
     </section>
   );
