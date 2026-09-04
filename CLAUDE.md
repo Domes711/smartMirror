@@ -74,8 +74,11 @@ and the **`mirrorControl`** React UI app.
   profile/dataset management (`/profiles`, `/dataset`, `/capture`, `/encode`),
   and the AI module builder endpoints. **NOT a UI** — the UI is `mirrorControl/`.
   Backend `supervisor.py` is the single camera arbiter (rotates frames 180° in the
-  capture loop to handle upside-down camera mount); `setup.sh` installs it as
-  `mirror-console-backend`/`-web` systemd units. See `mirror-console/README.md`.
+  capture loop to handle upside-down camera mount, uses TurboJPEG encoder with
+  `TJPF_RGB` pixel format for 3-5× faster JPEG encoding than cv2); `setup.sh`
+  installs it as `mirror-console-backend`/`-web` systemd units. Requires
+  `pip3 install --break-system-packages "PyTurboJPEG<2.0"` (1.x for libjpeg-turbo 2.x).
+  See `mirror-console/README.md`.
 - `mirrorControl/` — **primary UI app** (React + TypeScript + Redux + Vite) on
   `http://<pi>:8090`. Mobile-first PWA for controlling the mirror from a phone.
   Communicates with the mirror over **MQTT** (WebSocket `:9001`) for live state
@@ -245,6 +248,8 @@ cd ~/MagicMirror && ./setup.sh       # reinstall core + module deps
 
 ```bash
 cd ~/smartMirror/mirrorControl && ./setup.sh    # build + (re)install service
+# Or rebuild manually after git pull (requires nvm):
+source ~/.nvm/nvm.sh && cd ~/smartMirror/mirrorControl && npm run build
 sudo systemctl restart mirror-control
 journalctl -u mirror-control -f
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/

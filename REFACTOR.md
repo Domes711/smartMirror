@@ -618,9 +618,15 @@ jpg_bytes = encoder.encode(frame, quality=75)  # očekává RGB ✅
 - [x] Git push změn
 - [x] SSH na Pi: `git pull`
 - [x] Restart backend: `sudo systemctl restart mirror-console-backend`
+- [x] **Fix**: TurboJPEG pixel_format - specifikovat `TJPF_RGB` (TurboJPEG defaultuje na BGR)
+- [x] Rebuild mirrorControl (změny v Camera.tsx): `source ~/.nvm/nvm.sh && cd ~/smartMirror/mirrorControl && npm run build`
+- [x] Restart UI: `sudo systemctl restart mirror-control`
 - [x] Test: http://10.0.0.249:8090 → Dev mode → Camera tab
-  - [x] Stream by měl být plynulejší
-  - [x] Check logs: `journalctl -u mirror-console-backend -f` → mělo by být "TurboJPEG encoder initialized" ✅
+  - [x] Stream by měl být plynulejší ✅
+  - [x] Barvy správné (TJPF_RGB pixel format) ✅
+  - [x] Obraz správně otočený (180°) ✅
+  - [x] Detekce funguje, červený obdélník na správném místě ✅
+  - [x] Check logs: `journalctl -u mirror-console-backend -f` → "TurboJPEG encoder initialized" ✅
   - [x] Zkontrolovat FPS v /healthz endpoint → **11.8 FPS** ✅
 
 ---
