@@ -437,10 +437,10 @@ const rows = [
 
 **PO:**
 ```tsx
-// Poll /api/healthz každých 500ms
+// Poll /healthz každých 500ms
 useEffect(() => {
   const interval = setInterval(async () => {
-    const data = await fetch("/api/healthz").then(r => r.json());
+    const data = await fetch("/healthz").then(r => r.json());
     setDetectedFace(data.detected_face || null);
     setFingerCount(data.finger_count);
   }, 500);

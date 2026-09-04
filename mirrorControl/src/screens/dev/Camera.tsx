@@ -48,7 +48,7 @@ export default function Camera() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("/api/healthz");
+        const res = await fetch("/healthz");
         if (res.ok) {
           const data = await res.json();
           setDetectedFace(data.detected_face || null);
