@@ -239,6 +239,74 @@ useEffect(() => {
 
 ---
 
+## 2026-09-04c: Monitor Updating Loader
+
+### Problém
+- **Chybějící feedback**: Po odeslání příkazu nebylo jasné jestli se něco děje
+- **Nejistota**: Uživatel neví jestli čeká na odpověď nebo se příkaz ztratil
+
+### Řešení
+
+#### 1. Loading overlay (Monitor.tsx)
+```tsx
+const [isUpdating, setIsUpdating] = useState(false);
+
+// Zapnout loader při publishu
+const publishControl = (topic, value) => {
+  setIsUpdating(true);  // ← loader ON
+  publish(...);
+};
+
+const publishDebounced = (topic, value, delay) => {
+  setTimeout(() => {
+    setIsUpdating(true);  // ← loader ON po debounce
+    publish(...);
+  }, delay);
+};
+
+// Vypnout loader když přijde nový state
+useEffect(() => {
+  if (state) {
+    setLocalBrightness(state.brightness);
+    // ...
+    setIsUpdating(false);  // ← loader OFF
+  }
+}, [state]);
+```
+
+#### 2. Overlay design
+```tsx
+{isUpdating && (
+  <div style={{
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    background: "rgba(255, 255, 255, 0.85)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10
+  }}>
+    <Spinner color={C.signal} track="#f3c9c0" size={24} />
+    <span>Updating...</span>
+  </div>
+)}
+```
+
+### Jak to funguje
+1. **User akce** (klikne power/změní slider/vybere preset)
+2. **publishControl/publishDebounced** → `isUpdating = true` → loader se zobrazí
+3. **MQTT round-trip**: client → broker → daemon → ddcutil → daemon → broker → client
+4. **State update**: přijde nový state z daemonu → `isUpdating = false` → loader zmizí
+
+**Výhody:**
+- ✅ Jasný feedback pro uživatele
+- ✅ Overlay blokuje interakci během update
+- ✅ Vizuálně konzistentní se zbytkem appky (stejný Spinner jako v shell.tsx)
+- ✅ Automaticky zmizí když přijde odpověď (event-driven)
+
+---
+
 ## Template pro další refactory
 
 ### Problém
