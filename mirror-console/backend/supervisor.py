@@ -1108,7 +1108,9 @@ class Supervisor:
             for _ in range(3):  # discard warm-up frames
                 self.picam.capture_array()
             while not self.stop_capture.is_set():
-                frame = self.picam.capture_array()  # RGB888 == BGR for cv2
+                frame = self.picam.capture_array()  # RGB888 from picam2
+                # Convert RGB to BGR for OpenCV (picam2 returns RGB, cv2 expects BGR)
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 frame_idx += 1
                 overlay = self.overlay
                 if overlay == "gesture":
