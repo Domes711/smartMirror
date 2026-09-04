@@ -321,6 +321,59 @@ useEffect(() => {
 
 ---
 
+## 2026-09-04d: Camera Color Fix - RGB to BGR Conversion
+
+### Problém
+- **Divné barvy v camera streamu**: Barvy vypadaly jako z IR kamery (červená a modrá prohozené)
+- **Změna hardware**: Z IR kamery (grayscale) na USB RGB webkameru
+- **Chybějící konverze**: picam2 vrací RGB, ale OpenCV očekává BGR
+
+### Řešení
+
+#### 1. Přidání color space conversion (supervisor.py)
+
+**PŘED:**
+```python
+frame = self.picam.capture_array()  # RGB888 == BGR for cv2
+# ... processing ...
+ok, jpg = cv2.imencode(".jpg", frame, ...)
+```
+Komentář `RGB888 == BGR for cv2` byl **špatně** - picam2 vrací RGB, ale cv2 potřebuje BGR!
+
+**PO:**
+```python
+frame = self.picam.capture_array()  # RGB888 from picam2
+# Convert RGB to BGR for OpenCV (picam2 returns RGB, cv2 expects BGR)
+frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+# ... processing ...
+ok, jpg = cv2.imencode(".jpg", frame, ...)
+```
+
+### Proč to bylo potřeba?
+- **picam2** (Raspberry Pi Camera library v2) vrací RGB888 formát
+- **OpenCV** (cv2) interně používá BGR barevný prostor
+- **cv2.imencode(".jpg", ...)** enkóduje do JPEG s BGR kanály
+- **Bez konverze**: Red ↔ Blue jsou prohozené → divné barvy
+
+### S IR kamerou to nefungovalo proč?
+- IR kamera vrací grayscale (1 kanál)
+- Grayscale nemá RGB kanály → problém neviditelný
+- RGB webkamera má 3 kanály → prohození je okamžitě vidět
+
+### Změněné soubory
+```
+ mirror-console/backend/supervisor.py | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+```
+
+### Deploy
+- [x] Git push
+- [x] SSH na Pi: `git pull`
+- [x] Restart backend: `sudo systemctl restart mirror-console-backend`
+- [x] Test stream: http://10.0.0.249:8090 → Dev mode → Camera tab
+
+---
+
 ## Template pro další refactory
 
 ### Problém
