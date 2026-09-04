@@ -1111,6 +1111,8 @@ class Supervisor:
                 frame = self.picam.capture_array()  # RGB888 from picam2
                 # Convert RGB to BGR for OpenCV (picam2 returns RGB, cv2 expects BGR)
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                # Rotate 180° because camera is mounted upside down
+                frame = cv2.rotate(frame, cv2.ROTATE_180)
                 frame_idx += 1
                 overlay = self.overlay
                 if overlay == "gesture":

@@ -18,7 +18,7 @@ source of truth; this repo exists so nothing is lost if the SD card dies.
   the standalone `~/MagicMirror` is retired — `cleanup-pi.sh` removes it)
 - **Mirror Control UI:** `http://10.0.0.249:8090` (PWA, mobile-first)
 - **Mirror console backend:** `http://10.0.0.249:8000` (REST API only, no UI)
-- **Camera:** RPi Camera Module (ribbon-connected) — face recognition
+- **Camera:** RPi Camera Module (ribbon-connected, **mounted upside down** — frames rotated 180° in `supervisor.py` capture loop) — face recognition + gesture detection
 - **Radar:** HLK-LD2450 on UART `/dev/ttyAMA0` @ 256000 baud
 - **Monitor:** Dell U2515H (DDC/CI control via `ddcutil`, no GPIO)
 
@@ -73,7 +73,8 @@ and the **`mirrorControl`** React UI app.
   MJPEG stream, photo upload/download, layout store CRUD (`/layout`, `/store/*`),
   profile/dataset management (`/profiles`, `/dataset`, `/capture`, `/encode`),
   and the AI module builder endpoints. **NOT a UI** — the UI is `mirrorControl/`.
-  Backend `supervisor.py` is the single camera arbiter; `setup.sh` installs it as
+  Backend `supervisor.py` is the single camera arbiter (rotates frames 180° in the
+  capture loop to handle upside-down camera mount); `setup.sh` installs it as
   `mirror-console-backend`/`-web` systemd units. See `mirror-console/README.md`.
 - `mirrorControl/` — **primary UI app** (React + TypeScript + Redux + Vite) on
   `http://<pi>:8090`. Mobile-first PWA for controlling the mirror from a phone.

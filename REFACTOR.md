@@ -483,6 +483,71 @@ const getDetectionInfo = () => {
 
 ---
 
+## 2026-09-04f: Camera Rotation Fix - Upside Down Mount
+
+### Problém
+- **Kamera montovaná vzhůru nohama**: Z konstrukčních důvodů je kamera fyzicky otočená o 180°
+- **Detekce nefungovala**: face_recognition ani MediaPipe hands nerozpoznávaly obličeje/gesta na otočeném framu
+- **CSS transform hack**: UI otáčelo stream zpět pomocí `transform: "rotate(180deg)"`, ale to neřeší detekci
+
+### Řešení
+
+#### 1. Rotace frame v capture loop (supervisor.py)
+```python
+# PŘED
+frame = self.picam.capture_array()  # RGB888 from picam2
+frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+# ... detekce na otočeném framu ❌ nefunguje
+
+# PO
+frame = self.picam.capture_array()  # RGB888 from picam2
+frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+frame = cv2.rotate(frame, cv2.ROTATE_180)  # ✅ před detekcí
+# ... detekce na správně orientovaném framu ✅
+```
+
+#### 2. Odstranění CSS transform (Camera.tsx)
+```tsx
+// PŘED
+<img style={{ transform: "rotate(180deg)" }} />
+
+// PO
+<img style={{}} />  // frame už je správně orientovaný
+```
+
+### Proč to funguje
+1. **cv2.rotate(frame, cv2.ROTATE_180)** fyzicky otočí pixely v paměti o 180°
+2. Detekce dostane správně orientovaný frame → rozpozná obličeje/gesta
+3. Stream je enkódován už otočený → není potřeba CSS transform
+4. Jediná rotace (v Pythonu) místo dvou (Python + CSS)
+
+### Výhody
+- ✅ Detekce obličejů funguje
+- ✅ Detekce gest funguje
+- ✅ Čistší řešení (rotace na jednom místě)
+- ✅ Žádný performance overhead v browseru (CSS transform)
+
+### Změněné soubory
+```
+ mirror-console/backend/supervisor.py      | 2 ++
+ mirrorControl/src/screens/dev/Camera.tsx  | 1 -
+ REFACTOR.md                               | 55 +++++++++++++++++++++++
+ 3 files changed, 57 insertions(+), 1 deletion(-)
+```
+
+### Deploy checklist
+- [ ] Git push změn
+- [ ] SSH na Pi: `git pull`
+- [ ] Rebuild mirrorControl: `cd ~/smartMirror/mirrorControl && npm run build`
+- [ ] Restart backend: `sudo systemctl restart mirror-console-backend`
+- [ ] Restart web: `sudo systemctl restart mirror-console-web`
+- [ ] Test: http://10.0.0.249:8090 → Dev mode → Camera tab
+  - [ ] Přepnout na test_face → měl by se objevit červený obdélník kolem obličeje
+  - [ ] Přepnout na test_gesture → měly by se detekovat prsty
+  - [ ] Zkontrolovat "Osoba:" a "Prsty:" v info řádcích
+
+---
+
 ## Template pro další refactory
 
 ### Problém

@@ -141,8 +141,7 @@ export default function Camera() {
             style={{
               width: "100%",
               height: "100%",
-              objectFit: "cover",
-              transform: "rotate(180deg)"
+              objectFit: "cover"
             }}
           />
         ) : (
