@@ -41,11 +41,38 @@ export default function Monitor() {
 
   // Debounce timers
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const changingTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Subscribe to monitor state updates (event-driven, not polling)
   useEffect(() => {
-    loadState();
-    const interval = setInterval(loadState, 30000);
-    return () => clearInterval(interval);
+    const handleStateUpdate = (topic: string, payload: string) => {
+      try {
+        const newState = JSON.parse(payload);
+        setState(newState);
+        setStateLoading(false);
+      } catch (err) {
+        console.error("Failed to parse monitor state:", err);
+      }
+    };
+
+    // Subscribe to state topic
+    mqtt.sub("smartmirror/display/state", handleStateUpdate);
+
+    // Request initial state
+    const loadInitialState = async () => {
+      try {
+        await mqtt.pub("smartmirror/display/control/get_state", "1");
+      } catch (err) {
+        console.error("Failed to request initial state:", err);
+        setStateLoading(false);
+      }
+    };
+    loadInitialState();
+
+    // Cleanup: unsubscribe on unmount
+    return () => {
+      mqtt.unsub("smartmirror/display/state", handleStateUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -59,28 +86,6 @@ export default function Monitor() {
     }
   }, [state, isChanging]);
 
-  const loadState = async () => {
-    setStateLoading(true);
-    try {
-      // Start listening for response first, then send request
-      const subscribePromise = mqtt.sub("smartmirror/monitor/state", 1, 3000);
-      // Small delay to ensure subscribe is ready
-      await new Promise(resolve => setTimeout(resolve, 50));
-      // Request fresh state from daemon
-      await mqtt.pub("smartmirror/monitor/control/get_state", "1");
-      // Wait for the response
-      const data = await subscribePromise;
-      if (data.messages?.length) {
-        const msg = JSON.parse(data.messages[0].payload);
-        setState(msg);
-      }
-    } catch (err) {
-      console.error("Failed to load monitor state:", err);
-    } finally {
-      setStateLoading(false);
-    }
-  };
-
   const publishDebounced = (topic: string, value: string | number | object, delay = 300) => {
     // Clear existing timer for this topic
     if (debounceTimers.current[topic]) {
@@ -93,13 +98,14 @@ export default function Monitor() {
     debounceTimers.current[topic] = setTimeout(async () => {
       try {
         const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
-        await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
-        // Wait for daemon to: setvcp (300ms) + sleep (500ms) + getvcp (3000ms) = ~4s
-        setTimeout(async () => {
-          await loadState();
-          // Allow sync after state is loaded
+        await mqtt.pub(`smartmirror/display/control/${topic}`, payload);
+
+        // Daemon will publish updated state → our subscription will handle it
+        // Allow UI sync 1s after last publish (daemon publishes after 500ms)
+        if (changingTimer.current) clearTimeout(changingTimer.current);
+        changingTimer.current = setTimeout(() => {
           setIsChanging(false);
-        }, 4000);
+        }, 1000);
       } catch (err) {
         console.error("Publish failed:", err);
         setIsChanging(false);
@@ -110,8 +116,8 @@ export default function Monitor() {
   const publish = async (topic: string, value: string | number | object) => {
     try {
       const payload = typeof value === "object" ? JSON.stringify(value) : String(value);
-      await mqtt.pub(`smartmirror/monitor/control/${topic}`, payload);
-      setTimeout(loadState, 1000);
+      await mqtt.pub(`smartmirror/display/control/${topic}`, payload);
+      // Daemon will publish updated state → our subscription will handle it
     } catch (err) {
       console.error("Publish failed:", err);
     }
@@ -157,39 +163,31 @@ export default function Monitor() {
   return (
     <section style={{ padding: "18px 22px 30px", animation: "scin .28s ease" }}>
       <p style={{ ...eyebrow, margin: "0 0 6px" }}>DDC/CI · Dell U2515H</p>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <h2 style={h2}>{en ? "Monitor" : "Monitor"}</h2>
-      </div>
+      <h2 style={{ ...h2, margin: "0 0 24px" }}>{en ? "Monitor Control" : "Ovládání monitoru"}</h2>
 
-      {/* Current State Panel */}
-      <div style={{ background: C.p3, borderRadius: 12, padding: "12px 16px", marginBottom: 16, border: `1px solid ${C.line}`, position: "relative" }}>
-        {stateLoading && (
-          <div style={{ position: "absolute", inset: 0, background: "rgba(233, 232, 221, 0.8)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 24, height: 24, border: `2px solid ${C.line}`, borderTop: `2px solid ${C.signal}`, borderRadius: "50%", animation: "mc-sweep .8s linear infinite" }} />
+      {/* Current State */}
+      <div style={{ marginBottom: 24, padding: 16, borderRadius: 16, border: `1px solid ${C.line}`, background: C.p2 }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 12 }}>{en ? "Current State" : "Aktuální stav"}</div>
+        {stateLoading ? (
+          <div style={{ color: C.mute, fontSize: 13 }}>{en ? "Loading..." : "Načítání..."}</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>
+            <div>
+              <div style={{ marginBottom: 4 }}>{en ? "Brightness" : "Jas"}</div>
+              <div style={{ color: C.ink, fontSize: 14 }}>{state?.brightness ?? "—"}%</div>
+            </div>
+            <div>
+              <div style={{ marginBottom: 4 }}>{en ? "Contrast" : "Kontrast"}</div>
+              <div style={{ color: C.ink, fontSize: 14 }}>{state?.contrast ?? "—"}%</div>
+            </div>
+            <div>
+              <div style={{ marginBottom: 4 }}>RGB</div>
+              <div style={{ color: C.ink, fontSize: 14 }}>
+                {state ? `${state.red}/${state.green}/${state.blue}` : "—"}
+              </div>
+            </div>
           </div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, fontFamily: "var(--mono)", fontSize: 10, color: C.mute }}>
-          <div>
-            <div style={{ marginBottom: 4 }}>{en ? "Display" : "Displej"}</div>
-            <div style={{ color: state?.power === 1 ? "#1F8A3B" : "#E5482F", fontSize: 14, fontWeight: 700 }}>
-              {state?.power === 1 ? "ON" : state?.power === 4 || state?.power === 5 ? "OFF" : "—"}
-            </div>
-          </div>
-          <div>
-            <div style={{ marginBottom: 4 }}>{en ? "Brightness" : "Jas"}</div>
-            <div style={{ color: C.ink, fontSize: 14 }}>{state?.brightness ?? "—"}%</div>
-          </div>
-          <div>
-            <div style={{ marginBottom: 4 }}>{en ? "Contrast" : "Kontrast"}</div>
-            <div style={{ color: C.ink, fontSize: 14 }}>{state?.contrast ?? "—"}%</div>
-          </div>
-          <div>
-            <div style={{ marginBottom: 4 }}>RGB</div>
-            <div style={{ color: C.ink, fontSize: 14 }}>
-              {state ? `${state.red}/${state.green}/${state.blue}` : "—"}
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Power Controls */}
@@ -277,39 +275,36 @@ export default function Monitor() {
         </select>
       </div>
 
-      <div style={{ marginTop: 24 }}>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 12 }}>RGB Gain</div>
-        <Slider
-          label="Red"
-          value={localRed}
-          min={0}
-          max={100}
-          on={(v) => {
-            setLocalRed(v);
-            publishDebounced("rgb", { r: v });
-          }}
-        />
-        <Slider
-          label="Green"
-          value={localGreen}
-          min={0}
-          max={100}
-          on={(v) => {
-            setLocalGreen(v);
-            publishDebounced("rgb", { g: v });
-          }}
-        />
-        <Slider
-          label="Blue"
-          value={localBlue}
-          min={0}
-          max={100}
-          on={(v) => {
-            setLocalBlue(v);
-            publishDebounced("rgb", { b: v });
-          }}
-        />
-      </div>
+      <Slider
+        label="Red"
+        value={localRed}
+        min={0}
+        max={100}
+        on={(v) => {
+          setLocalRed(v);
+          publishDebounced("rgb", { r: v, g: localGreen, b: localBlue });
+        }}
+      />
+      <Slider
+        label="Green"
+        value={localGreen}
+        min={0}
+        max={100}
+        on={(v) => {
+          setLocalGreen(v);
+          publishDebounced("rgb", { r: localRed, g: v, b: localBlue });
+        }}
+      />
+      <Slider
+        label="Blue"
+        value={localBlue}
+        min={0}
+        max={100}
+        on={(v) => {
+          setLocalBlue(v);
+          publishDebounced("rgb", { r: localRed, g: localGreen, b: v });
+        }}
+      />
     </section>
   );
 }

@@ -9,25 +9,32 @@ a Raspberry Pi. This repository holds the **design specs / plans** and a
 **backup of the user-owned code and data** running on the Pi. The Pi is the
 source of truth; this repo exists so nothing is lost if the SD card dies.
 
+**Refactoring log**: see `REFACTOR.md` for major architectural changes and consolidation history.
+
 ## Target hardware
 
 - **Pi:** `admin@10.0.0.249` (SSH)
 - **MagicMirror root:** `~/smartMirror/MagicMirror/` (single source = the clone;
   the standalone `~/MagicMirror` is retired — `cleanup-pi.sh` removes it)
+- **Mirror Control UI:** `http://10.0.0.249:8090` (PWA, mobile-first)
+- **Mirror console backend:** `http://10.0.0.249:8000` (REST API only, no UI)
 - **Camera:** RPi Camera Module (ribbon-connected) — face recognition
 - **Radar:** HLK-LD2450 on UART `/dev/ttyAMA0` @ 256000 baud
-- **Relay:** GPIO17 → display power button (presence-based display on/off)
+- **Monitor:** Dell U2515H (DDC/CI control via `ddcutil`, no GPIO)
 
 ## Repository layout
 
 The repo is now **self-contained and runnable** via setup scripts (see
 [Setup](#setup-fresh-pi)). The MagicMirror **core is a vendored fork** (ours),
-plus our own modules, the camera/radar daemons, and the `mirror-console` web app.
+plus our own modules, the camera/radar daemons, the `mirror-console` backend,
+and the **`mirrorControl`** React UI app.
 
 - `docs/superpowers/specs/` — approved design specs
 - `docs/superpowers/plans/` — task-by-task implementation plans
+- `REFACTOR.md` — refactoring log (major architectural changes)
 - `setup.sh` — **master installer**: `git clone` → `./setup.sh` runs every
-  component's own `setup.sh` (camera, radar, console, MagicMirror) + sudoers.
+  component's own `setup.sh` (camera, radar, display control, mirror-console
+  backend, MagicMirror, mirrorControl app) + sudoers.
 - `MagicMirror/` — **vendored fork** of MagicMirror² core (full, runnable; our
   fork adds per-instance `id` support). `MagicMirror/setup.sh` installs core +
   every module's deps; `start-magicmirror.sh` + `pm2-setup.sh` run it under pm2.
@@ -37,8 +44,9 @@ plus our own modules, the camera/radar daemons, and the `mirror-console` web app
   `position`). Each module carries an `id`; `position` is omitted (placement is
   pages.js only).
 - `MagicMirror/config/pages.js` — **the live layout schedule**, read by the core
-  profile system (`MagicMirror/js/profile.js`) and **generated** by the console's
-  layout editor. (The old `modules/MMM-Profile/pages.js` is retired.)
+  profile system (`MagicMirror/js/profile.js`) and **generated** by the
+  `mirrorControl` layout editor (Scenes screen with time windows). (The old
+  `modules/MMM-Profile/pages.js` is retired.)
 - `MagicMirror/js/profile.js` + `MagicMirror/js/main.js` — the **core** profile
   system (presence-driven state machine + cron-window layout resolution over
   MQTT; `main.js` `projectLayout` does the placement and renders the Face ID
@@ -54,19 +62,30 @@ plus our own modules, the camera/radar daemons, and the `mirror-console` web app
 - `ld2450/` — radar daemon, tests, `ld2450.service`, `setup.sh`. Publishes
   presence + live `targets` over MQTT; reads `radar_config.json` (per-Pi,
   gitignored) for calibration (offset/mirror, zone, smoothing, ghost exclusions).
-- `mirror-console/` — **web console** (React + Vite + Express + Python
-  supervisor) on `http://<pi>:8000`. Tabs: **Kamera** (camera arbiter —
-  Face detect / Test obličejů / Test gest), **Profily** (enroll faces + per-
-  profile **Rozložení** layout editor — time windows + a **Výchozí** default
-  layout per profile → generates `config/pages.js` and injects managed modules
-  into `config.js`; the non-deletable `default` profile is the no-recognition
-  fallback), **Radar** (live map + on/off), **MQTT** (publish test
-  messages + bus monitor), **Moduly (AI)** (build a new MagicMirror module by
-  chatting with Claude — runs on the Pi via the Claude Agent SDK, edits a
-  scaffolded draft with a live `demo.html` iframe preview, then installs it onto
-  the mirror and registers it in the layout catalog; see `module-ai.js` +
-  `mirror-console/README.md`). Backend `supervisor.py` is the single camera
-  arbiter; `setup.sh` installs it as `mirror-console-backend`/`-web` systemd units.
+- `display_control/` — comprehensive DDC/CI monitor control daemon
+  (`display-control` systemd unit) for Dell U2515H. Controls power (on/standby),
+  brightness, contrast, RGB gains, color presets (5000K-10000K), display modes
+  (Standard/Movie/Games), and custom features via MQTT. Publishes current state
+  to `smartmirror/display/state` (retained). See `display_control/README.md` and
+  `REFACTOR.md` (2026-09-04 consolidation).
+- `mirror-console/` — **backend server** (Express + Python supervisor) on
+  `http://<pi>:8000`. Provides REST API for operations MQTT can't handle: camera
+  MJPEG stream, photo upload/download, layout store CRUD (`/layout`, `/store/*`),
+  profile/dataset management (`/profiles`, `/dataset`, `/capture`, `/encode`),
+  and the AI module builder endpoints. **NOT a UI** — the UI is `mirrorControl/`.
+  Backend `supervisor.py` is the single camera arbiter; `setup.sh` installs it as
+  `mirror-console-backend`/`-web` systemd units. See `mirror-console/README.md`.
+- `mirrorControl/` — **primary UI app** (React + TypeScript + Redux + Vite) on
+  `http://<pi>:8090`. Mobile-first PWA for controlling the mirror from a phone.
+  Communicates with the mirror over **MQTT** (WebSocket `:9001`) for live state
+  (presence, radar targets, recognition, layout reload) and falls back to REST
+  (proxied to `mirror-console` backend on `:8000`) for MJPEG streams, photo
+  upload, and layout/store operations. Screens: **Home** (live mirror preview),
+  **Scenes** (layout editor with time windows), **Modules** (store + AI builder),
+  **Profiles** (face enrollment + per-profile layouts), **Dev** (radar/camera/MQTT
+  debug). Installed as `mirror-control` systemd unit (`vite preview`). See
+  `mirrorControl/README.md` for architecture. **When working on UI/frontend,
+  edit `mirrorControl/`, not `mirror-console/web/`** (which is legacy/unused).
 
 Deploy is **git pull**: the user pushes to git, then `git pull` on the Pi.
 Per-Pi runtime state (`radar_config.json`, `layout_store.json`,
@@ -204,7 +223,8 @@ prints: enable UART (`raspi-config`) and `pm2 startup` for boot autostart. (The
 console injects managed modules into `config.js` between `// MIRROR-CONSOLE`
 markers automatically — no manual `require()` splice; `console-modules.js` is
 legacy.)
-Services: `ld2450` (enabled), `mirror-console-backend`/`-web` (enabled),
+Services: `ld2450` (enabled), `display-control` (enabled),
+`mirror-console-backend`/`-web` (enabled), `mirror-control` (enabled),
 `face_reco` (installed but **disabled** — the console starts/stops it),
 MagicMirror under **pm2** (process name `MagicMirror`).
 
@@ -220,12 +240,22 @@ pm2 logs MagicMirror --lines 100     # tail logs
 cd ~/MagicMirror && ./setup.sh       # reinstall core + module deps
 ```
 
-### Mirror console
+### Mirror Control (UI app)
 
 ```bash
-cd ~/smartMirror/mirror-console && ./setup.sh   # build web + (re)install services
+cd ~/smartMirror/mirrorControl && ./setup.sh    # build + (re)install service
+sudo systemctl restart mirror-control
+journalctl -u mirror-control -f
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/
+# Access from phone/laptop: http://10.0.0.249:8090
+```
+
+### Mirror console (backend)
+
+```bash
+cd ~/smartMirror/mirror-console && ./setup.sh   # (re)install backend + web services
 sudo systemctl restart mirror-console-backend mirror-console-web
-journalctl -u mirror-console-web -f
+journalctl -u mirror-console-backend -f
 curl -s http://127.0.0.1:8000/healthz; echo
 ```
 
@@ -236,6 +266,18 @@ sudo systemctl status ld2450
 sudo systemctl restart ld2450
 journalctl -u ld2450 -f
 sudo systemctl stop ld2450    # release /dev/ttyAMA0 before running viewer.py
+```
+
+### Display control
+
+```bash
+sudo systemctl status display-control
+sudo systemctl restart display-control
+journalctl -u display-control -f
+# Test power toggle via MQTT:
+mosquitto_pub -h 127.0.0.1 -t smartmirror/display/control -m '{"command":"toggle"}'
+# Test brightness (0-100):
+mosquitto_pub -h 127.0.0.1 -t smartmirror/display/control -m '{"command":"brightness","value":50}'
 ```
 
 ### Python tests (ld2450)
@@ -329,7 +371,7 @@ unmodified upstream. Our modules (`modules/MMM-*`) are not part of this delta.
   and **`mqtt` ^5.11.2** (profile event bus). (`croner` is also present.)
 
 **Contract this introduces:** modules are declared in `config.js` with an `id`
-and **no `position`**; `config/pages.js` (generated by mirror-console) decides
+and **no `position`**; `config/pages.js` (generated by `mirrorControl`) decides
 placement per `(user, cron window)`; the core projects/repositions live over
 socket.io and hot-loads new modules without a pm2 restart. To upstream cleanly,
 the profile system could become an opt-in core feature gated on `config.profile`

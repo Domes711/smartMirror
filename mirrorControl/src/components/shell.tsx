@@ -176,7 +176,7 @@ export function BottomNav() {
       {devMode ? (
         <>
           <NavItem active={tab === "radar"} label={L.navRadar} onClick={() => nav("radar", "radar")}>{Ico.radar}</NavItem>
-          <NavItem active={tab === "monitor"} label="Monitor" onClick={() => nav("monitor", "monitor")}>{Ico.monitor}</NavItem>
+          <NavItem active={tab === "monitor"} label={en ? "Monitor" : "Monitor"} onClick={() => nav("monitor", "monitor")}>{Ico.monitor}</NavItem>
           <NavItem active={tab === "camera"} label={L.navCamera} onClick={() => nav("camera", "camera")}>{Ico.camera}</NavItem>
           <NavItem active={tab === "comms"} label={L.navComms} onClick={() => nav("comms", "comms")}>{Ico.comms}</NavItem>
         </>

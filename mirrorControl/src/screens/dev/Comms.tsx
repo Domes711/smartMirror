@@ -41,13 +41,13 @@ export default function Comms() {
 
   // Monitor mode presets: ONLY monitor control (power, brightness)
   const monitorModePresets: { label: string; topic: string; payload: string; dot: string }[] = [
-    { label: en ? "💡 Power ON" : "💡 Zapnout", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "power_on" }), dot: "#3bd17a" },
-    { label: en ? "⏾ Standby" : "⏾ Standby", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "power_standby" }), dot: "#8C8C81" },
-    { label: en ? "Brightness: 100%" : "Jas: 100%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 100 }), dot: "#3bd17a" },
-    { label: en ? "Brightness: 75%" : "Jas: 75%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 75 }), dot: "#3bd17a" },
-    { label: en ? "Brightness: 50%" : "Jas: 50%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 50 }), dot: "#ffc34d" },
-    { label: en ? "Brightness: 25%" : "Jas: 25%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 25 }), dot: "#8C8C81" },
-    { label: en ? "Brightness: 0%" : "Jas: 0%", topic: "smartmirror/display/control", payload: JSON.stringify({ command: "brightness", value: 0 }), dot: "#8C8C81" },
+    { label: en ? "💡 Power ON" : "💡 Zapnout", topic: "smartmirror/display/control/power", payload: "on", dot: "#3bd17a" },
+    { label: en ? "⏾ Standby" : "⏾ Standby", topic: "smartmirror/display/control/power", payload: "standby", dot: "#8C8C81" },
+    { label: en ? "Brightness: 100%" : "Jas: 100%", topic: "smartmirror/display/control/brightness", payload: "100", dot: "#3bd17a" },
+    { label: en ? "Brightness: 75%" : "Jas: 75%", topic: "smartmirror/display/control/brightness", payload: "75", dot: "#3bd17a" },
+    { label: en ? "Brightness: 50%" : "Jas: 50%", topic: "smartmirror/display/control/brightness", payload: "50", dot: "#ffc34d" },
+    { label: en ? "Brightness: 25%" : "Jas: 25%", topic: "smartmirror/display/control/brightness", payload: "25", dot: "#8C8C81" },
+    { label: en ? "Brightness: 0%" : "Jas: 0%", topic: "smartmirror/display/control/brightness", payload: "0", dot: "#8C8C81" },
   ];
 
   const presets = selectedTarget === "user" ? userModePresets : monitorModePresets;
