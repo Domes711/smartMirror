@@ -89,7 +89,12 @@ and the **`mirrorControl`** React UI app.
   `mirrorControl/README.md` for architecture. **All UI work happens in
   `mirrorControl/`** (mirror-console is backend/API only, no UI).
 
-Deploy is **git pull**: the user pushes to git, then `git pull` on the Pi.
+Deploy is **git pull**: the user pushes to git, then on the Pi
+`cd ~/smartMirror && ./deploy.sh` — pulls master, installs deps, rebuilds
+`mirrorControl/`, restarts the units + pm2 MagicMirror and health-checks
+:8000 / :8090 / :8080. `./deploy.sh --full` also re-runs `MagicMirror/setup.sh`
+(core + module deps); `./deploy-fe.sh` is the app-only fast path (no core /
+console / daemon restart — don't use it when `MagicMirror/js/` changed).
 Per-Pi runtime state (`radar_config.json`, `layout_store.json`,
 `console-modules.js`, `mirror-console/backend/custom_modules.json`,
 `mirror-console/module-drafts/`, `vendor/`, `fonts/`, `node_modules/`) is gitignored.

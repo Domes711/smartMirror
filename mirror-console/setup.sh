@@ -1,9 +1,10 @@
 #!/bin/bash
-# setup.sh — bring up the mirror-console (supervisor + web) correctly.
+# setup.sh — bring up the mirror-console (supervisor + API gateway) correctly.
 #
-# Builds the React web, installs deps, then generates + enables two systemd
-# units with paths/binaries detected at setup time (robust to repo location and
-# nvm node version changes — just re-run this after a node upgrade).
+# mirror-console is backend only — the UI is mirrorControl/ (:8090). This
+# installs deps and generates + enables two systemd units with paths/binaries
+# detected at setup time (robust to repo location and nvm node version changes
+# — just re-run this after a node upgrade).
 #
 # Usage (on the Pi):
 #   cd ~/smartMirror/mirror-console && ./setup.sh
@@ -20,9 +21,8 @@ echo "▸ node:   $NODE"
 echo "▸ python: $PY"
 echo "▸ user:   $USER_NAME"
 
-echo "▸ Installing deps + building web…"
+echo "▸ Installing deps…"
 ( cd "$DIR/server" && npm install --no-audit --no-fund )
-( cd "$DIR/web" && npm install --no-audit --no-fund && npm run build )
 
 echo "▸ Writing systemd units…"
 sudo tee /etc/systemd/system/mirror-console-backend.service >/dev/null <<EOF
@@ -47,7 +47,7 @@ EOF
 
 sudo tee /etc/systemd/system/mirror-console-web.service >/dev/null <<EOF
 [Unit]
-Description=Smart Mirror camera console — web front-end (Express + React)
+Description=Smart Mirror console — API gateway (Express, proxy + MQTT bridge)
 After=network.target mirror-console-backend.service
 Wants=mirror-console-backend.service
 

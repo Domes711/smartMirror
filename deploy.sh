@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# One-shot deploy: pull latest master, install deps, rebuild the web console,
-# and restart everything so changes (front-end + back-end + modules) take effect.
+# One-shot deploy: pull latest master, install deps, rebuild the Mirror Control
+# app, and restart everything so changes (front-end + core + back-end + modules)
+# take effect.
 #
 # Safe to run repeatedly. Per-Pi state is gitignored (layout_store.json,
 # installed_modules.json, console-modules.js, config/pages.js,
-# radar_config.json, node_modules, web/dist) so it is never touched.
+# radar_config.json, node_modules, mirrorControl/dist) so it is never touched.
 # The only tracked runtime file is MagicMirror/config/config.js — it is backed
 # up first and the pull is done with --autostash.
 #
@@ -20,6 +21,7 @@ FULL=0
 c() { printf '\033[1;36m▸ %s\033[0m\n' "$*"; }       # step
 ok() { printf '\033[1;32m  ✓ %s\033[0m\n' "$*"; }    # success
 warn() { printf '\033[1;33m  ! %s\033[0m\n' "$*"; }  # warning
+unit_installed() { systemctl list-unit-files "$1.service" 2>/dev/null | grep -q "$1.service"; }
 
 # --- node / npm / pm2 (nvm is not on PATH for non-interactive shells) ---------
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
@@ -80,49 +82,24 @@ c "Instaluji závislosti konzole (server)…"
 ( cd mirror-console/server && "$NPM" install --no-audit --no-fund )
 ok "server hotov"
 
-# --- 5. console web: deps + build --------------------------------------------
-c "Buildím web konzoli…"
-( cd mirror-console/web && "$NPM" install --no-audit --no-fund && "$NPM" run build )
-ok "web/dist vygenerován"
-
-# --- 5b. Mirror Control app (nová appka): build + serve unit ------------------
-# Builds mirrorControl/ (Vite SPA) and serves the production build with
-# `vite preview` under a systemd unit on :8090. MQTT goes direct (ws :9001);
-# REST fallback is proxied to :8000 (see mirrorControl/vite.config.ts).
-c "Buildím Mirror Control (nová appka)…"
-( cd mirrorControl && "$NPM" install --no-audit --no-fund && "$NPM" run build )
-ok "mirrorControl/dist vygenerován"
-
-MC_USER="$(id -un)"
-NODE_BIN_DIR="$(dirname "$NPM")"
-c "Instaluji službu mirror-control (port 8090)…"
-sudo tee /etc/systemd/system/mirror-control.service >/dev/null <<EOF
-[Unit]
-Description=Mirror Control web app (Vite preview)
-After=network.target
-
-[Service]
-Type=simple
-User=$MC_USER
-WorkingDirectory=$REPO/mirrorControl
-Environment=HOME=$HOME
-Environment=PATH=$NODE_BIN_DIR:/usr/local/bin:/usr/bin:/bin
-ExecStart=$NPM run preview -- --host 0.0.0.0 --port 8090 --strictPort
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-sudo systemctl daemon-reload
-sudo systemctl enable mirror-control >/dev/null 2>&1 || true
-ok "mirror-control.service nainstalován"
+# --- 5. Mirror Control app (jediné UI, :8090) --------------------------------
+# mirror-console je od konsolidace jen backend/API — UI je mirrorControl/ (Vite
+# SPA). MQTT jde napřímo (ws :9001), REST fallback se proxuje na :8000
+# (viz mirrorControl/vite.config.ts). Unit píše mirrorControl/setup.sh, ať
+# nemáme dvě definice, které se rozejdou.
+if unit_installed mirror-control; then
+  c "Buildím Mirror Control (:8090)…"
+  ( cd mirrorControl && "$NPM" install --no-audit --no-fund && "$NPM" run build )
+  ok "mirrorControl/dist vygenerován"
+else
+  c "mirror-control.service chybí — spouštím mirrorControl/setup.sh (build + unit)…"
+  ( cd mirrorControl && ./setup.sh )
+  ok "mirror-control.service nainstalován"
+fi
 
 # --- 6. restart everything ----------------------------------------------------
 restart_unit() {  # restart a systemd unit only if it is installed
-  if systemctl list-unit-files "$1.service" 2>/dev/null | grep -q "$1.service"; then
+  if unit_installed "$1"; then
     sudo systemctl restart "$1" && ok "restart $1"
   else
     warn "$1.service není nainstalován (přeskakuji)"
@@ -133,6 +110,7 @@ restart_unit mirror-console-backend
 restart_unit mirror-console-web
 restart_unit mirror-control
 restart_unit ld2450
+restart_unit display-control
 if [ -n "$PM2" ]; then
   "$PM2" restart MagicMirror >/dev/null 2>&1 && ok "restart MagicMirror (pm2)" \
     || warn "pm2 restart MagicMirror selhal (běží MagicMirror pod pm2?)"
@@ -142,11 +120,14 @@ fi
 
 # --- 7. health check ----------------------------------------------------------
 c "Kontrola…"
-sleep 2
-code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz || true)"
-[ "$code" = "200" ] && ok "konzole běží (HTTP 200)" || warn "konzole neodpovídá (HTTP $code) — viz: journalctl -u mirror-console-web -n 50"
-mc_code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/ || true)"
-[ "$mc_code" = "200" ] && ok "Mirror Control běží (HTTP 200, :8090)" || warn "Mirror Control neodpovídá (HTTP $mc_code) — viz: journalctl -u mirror-control -n 50"
+sleep 3
+check() {  # check <label> <url> <hint>
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$2" || true)"
+  [ "$code" = "200" ] && ok "$1 běží (HTTP 200)" || warn "$1 neodpovídá (HTTP $code) — viz: $3"
+}
+check "mirror-console (:8000)" http://127.0.0.1:8000/healthz "journalctl -u mirror-console-web -n 50"
+check "Mirror Control (:8090)" http://127.0.0.1:8090/ "journalctl -u mirror-control -n 50"
+check "MagicMirror (:8080)" http://127.0.0.1:8080/ "pm2 logs MagicMirror --lines 50"
 
 echo
 ok "Hotovo. Změny FE i BE jsou nasazené. Mirror Control: http://<pi>:8090"
