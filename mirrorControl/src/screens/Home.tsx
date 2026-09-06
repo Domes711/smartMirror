@@ -6,6 +6,7 @@ import { MirrorLoader } from "@/components/MirrorLoader";
 import { PillButton, tokens as C, h1 } from "@/components/ui";
 import * as fx from "@/app/thunks";
 import { resolveActiveId } from "@/app/selectors";
+import { mirrorDisplayUrl } from "@/services/api";
 
 export default function Home() {
   const dispatch = useAppDispatch();
@@ -65,6 +66,25 @@ export default function Home() {
           </Row>
           <Row label={L.modsRunning}>
             <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{liveCount}</span>
+          </Row>
+          <Row label={L.mirrorUrl}>
+            <a
+              href={mirrorDisplayUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 13,
+                color: C.butter,
+                textDecoration: "none",
+                borderBottom: `1px solid ${C.butter}`,
+                transition: "opacity .2s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+            >
+              {mirrorDisplayUrl()}
+            </a>
           </Row>
         </div>
       </div>

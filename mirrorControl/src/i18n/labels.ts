@@ -9,7 +9,7 @@ export interface LabelDict {
 export const LABELS: Record<Lang, LabelDict> = {
   cs: {
     navMirror: "Zrcadlo", navLayouts: "Scény", navModules: "Widgety", navProfiles: "Profily", navRadar: "Radar", navCamera: "Kamera", navComms: "Komunikace", online: "online",
-    editLayout: "Upravit scénu", wake: "Probudit", currentInfo: "Aktuální informace", activeScene: "Aktivní scéna", profile: "Profil", connection: "Připojení", modsRunning: "Widgety v provozu",
+    editLayout: "Upravit scénu", wake: "Probudit", currentInfo: "Aktuální informace", activeScene: "Aktivní scéna", profile: "Profil", connection: "Připojení", modsRunning: "Widgety v provozu", mirrorUrl: "Adresa zrcadla",
     changesA: "nepublikovaných změn.", changesB: "Náhled výše je živý stav zrcadla.", apply: "Aplikovat",
     winTitle: "Časová okna", winEyebrow: "default · kdy se co zobrazí", addWindow: "Přidat časové okno",
     winHint: "Okno určuje časový úsek dne. Po vytvoření okna rovnou upravíš jeho rozložení widgetů.", applyToMirror: "Aplikovat na zrcadlo",
@@ -30,7 +30,7 @@ export const LABELS: Record<Lang, LabelDict> = {
   },
   en: {
     navMirror: "Mirror", navLayouts: "Scenes", navModules: "Widgets", navProfiles: "Profiles", navRadar: "Radar", navCamera: "Camera", navComms: "Comms", online: "online",
-    editLayout: "Edit scene", wake: "Wake up", currentInfo: "Current information", activeScene: "Active scene", profile: "Profile", connection: "Connection", modsRunning: "Widgets running",
+    editLayout: "Edit scene", wake: "Wake up", currentInfo: "Current information", activeScene: "Active scene", profile: "Profile", connection: "Connection", modsRunning: "Widgets running", mirrorUrl: "Mirror URL",
     changesA: "unpublished changes.", changesB: "Preview above is the live mirror state.", apply: "Apply",
     winTitle: "Time windows", winEyebrow: "default · when things show", addWindow: "Add time window",
     winHint: "A window defines a time range of the day. After creating one you edit its widget layout right away.", applyToMirror: "Apply to mirror",
