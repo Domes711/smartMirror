@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 export const tokens = {
@@ -107,8 +108,30 @@ export function Modal({ open, onClose, children, width = 320 }: { open: boolean;
   );
 }
 
-/** Bottom sheet. */
+/**
+ * Bottom sheet.
+ *
+ * Lifts itself above the on-screen keyboard: the sheet is `position: fixed`, so
+ * iOS would otherwise leave it pinned to the layout viewport bottom — behind the
+ * keyboard. `visualViewport` reports how much of the screen the keyboard eats.
+ */
 export function BottomSheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+  const [kbInset, setKbInset] = useState(0);
+
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!open || !vv) return;
+    const sync = () => setKbInset(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    sync();
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    return () => {
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
+      setKbInset(0);
+    };
+  }, [open]);
+
   if (!open) return null;
   return (
     <Backdrop onClick={onClose} align="end">
@@ -118,6 +141,7 @@ export function BottomSheet({ open, onClose, children }: { open: boolean; onClos
           width: "100%", background: C.paper, borderTopLeftRadius: 22, borderTopRightRadius: 22,
           borderTop: `1px solid ${C.line}`, padding: "20px 22px calc(22px + env(safe-area-inset-bottom))",
           animation: "mc-sheet .26s ease", maxHeight: "80%", overflowY: "auto",
+          marginBottom: kbInset, transition: "margin-bottom .18s ease",
         }}
       >
         <div style={{ width: 38, height: 4, borderRadius: 999, background: C.line, margin: "0 auto 16px" }} />

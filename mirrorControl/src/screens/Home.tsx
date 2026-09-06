@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { BottomSheet, PillButton, Segmented, eyebrow, tokens as C, h1 } from "@/components/ui";
@@ -84,6 +85,16 @@ export default function Home() {
   const [msgOpen, setMsgOpen] = useState(false);
   const [msgText, setMsgText] = useState("");
   const [msgTimer, setMsgTimer] = useState(DURATIONS[1].value);
+  const msgRef = useRef<HTMLTextAreaElement>(null);
+
+  // iOS only opens the keyboard for a focus() call that happens inside the tap
+  // handler itself — autoFocus on a freshly mounted node is ignored. flushSync
+  // mounts the sheet synchronously so the textarea exists and can be focused
+  // while the gesture is still on the stack.
+  const openMessage = () => {
+    flushSync(() => setMsgOpen(true));
+    msgRef.current?.focus();
+  };
 
   const sendMessage = () => {
     if (!msgText.trim()) return;
@@ -129,7 +140,7 @@ export default function Home() {
             onClick={() => dispatch(fx.toggleDisplay())}
           />
           <ActionCard icon={Icons.scene} label={L.editLayout as string} onClick={() => dispatch(fx.editResolved("home"))} />
-          <ActionCard icon={Icons.message} label={L.sendMessage as string} onClick={() => setMsgOpen(true)} />
+          <ActionCard icon={Icons.message} label={L.sendMessage as string} onClick={openMessage} />
           <ActionCard icon={Icons.widget} label={L.newWidget as string} onClick={() => dispatch(fx.goTab("modules"))} />
         </div>
 
@@ -155,11 +166,12 @@ export default function Home() {
         <p style={{ fontSize: 13, color: C.ink2, margin: "0 0 14px" }}>{L.msgHint}</p>
 
         <textarea
+          ref={msgRef}
           value={msgText}
           onChange={(e) => setMsgText(e.target.value)}
           placeholder={L.msgPh as string}
           rows={3}
-          autoFocus
+          enterKeyHint="send"
           style={{
             width: "100%", boxSizing: "border-box", resize: "none",
             border: `1px solid ${C.line}`, borderRadius: 12, background: C.p3,
