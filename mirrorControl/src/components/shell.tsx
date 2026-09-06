@@ -127,7 +127,7 @@ export function Toast() {
   const toast = useAppSelector((s) => s.ui.toast);
   if (!toast) return null;
   return (
-    <div style={{ position: "absolute", left: "50%", bottom: 92, zIndex: 60, transform: "translateX(-50%)", display: "inline-flex", alignItems: "center", gap: 8, background: C.ink, color: C.paper, fontFamily: "var(--mono)", fontSize: 11.5, padding: "10px 16px", borderRadius: 999, animation: "toastin .25s ease", whiteSpace: "nowrap" }}>
+    <div style={{ position: "fixed", left: "50%", bottom: 92, zIndex: 1100, transform: "translateX(-50%)", display: "inline-flex", alignItems: "center", gap: 8, background: C.ink, color: C.paper, fontFamily: "var(--mono)", fontSize: 11.5, padding: "10px 16px", borderRadius: 999, animation: "toastin .25s ease", whiteSpace: "nowrap" }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.signal }} />
       {toast}
     </div>

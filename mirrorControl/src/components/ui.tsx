@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export const tokens = {
   paper: "#E9E8DD", p2: "#EFEEE4", p3: "#E2E1D5", ink: "#1A1A17", ink2: "#3a3a34",
@@ -66,19 +67,28 @@ export function Segmented<T extends string | number>({
   );
 }
 
-/** Full-bleed dimmed backdrop. */
+/**
+ * Full-bleed dimmed backdrop.
+ *
+ * Rendered through a portal on `document.body` with `position: fixed` so it
+ * always covers the whole app — including the bottom nav. Inside the screen it
+ * is invoked from, a stacking context (scroll container, running animation)
+ * would otherwise trap its z-index below the nav bar.
+ */
 export function Backdrop({ onClick, children, align = "center" }: { onClick?: () => void; children: ReactNode; align?: "center" | "end" }) {
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       onClick={onClick}
       style={{
-        position: "absolute", inset: 0, zIndex: 40, background: "rgba(26,26,23,.42)",
+        position: "fixed", inset: 0, zIndex: 1000, background: "rgba(26,26,23,.42)",
         display: "flex", alignItems: align === "end" ? "flex-end" : "center", justifyContent: "center",
         padding: align === "end" ? 0 : 20, animation: "mc-fade .2s ease",
       }}
     >
       {children}
-    </div>
+    </div>,
+    document.body
   );
 }
 
