@@ -7,7 +7,7 @@ import { BottomSheet, PillButton, Segmented, eyebrow, tokens as C, h1 } from "@/
 import * as fx from "@/app/thunks";
 import { resolveActiveId } from "@/app/selectors";
 import { mirrorDisplayUrl } from "@/services/api";
-import { isConnected } from "@/services/mqtt";
+import { isConnected, publish, TOPICS } from "@/services/mqtt";
 
 /* ---------- quick-action icons ---------- */
 const ico: CSSProperties = { width: 20, height: 20, fill: "none", stroke: C.paper, strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" };
@@ -38,6 +38,12 @@ const Icons = {
   widget: (
     <svg viewBox="0 0 24 24" style={ico}>
       <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  brightness: (
+    <svg viewBox="0 0 24 24" style={ico}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4 12H2M22 12h-2M19.07 4.93l-1.41 1.41M6.34 17.66l-1.41 1.41M19.07 19.07l-1.41-1.41M6.34 6.34L4.93 4.93" />
     </svg>
   ),
 };
@@ -87,6 +93,9 @@ export default function Home() {
   const [msgTimer, setMsgTimer] = useState(DURATIONS[1].value);
   const msgRef = useRef<HTMLTextAreaElement>(null);
 
+  // Brightness control
+  const [brightness, setBrightness] = useState(50);
+
   // iOS only opens the keyboard for a focus() call that happens inside the tap
   // handler itself — autoFocus on a freshly mounted node is ignored. flushSync
   // mounts the sheet synchronously so the textarea exists and can be focused
@@ -101,6 +110,12 @@ export default function Home() {
     dispatch(fx.sendMirrorMessage(msgText, msgTimer));
     setMsgText("");
     setMsgOpen(false);
+  };
+
+  const handleBrightnessChange = (delta: number) => {
+    const newBrightness = Math.max(0, Math.min(100, brightness + delta));
+    setBrightness(newBrightness);
+    publish(TOPICS.displayBrightness, String(newBrightness));
   };
 
   const ActionCard = ({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) => (
@@ -118,6 +133,47 @@ export default function Home() {
       </span>
       <span style={{ fontSize: 15.5, fontWeight: 600, letterSpacing: "-.01em" }}>{label}</span>
     </button>
+  );
+
+  const BrightnessCard = () => (
+    <div
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14,
+        background: C.p2, border: `1px solid ${C.line}`, borderRadius: 16,
+        padding: "16px 16px 18px", color: C.ink,
+      }}
+    >
+      <span style={{ width: 42, height: 42, borderRadius: 12, background: C.ink, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+        {Icons.brightness}
+      </span>
+      <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          onClick={() => handleBrightnessChange(-10)}
+          className="mc-lift"
+          style={{
+            width: 32, height: 32, borderRadius: 8, background: C.p3,
+            border: `1px solid ${C.line}`, display: "grid", placeItems: "center",
+            cursor: "pointer", fontSize: 18, fontWeight: 600, color: C.ink,
+          }}
+        >
+          −
+        </button>
+        <span style={{ flex: 1, textAlign: "center", fontFamily: "var(--mono)", fontSize: 15.5, fontWeight: 600 }}>
+          {brightness}%
+        </span>
+        <button
+          onClick={() => handleBrightnessChange(10)}
+          className="mc-lift"
+          style={{
+            width: 32, height: 32, borderRadius: 8, background: C.p3,
+            border: `1px solid ${C.line}`, display: "grid", placeItems: "center",
+            cursor: "pointer", fontSize: 18, fontWeight: 600, color: C.ink,
+          }}
+        >
+          +
+        </button>
+      </div>
+    </div>
   );
 
   const Row = ({ label, children }: { label: string; children: ReactNode }) => (
@@ -142,6 +198,7 @@ export default function Home() {
           <ActionCard icon={Icons.scene} label={L.editLayout as string} onClick={() => dispatch(fx.editResolved("home"))} />
           <ActionCard icon={Icons.message} label={L.sendMessage as string} onClick={openMessage} />
           <ActionCard icon={Icons.widget} label={L.newWidget as string} onClick={() => dispatch(fx.goTab("modules"))} />
+          <BrightnessCard />
         </div>
 
         <p style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-.01em", color: C.ink, margin: "0 0 6px" }}>{L.currentInfo}</p>
