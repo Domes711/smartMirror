@@ -1,12 +1,10 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
-import { Mirror } from "@/components/Mirror";
 import { MirrorStream } from "@/components/MirrorStream";
 import { MirrorLoader } from "@/components/MirrorLoader";
 import { PillButton, tokens as C, h1 } from "@/components/ui";
 import * as fx from "@/app/thunks";
 import { resolveActiveId } from "@/app/selectors";
-import { mirrorDisplayUrl } from "@/services/api";
 
 export default function Home() {
   const dispatch = useAppDispatch();
@@ -41,8 +39,8 @@ export default function Home() {
             <MirrorLoader aspect={false} height="48dvh" />
           ) : (
             <div style={{ position: "relative", animation: "mc-fade .45s ease" }}>
-              {/* real mirror when connected, synthetic preview as offline fallback */}
-              {connected ? <MirrorStream /> : <Mirror regions={regions} mode="preview" />}
+              {/* Always show real mirror stream (MagicMirror on :8080) */}
+              <MirrorStream />
               <div style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 6, background: "rgba(26,26,23,.55)", border: "1px solid rgba(229,72,47,.5)", borderRadius: 999, padding: "4px 9px", backdropFilter: "blur(2px)" }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.signal }} />
                 <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: C.signal }}>{L.live}</span>
@@ -66,25 +64,6 @@ export default function Home() {
           </Row>
           <Row label={L.modsRunning}>
             <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{liveCount}</span>
-          </Row>
-          <Row label={L.mirrorUrl}>
-            <a
-              href={mirrorDisplayUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 13,
-                color: C.butter,
-                textDecoration: "none",
-                borderBottom: `1px solid ${C.butter}`,
-                transition: "opacity .2s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-            >
-              {mirrorDisplayUrl()}
-            </a>
           </Row>
         </div>
       </div>
