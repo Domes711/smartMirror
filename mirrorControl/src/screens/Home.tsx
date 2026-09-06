@@ -39,8 +39,8 @@ export default function Home() {
             <MirrorLoader aspect={false} height="50dvh" />
           ) : (
             <div style={{ position: "relative", width: "100%", height: "100%", animation: "mc-fade .45s ease" }}>
-              {/* Always show real mirror stream (MagicMirror on :8080), zoomed out to 10% */}
-              <MirrorStream zoom={0.1} />
+              {/* Always show real mirror stream (MagicMirror on :8080), zoomed out to 1% */}
+              <MirrorStream zoom={0.01} />
               <div style={{ position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: 6, background: "rgba(26,26,23,.55)", border: "1px solid rgba(229,72,47,.5)", borderRadius: 999, padding: "4px 9px", backdropFilter: "blur(2px)" }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.signal }} />
                 <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: C.signal }}>{L.live}</span>
