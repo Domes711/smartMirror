@@ -34,11 +34,11 @@ export default function Home() {
     <section style={{ height: "100%", display: "flex", flexDirection: "column", padding: "18px 22px 0", animation: "scin .28s ease" }}>
       <h1 style={{ ...h1, marginBottom: 12, flex: "0 0 auto" }}>{L.navMirror}</h1>
       <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "6px 22px 0" }}>
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", height: "60dvh" }}>
           {homeLoading ? (
-            <MirrorLoader aspect={false} height="48dvh" />
+            <MirrorLoader aspect={false} height="60dvh" />
           ) : (
-            <div style={{ position: "relative", animation: "mc-fade .45s ease" }}>
+            <div style={{ position: "relative", height: "100%", animation: "mc-fade .45s ease" }}>
               {/* Always show real mirror stream (MagicMirror on :8080) */}
               <MirrorStream />
               <div style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 6, background: "rgba(26,26,23,.55)", border: "1px solid rgba(229,72,47,.5)", borderRadius: 999, padding: "4px 9px", backdropFilter: "blur(2px)" }}>
