@@ -5,7 +5,7 @@ import { mirrorDisplayUrl } from "@/services/api";
  * on :8080) as a full-size iframe.
  * Requires MagicMirror `httpHeaders.frameguard:false`.
  */
-export function MirrorStream() {
+export function MirrorStream({ zoom = 0.5 }: { zoom?: number }) {
   const url = mirrorDisplayUrl();
 
   return (
@@ -17,7 +17,8 @@ export function MirrorStream() {
         width: "100%",
         height: "100%",
         border: "none",
-        display: "block"
+        display: "block",
+        zoom: zoom
       }}
     />
   );

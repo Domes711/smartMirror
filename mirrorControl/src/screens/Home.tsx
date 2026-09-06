@@ -34,15 +34,13 @@ export default function Home() {
     <section style={{ height: "100%", display: "flex", flexDirection: "column", padding: "18px 22px 0", animation: "scin .28s ease" }}>
       <h1 style={{ ...h1, marginBottom: 12, flex: "0 0 auto" }}>{L.navMirror}</h1>
       <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "6px 22px 0" }}>
-        <div style={{ position: "relative", height: "45dvh", overflow: "hidden", borderRadius: 12, background: "#000" }}>
+        <div style={{ position: "relative", height: "50dvh", overflow: "hidden", borderRadius: 12, background: "#000" }}>
           {homeLoading ? (
-            <MirrorLoader aspect={false} height="45dvh" />
+            <MirrorLoader aspect={false} height="50dvh" />
           ) : (
             <div style={{ position: "relative", width: "100%", height: "100%", animation: "mc-fade .45s ease" }}>
-              {/* Always show real mirror stream (MagicMirror on :8080) */}
-              <div style={{ width: "100%", height: "100%", transform: "scale(0.5)", transformOrigin: "top center" }}>
-                <MirrorStream />
-              </div>
+              {/* Always show real mirror stream (MagicMirror on :8080), zoomed out to 50% */}
+              <MirrorStream zoom={0.5} />
               <div style={{ position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: 6, background: "rgba(26,26,23,.55)", border: "1px solid rgba(229,72,47,.5)", borderRadius: 999, padding: "4px 9px", backdropFilter: "blur(2px)" }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.signal }} />
                 <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: C.signal }}>{L.live}</span>
