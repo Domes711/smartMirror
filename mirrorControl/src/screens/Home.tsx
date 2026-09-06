@@ -18,6 +18,11 @@ const Icons = {
       <path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.2 5.2l1.9 1.9M16.9 16.9l1.9 1.9M18.8 5.2l-1.9 1.9M7.1 16.9l-1.9 1.9" />
     </svg>
   ),
+  sleep: (
+    <svg viewBox="0 0 24 24" style={ico}>
+      <path d="M20 14.5A8.2 8.2 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z" />
+    </svg>
+  ),
   scene: (
     <svg viewBox="0 0 24 24" style={ico}>
       <path d="M4 20h4L19 9l-4-4L4 16z" />
@@ -62,6 +67,7 @@ export default function Home() {
   const liveData = useAppSelector((s) => s.mirror.live);
   const mirrorLoading = useAppSelector((s) => s.mirror.loading);
   const profileKeys = useAppSelector((s) => s.mirror.profileKeys);
+  const displayOn = useAppSelector((s) => s.mirror.displayOn);
   const currentUserKey = useAppSelector((s) => s.mirror.currentUserKey);
 
   const activeId = resolveActiveId(scenes);
@@ -117,7 +123,11 @@ export default function Home() {
       <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "0 22px calc(env(safe-area-inset-bottom) + 18px)" }}>
         <p style={{ ...eyebrow, margin: "0 0 10px" }}>{L.quickActions}</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 22 }}>
-          <ActionCard icon={Icons.wake} label={L.wake as string} onClick={() => dispatch(fx.wake())} />
+          <ActionCard
+            icon={displayOn ? Icons.sleep : Icons.wake}
+            label={(displayOn ? L.sleepBtn : L.wake) as string}
+            onClick={() => dispatch(fx.toggleDisplay())}
+          />
           <ActionCard icon={Icons.scene} label={L.editLayout as string} onClick={() => dispatch(fx.editResolved("home"))} />
           <ActionCard icon={Icons.message} label={L.sendMessage as string} onClick={() => setMsgOpen(true)} />
           <ActionCard icon={Icons.widget} label={L.newWidget as string} onClick={() => dispatch(fx.goTab("modules"))} />

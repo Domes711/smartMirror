@@ -18,6 +18,8 @@ export interface MirrorState {
   profileKeys: Record<string, string>;
   /** which profile's windows are currently projected into the scenes slice */
   currentUserKey: string;
+  /** monitor power from smartmirror/display/state (null = not reported yet) */
+  displayOn: boolean | null;
 }
 
 const initialState: MirrorState = {
@@ -31,6 +33,7 @@ const initialState: MirrorState = {
   loadedByModule: {},
   profileKeys: { default: "default" },
   currentUserKey: "default",
+  displayOn: null,
 };
 
 const mirrorSlice = createSlice({
@@ -68,6 +71,10 @@ const mirrorSlice = createSlice({
     },
     setCurrentUserKey(s, a: PayloadAction<string>) {
       s.currentUserKey = a.payload;
+    },
+    /** Monitor power — set optimistically on toggle, confirmed by the daemon. */
+    setDisplayOn(s, a: PayloadAction<boolean | null>) {
+      s.displayOn = a.payload;
     },
   },
 });

@@ -1,6 +1,7 @@
 import type { store as Store } from "@/app/store";
-import { connectMqtt, TOPICS } from "./mqtt";
+import { connectMqtt, publish, TOPICS } from "./mqtt";
 import { devActions } from "@/features/dev/devSlice";
+import { mirrorActions } from "@/features/mirror/mirrorSlice";
 
 type AppStore = typeof Store;
 
@@ -11,7 +12,11 @@ type AppStore = typeof Store;
  */
 export function startMirrorBridge(store: AppStore): void {
   connectMqtt({
-    onConnect: () => store.dispatch(devActions.logMsg(line("←", "#3bd17a", "system", "mqtt connected"))),
+    onConnect: () => {
+      store.dispatch(devActions.logMsg(line("←", "#3bd17a", "system", "mqtt connected")));
+      // ask the display daemon for a fresh state (the retained one may be stale)
+      publish(TOPICS.displayGetState, "1");
+    },
     onClose: () => store.dispatch(devActions.logMsg(line("←", "#8C8C81", "system", "mqtt closed"))),
     onMessage: (topic, payload) => {
       // live monitor (dev → Komunikace)
@@ -20,6 +25,10 @@ export function startMirrorBridge(store: AppStore): void {
       try {
         if (topic === TOPICS.radarPresence) {
           store.dispatch(devActions.setPresence(payload.trim() === "present"));
+        } else if (topic === TOPICS.displayState) {
+          // { power: 1 (on) | 4 (standby) | null, brightness, … } — VCP D6 value
+          const power = JSON.parse(payload)?.power;
+          store.dispatch(mirrorActions.setDisplayOn(power == null ? null : Number(power) === 1));
         } else if (topic === TOPICS.radarTargets) {
           const data = JSON.parse(payload);
           const targets = Array.isArray(data) ? data : data.targets;

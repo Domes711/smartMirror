@@ -28,6 +28,7 @@ export const TOPICS = {
   // the per-command sub-topics below with plain payloads, not on a JSON envelope.
   displayPower: "smartmirror/display/control/power", // "on" | "standby"
   displayBrightness: "smartmirror/display/control/brightness", // "0".."100"
+  displayGetState: "smartmirror/display/control/get_state", // app → daemon: publish state now
   displayState: "smartmirror/display/state", // daemon → app: current state (retained)
 } as const;
 

@@ -34,9 +34,18 @@ Evidence větších refactorů a architektonických změn v projektu.
 - `main.js` na `MIRROR_MESSAGE` pošle `SHOW_ALERT` (typ `notification`,
   `messageType: "text"`, takže se vzkaz nikdy nerenderuje jako HTML).
 
+#### 4. Probudit = přepínač displeje
+- `mirrorBridge` čte `smartmirror/display/state` (retained, VCP D6: `1` = on,
+  `4` = standby) do `mirror.displayOn`; při připojení si vyžádá čerstvý stav
+  přes `…/control/get_state`.
+- Tlačítko podle stavu: displej vypnutý → `Probudit` (slunce, `power=on` +
+  `control/wake`), zapnutý → `Uspat` (měsíc, `power=standby` + `control/reset`).
+  Stav se přepne optimisticky a daemon ho vzápětí potvrdí.
+
 ### Výsledek
-`Probudit` reálně zapne monitor (DDC/CI `power=on`) i probudí profil systém;
-`Poslat vzkaz` zobrazí vzkaz na zrcadle na 1 min / 10 min / 1 h.
+`Probudit`/`Uspat` reálně ovládá monitor (DDC/CI) i profil systém a mění se
+podle skutečného stavu displeje; `Poslat vzkaz` zobrazí vzkaz na zrcadle na
+1 min / 10 min / 1 h.
 
 ---
 

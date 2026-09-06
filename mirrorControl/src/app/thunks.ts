@@ -349,8 +349,23 @@ export const wake = (): Thunk => (dispatch, getState) => {
   // power the monitor back on (DDC/CI daemon) and pull the core out of sleep
   publish(TOPICS.displayPower, "on");
   publish(TOPICS.wake, "1");
+  dispatch(mirrorActions.setDisplayOn(true)); // optimistic; daemon confirms via display/state
   dispatch(toast(Lof(getState()).tWake));
   dispatch(startLiveLoad());
+};
+
+/** Monitor to standby + the core back to `asleep`. */
+export const sleep = (): Thunk => (dispatch, getState) => {
+  publish(TOPICS.displayPower, "standby");
+  publish(TOPICS.controlReset, "1");
+  dispatch(mirrorActions.setDisplayOn(false));
+  dispatch(toast(Lof(getState()).tSleep));
+};
+
+/** One button for both: wake a sleeping display, put a running one to sleep. */
+export const toggleDisplay = (): Thunk => (dispatch, getState) => {
+  if (getState().mirror.displayOn === true) dispatch(sleep());
+  else dispatch(wake());
 };
 
 /** Show a short note on the mirror (core → alert module). `timer` is in ms. */
