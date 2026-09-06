@@ -106,8 +106,10 @@ display power.
 > camera is arbitrated by `mirror-console` (the supervisor starts/stops
 > `face_reco`). Topics: `smartmirror/radar/presence` (`present`/`absent`),
 > `smartmirror/radar/targets` (live positions), `smartmirror/camera/recognition`
-> (`{user}`), `smartmirror/camera/gesture`, `smartmirror/control/reset`, plus
-> `smartmirror/radar/{control,config}` for calibration. Steps 1-2 below keep the
+> (`{user}`), `smartmirror/camera/gesture`, `smartmirror/control/reset`,
+> `smartmirror/control/wake` (app → core: leave sleep),
+> `smartmirror/control/message` (app → core: `{message,timer}` → alert on the
+> mirror), plus `smartmirror/radar/{control,config}` for calibration. Steps 1-2 below keep the
 > original HTTP wording for context (now MQTT); steps 3-4 reflect the core.
 
 Data flow:
@@ -332,7 +334,10 @@ unmodified upstream. Our modules (`modules/MMM-*`) are not part of this delta.
   to MQTT, runs the presence/recognition state machine
   (`asleep`/`scanning`/`user`/`dimming`), resolves the active layout from
   `config/pages.js` (per-user cron windows + `defaults[user]`), and emits
-  `PROFILE_STATE` / `PROFILE_PREVIEW` over socket.io. No upstream equivalent.
+  `PROFILE_STATE` / `PROFILE_PREVIEW` / `MIRROR_MESSAGE` over socket.io. Also
+  handles `smartmirror/control/wake` (manual wake from the app) and
+  `smartmirror/control/message` (a note to show on the mirror). No upstream
+  equivalent.
 - `css/profile.css` — Face ID indicator styles (scanning ring → check / X →
   avatar), mirroring `tests/face-id-animation.html`.
 
@@ -352,6 +357,8 @@ unmodified upstream. Our modules (`modules/MMM-*`) are not part of this delta.
   - **`projectLayout(layout)`** — moves every **id-bearing** module's DOM into the
     region/`.container` named in the active layout and shows it; hides the rest
     (lockString `mm-profile`). The sole placement mechanism.
+  - socket handler **`MIRROR_MESSAGE`** — a note sent from `mirrorControl`
+    (Zrcadlo → Poslat vzkaz) forwarded to the `alert` module as `SHOW_ALERT`.
   - socket handlers **`PROFILE_STATE`** (render Face ID indicator + projectLayout)
     and **`PROFILE_PREVIEW`** (projectLayout for the live preview; when it carries
     `scene` meta the indicator flips to **scene-setup mode** via

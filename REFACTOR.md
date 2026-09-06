@@ -4,6 +4,42 @@ Evidence větších refactorů a architektonických změn v projektu.
 
 ---
 
+## 2026-09-06: Zrcadlo (Home) tab — rychlé akce + funkční ovládání
+
+### Problém
+- Home screen byl „stats dashboard“ (emoji karty + posuvník jasu), který
+  neodpovídal návrhu aplikace.
+- **Mrtvé ovládání**: `Probudit` publikovalo na `smartmirror/control/wake`,
+  které nikdo neodebíral; jas a „Wake / Sleep“ posílaly JSON na
+  `smartmirror/display/control`, jenže daemon poslouchá na pod-topicech
+  (`…/control/power`, `…/control/brightness`) s prostými hodnotami.
+
+### Řešení
+
+#### 1. `mirrorControl/src/screens/Home.tsx` (přepsáno)
+- **Rychlé akce** 2×2: `Probudit`, `Upravit scénu`, `Poslat vzkaz`,
+  `Nový widget` (tmavá ikona v dlaždici + popisek).
+- **Aktuální informace**: aktivní scéna (pill), profil, připojení
+  (`● online · <host>`), widgety v provozu.
+- Odstraněn náhled zrcadla, emoji statistiky i posuvník jasu.
+
+#### 2. MQTT topics (`mirrorControl/src/services/mqtt.ts`)
+- `displayControl` (JSON envelope) → `displayPower` / `displayBrightness`
+  (pod-topicy, prosté hodnoty — tak, jak je `display_control.py` odebírá).
+- Nový `message: smartmirror/control/message`.
+
+#### 3. Core (`MagicMirror/js/profile.js`, `js/main.js`)
+- `profile.js` odebírá `smartmirror/control/wake` (probuzení = zrušit dim
+  timer, stav `user`) a `smartmirror/control/message` → `io.emit("MIRROR_MESSAGE")`.
+- `main.js` na `MIRROR_MESSAGE` pošle `SHOW_ALERT` (typ `notification`,
+  `messageType: "text"`, takže se vzkaz nikdy nerenderuje jako HTML).
+
+### Výsledek
+`Probudit` reálně zapne monitor (DDC/CI `power=on`) i probudí profil systém;
+`Poslat vzkaz` zobrazí vzkaz na zrcadle na 1 min / 10 min / 1 h.
+
+---
+
 ## 2026-09-04: Display Control Consolidation & Event-Driven Monitor UI
 
 ### Problém

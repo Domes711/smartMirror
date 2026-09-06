@@ -1,10 +1,55 @@
+import { useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
-import { PillButton, tokens as C, h1 } from "@/components/ui";
+import { BottomSheet, PillButton, Segmented, eyebrow, tokens as C, h1 } from "@/components/ui";
 import * as fx from "@/app/thunks";
 import { resolveActiveId } from "@/app/selectors";
-import { useState } from "react";
-import { publish, TOPICS } from "@/services/mqtt";
+import { mirrorDisplayUrl } from "@/services/api";
+import { isConnected } from "@/services/mqtt";
+
+/* ---------- quick-action icons ---------- */
+const ico: CSSProperties = { width: 20, height: 20, fill: "none", stroke: C.paper, strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" };
+
+const Icons = {
+  wake: (
+    <svg viewBox="0 0 24 24" style={ico}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.2 5.2l1.9 1.9M16.9 16.9l1.9 1.9M18.8 5.2l-1.9 1.9M7.1 16.9l-1.9 1.9" />
+    </svg>
+  ),
+  scene: (
+    <svg viewBox="0 0 24 24" style={ico}>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="M14.5 5.5l4 4" />
+    </svg>
+  ),
+  message: (
+    <svg viewBox="0 0 24 24" style={ico}>
+      <path d="M4 5h16v11H8l-4 4z" />
+    </svg>
+  ),
+  widget: (
+    <svg viewBox="0 0 24 24" style={ico}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+};
+
+/** Duration presets for a note shown on the mirror (ms). */
+const DURATIONS = [
+  { value: 60_000, label: "1 min" },
+  { value: 600_000, label: "10 min" },
+  { value: 3_600_000, label: "1 h" },
+];
+
+function mirrorHost(): string {
+  try {
+    return new URL(mirrorDisplayUrl()).hostname;
+  } catch {
+    return typeof location !== "undefined" ? location.hostname : "—";
+  }
+}
 
 export default function Home() {
   const dispatch = useAppDispatch();
@@ -16,210 +61,114 @@ export default function Home() {
   const connected = useAppSelector((s) => s.mirror.connected);
   const liveData = useAppSelector((s) => s.mirror.live);
   const mirrorLoading = useAppSelector((s) => s.mirror.loading);
+  const profileKeys = useAppSelector((s) => s.mirror.profileKeys);
+  const currentUserKey = useAppSelector((s) => s.mirror.currentUserKey);
+
   const activeId = resolveActiveId(scenes);
   const sc = scenes[activeId];
   const regions = sc?.regions ?? {};
   const liveCount = Object.values(regions).reduce((n, a) => n + (a?.length || 0), 0);
   const activeName = mirrorLoading ? "…" : sc ? (en && sc.name_en ? sc.name_en : sc.name) : "—";
+  const profileName =
+    currentUserKey === "default"
+      ? (L.defaultTag as string)
+      : Object.keys(profileKeys).find((n) => profileKeys[n] === currentUserKey) || currentUserKey;
 
-  // Radar data
-  const radarPresence = useAppSelector((s) => s.dev.livePresence);
-  const radarTargets = useAppSelector((s) => s.dev.liveTargets);
+  // "Poslat vzkaz" composer
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [msgText, setMsgText] = useState("");
+  const [msgTimer, setMsgTimer] = useState(DURATIONS[1].value);
 
-  // Brightness control
-  const [brightness, setBrightness] = useState(50);
+  const sendMessage = () => {
+    if (!msgText.trim()) return;
+    dispatch(fx.sendMirrorMessage(msgText, msgTimer));
+    setMsgText("");
+    setMsgOpen(false);
+  };
 
-  const StatCard = ({
-    icon,
-    label,
-    value,
-    valueColor
-  }: {
-    icon: string;
-    label: string;
-    value: string | number;
-    valueColor?: string;
-  }) => (
-    <div style={{
-      background: C.p2,
-      border: `1px solid ${C.line}`,
-      borderRadius: 12,
-      padding: "16px 18px",
-      display: "flex",
-      flexDirection: "column",
-      gap: 8
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 20 }}>{icon}</span>
-        <span style={{
-          fontFamily: "var(--mono)",
-          fontSize: 10,
-          color: C.mute,
-          textTransform: "uppercase",
-          letterSpacing: ".08em"
-        }}>
-          {label}
-        </span>
-      </div>
-      <div style={{
-        fontFamily: "var(--mono)",
-        fontSize: 18,
-        fontWeight: 600,
-        color: valueColor || C.ink,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
-      }}>
-        {value}
-      </div>
+  const ActionCard = ({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) => (
+    <button
+      onClick={onClick}
+      className="mc-lift"
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14,
+        background: C.p2, border: `1px solid ${C.line}`, borderRadius: 16,
+        padding: "16px 16px 18px", cursor: "pointer", textAlign: "left", color: C.ink,
+      }}
+    >
+      <span style={{ width: 42, height: 42, borderRadius: 12, background: C.ink, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+        {icon}
+      </span>
+      <span style={{ fontSize: 15.5, fontWeight: 600, letterSpacing: "-.01em" }}>{label}</span>
+    </button>
+  );
+
+  const Row = ({ label, children }: { label: string; children: ReactNode }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 2px", borderBottom: `1px solid ${C.line}` }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, textTransform: "uppercase", letterSpacing: ".08em" }}>{label}</span>
+      {children}
     </div>
   );
 
-  const handleBrightnessChange = (delta: number) => {
-    const newBrightness = Math.max(0, Math.min(100, brightness + delta));
-    setBrightness(newBrightness);
-    publish(TOPICS.displayControl, { command: "brightness", value: newBrightness });
-  };
-
-  const handleWakeSleep = () => {
-    publish(TOPICS.displayControl, { command: "toggle" });
-  };
-
   return (
-    <section style={{
-      height: "100%",
-      display: "flex",
-      flexDirection: "column",
-      padding: "18px 22px 0",
-      animation: "scin .28s ease"
-    }}>
+    <section style={{ height: "100%", display: "flex", flexDirection: "column", padding: "18px 22px 0", animation: "scin .28s ease" }}>
       <h1 style={{ ...h1, marginBottom: 16, flex: "0 0 auto" }}>{L.navMirror}</h1>
 
-      <div className="mc-noscroll" style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        margin: "0 -22px",
-        padding: "0 22px"
-      }}>
-        {/* Stats Cards - 2x2 grid */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 12,
-          marginBottom: 20
-        }}>
-          <StatCard
-            icon="📋"
-            label={L.activeScene}
-            value={activeName}
-          />
-          <StatCard
-            icon="📡"
-            label="Radar"
-            value={radarPresence === null ? "—" : radarPresence ? `● ${radarTargets.length}` : "○ 0"}
-            valueColor={radarPresence ? C.green : C.mute}
-          />
-          <StatCard
-            icon="🧩"
-            label={L.modsRunning}
-            value={liveCount}
-          />
-          <StatCard
-            icon="🔗"
-            label={L.connection}
-            value={connected ? (liveData ? L.online : "sync…") : "offline"}
-            valueColor={connected ? C.green : C.signal}
-          />
+      <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "0 22px calc(env(safe-area-inset-bottom) + 18px)" }}>
+        <p style={{ ...eyebrow, margin: "0 0 10px" }}>{L.quickActions}</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 22 }}>
+          <ActionCard icon={Icons.wake} label={L.wake as string} onClick={() => dispatch(fx.wake())} />
+          <ActionCard icon={Icons.scene} label={L.editLayout as string} onClick={() => dispatch(fx.editResolved("home"))} />
+          <ActionCard icon={Icons.message} label={L.sendMessage as string} onClick={() => setMsgOpen(true)} />
+          <ActionCard icon={Icons.widget} label={L.newWidget as string} onClick={() => dispatch(fx.goTab("modules"))} />
         </div>
 
-        {/* Brightness Control */}
-        <div style={{
-          background: C.p2,
-          border: `1px solid ${C.line}`,
-          borderRadius: 12,
-          padding: "16px 18px",
-          marginBottom: 12
-        }}>
-          <div style={{
-            fontFamily: "var(--mono)",
-            fontSize: 10,
-            color: C.mute,
-            textTransform: "uppercase",
-            letterSpacing: ".08em",
-            marginBottom: 12
-          }}>
-            💡 {en ? "Brightness" : "Jas displeje"}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button
-              onClick={() => handleBrightnessChange(-10)}
-              style={{
-                background: C.p3,
-                border: `1px solid ${C.line}`,
-                borderRadius: 8,
-                width: 44,
-                height: 44,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 20,
-                cursor: "pointer",
-                color: C.ink
-              }}
-            >
-              −
-            </button>
-            <div style={{
-              flex: 1,
-              textAlign: "center",
-              fontFamily: "var(--mono)",
-              fontSize: 24,
-              fontWeight: 600,
-              color: C.ink
-            }}>
-              {brightness}%
-            </div>
-            <button
-              onClick={() => handleBrightnessChange(10)}
-              style={{
-                background: C.p3,
-                border: `1px solid ${C.line}`,
-                borderRadius: 8,
-                width: 44,
-                height: 44,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 20,
-                cursor: "pointer",
-                color: C.ink
-              }}
-            >
-              +
-            </button>
-          </div>
-        </div>
+        <p style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-.01em", color: C.ink, margin: "0 0 6px" }}>{L.currentInfo}</p>
+        <Row label={L.activeScene as string}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 13, background: C.butter, color: C.bink, padding: "4px 12px", borderRadius: 999 }}>{activeName}</span>
+        </Row>
+        <Row label={L.profile as string}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{profileName}</span>
+        </Row>
+        <Row label={L.connection as string}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: connected ? C.green : C.signal }}>
+            ● {connected ? `${liveData ? L.online : L.syncing} · ${mirrorHost()}` : L.offline}
+          </span>
+        </Row>
+        <Row label={L.modsRunning as string}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{liveCount}</span>
+        </Row>
       </div>
 
-      {/* Quick Actions */}
-      <div style={{
-        flex: "0 0 auto",
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 10,
-        alignItems: "center",
-        margin: "0 -22px",
-        padding: "14px 22px calc(env(safe-area-inset-bottom) + 14px)",
-        borderTop: `1px solid ${C.line}`
-      }}>
-        <PillButton full onClick={() => dispatch(fx.editResolved("home"))}>
-          {L.editLayout}
-        </PillButton>
-        <PillButton variant="outline" onClick={handleWakeSleep}>
-          {en ? "Wake / Sleep" : "Probudit / Uspat"}
-        </PillButton>
-      </div>
+      <BottomSheet open={msgOpen} onClose={() => setMsgOpen(false)}>
+        <p style={{ ...eyebrow, margin: "0 0 4px" }}>{L.msgTitle}</p>
+        <p style={{ fontSize: 13, color: C.ink2, margin: "0 0 14px" }}>{L.msgHint}</p>
+
+        <textarea
+          value={msgText}
+          onChange={(e) => setMsgText(e.target.value)}
+          placeholder={L.msgPh as string}
+          rows={3}
+          autoFocus
+          style={{
+            width: "100%", boxSizing: "border-box", resize: "none",
+            border: `1px solid ${C.line}`, borderRadius: 12, background: C.p3,
+            padding: "12px 14px", fontFamily: "var(--grotesk)", fontSize: 15, color: C.ink,
+          }}
+        />
+
+        <p style={{ ...eyebrow, margin: "14px 0 7px" }}>{L.msgDuration}</p>
+        <Segmented options={DURATIONS} value={msgTimer} onChange={setMsgTimer} />
+
+        {!isConnected() && (
+          <p style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.signal, margin: "14px 0 0" }}>{L.msgOffline}</p>
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+          <PillButton variant="outline" onClick={() => setMsgOpen(false)}>{L.cancel}</PillButton>
+          <PillButton full onClick={sendMessage} style={{ opacity: msgText.trim() ? 1 : 0.45 }}>{L.msgSend}</PillButton>
+        </div>
+      </BottomSheet>
     </section>
   );
 }

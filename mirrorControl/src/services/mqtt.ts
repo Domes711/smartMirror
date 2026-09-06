@@ -21,10 +21,13 @@ export const TOPICS = {
   controlReset: "smartmirror/control/reset",
   profilePreview: "smartmirror/profile/preview", // app → core: live layout preview
   profileReload: "smartmirror/profile/reload", // app → core: re-read pages.js
-  // app-originated control surface (consumed by core / HA bridges)
-  wake: "smartmirror/control/wake",
-  // display control (DDC/CI monitor control daemon)
-  displayControl: "smartmirror/display/control", // app → daemon: {command, value?}
+  // app-originated control surface (consumed by MagicMirror core — js/profile.js)
+  wake: "smartmirror/control/wake", // app → core: leave sleep, project the live layout
+  message: "smartmirror/control/message", // app → core: {text, timer} → alert on the mirror
+  // display control (DDC/CI monitor control daemon). NOTE: the daemon listens on
+  // the per-command sub-topics below with plain payloads, not on a JSON envelope.
+  displayPower: "smartmirror/display/control/power", // "on" | "standby"
+  displayBrightness: "smartmirror/display/control/brightness", // "0".."100"
   displayState: "smartmirror/display/state", // daemon → app: current state (retained)
 } as const;
 

@@ -346,10 +346,22 @@ export const applyAndHome = (): Thunk => (dispatch) => {
 };
 
 export const wake = (): Thunk => (dispatch, getState) => {
+  // power the monitor back on (DDC/CI daemon) and pull the core out of sleep
+  publish(TOPICS.displayPower, "on");
   publish(TOPICS.wake, "1");
   dispatch(toast(Lof(getState()).tWake));
   dispatch(startLiveLoad());
 };
+
+/** Show a short note on the mirror (core → alert module). `timer` is in ms. */
+export const sendMirrorMessage =
+  (text: string, timer: number): Thunk =>
+  (dispatch, getState) => {
+    const message = text.trim();
+    if (!message) return;
+    publish(TOPICS.message, { message, timer });
+    dispatch(toast(Lof(getState()).tMsgSent));
+  };
 
 // --- global async task (progress). Simulated; hook installStatus() for real. ---
 export const startTask =

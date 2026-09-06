@@ -793,6 +793,19 @@ const MM = (function () {
 					if (scene) renderSceneEditing(scene);
 				});
 
+				// A note sent from the Mirror Control app → alert module growl.
+				socket.on("MIRROR_MESSAGE", ({ title, message, timer }) => {
+					if (!message) return;
+					sendNotification("SHOW_ALERT", {
+						type: "notification",
+						title: title || undefined,
+						titleType: "text",
+						message,
+						messageType: "text", // render as plain text, never as HTML
+						timer: timer || undefined
+					}, null);
+				});
+
 				// Hot-load a brand-new module without a page reload.
 				// Triggered by mirror-console after it registers the module in config.js.
 				socket.on("MODULE_HOT_LOAD", async ({ moduleName, moduleId, moduleConfig }) => {

@@ -9,12 +9,15 @@
  *   smartmirror/radar/presence       "present" | "absent"
  *   smartmirror/camera/recognition   {"user":"Domes"} | {"user":null}
  *   smartmirror/control/reset        any
+ *   smartmirror/control/wake         any  → leave sleep and project the live layout
+ *   smartmirror/control/message      {"message":"…","timer":600000} → note on the mirror
  *   smartmirror/profile/preview      {"layout":[{id,position}]}
  *   smartmirror/profile/reload       any  → cache-busts and re-reads config/pages.js
  *
  * Socket.io emissions:
  *   PROFILE_STATE   { state, currentUser, layout }
  *   PROFILE_PREVIEW { layout }
+ *   MIRROR_MESSAGE  { message, title, timer }
  */
 
 const Log = require("logger");
@@ -34,6 +37,8 @@ const PREVIEW_TTL_MS = 90 * 1000;
 const TOPIC_PRESENCE = "smartmirror/radar/presence";
 const TOPIC_RECOGNITION = "smartmirror/camera/recognition";
 const TOPIC_CONTROL = "smartmirror/control/reset";
+const TOPIC_WAKE = "smartmirror/control/wake";
+const TOPIC_MESSAGE = "smartmirror/control/message";
 const TOPIC_PREVIEW = "smartmirror/profile/preview";
 const TOPIC_RELOAD = "smartmirror/profile/reload";
 
@@ -97,7 +102,7 @@ class ProfileManager {
 		this.mqttClient.on("connect", () => {
 			Log.info("[Profile] MQTT connected to " + brokerUrl);
 			this.mqttClient.subscribe(
-				[TOPIC_PRESENCE, TOPIC_RECOGNITION, TOPIC_CONTROL, TOPIC_PREVIEW, TOPIC_RELOAD],
+				[TOPIC_PRESENCE, TOPIC_RECOGNITION, TOPIC_CONTROL, TOPIC_WAKE, TOPIC_MESSAGE, TOPIC_PREVIEW, TOPIC_RELOAD],
 				(err) => { if (err) Log.error("[Profile] MQTT subscribe error:", err); }
 			);
 		});
@@ -121,6 +126,10 @@ class ProfileManager {
 				else this._onUserUnknown();
 			} else if (topic === TOPIC_CONTROL) {
 				this._onReset();
+			} else if (topic === TOPIC_WAKE) {
+				this._onWake();
+			} else if (topic === TOPIC_MESSAGE) {
+				this._onMessage(payload);
 			} else if (topic === TOPIC_PREVIEW) {
 				const data = JSON.parse(payload);
 				// `{exit:true}` leaves the app's scene-setup preview → restore live state
@@ -181,6 +190,33 @@ class ProfileManager {
 			this._push();
 		}, ms);
 		this._push();
+	}
+
+	/** Manual wake from the app: leave sleep/dimming and show the live layout. */
+	_onWake () {
+		Log.info("[Profile] WAKE received");
+		this._cancelDimTimer();
+		this.state = "user";
+		if (!this.currentUser) this.currentUser = this._defaultUser();
+		this._push();
+	}
+
+	/** A note sent from the app — forwarded to the browser's alert module. */
+	_onMessage (payload) {
+		let data;
+		try {
+			data = JSON.parse(payload);
+		} catch {
+			data = { message: payload };
+		}
+		const message = (data && (data.message || data.text)) || "";
+		if (!message) return;
+		Log.info("[Profile] message: " + message);
+		this.io.emit("MIRROR_MESSAGE", {
+			title: (data && data.title) || null,
+			message,
+			timer: (data && Number(data.timer)) || 0
+		});
 	}
 
 	_onReset () {
