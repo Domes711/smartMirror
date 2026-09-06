@@ -41,7 +41,7 @@ export default function Home() {
     valueColor?: string;
   }) => (
     <div style={{
-      background: C.bg,
+      background: C.p2,
       border: `1px solid ${C.line}`,
       borderRadius: 12,
       padding: "16px 18px",
@@ -135,7 +135,7 @@ export default function Home() {
 
         {/* Brightness Control */}
         <div style={{
-          background: C.bg,
+          background: C.p2,
           border: `1px solid ${C.line}`,
           borderRadius: 12,
           padding: "16px 18px",
@@ -155,7 +155,7 @@ export default function Home() {
             <button
               onClick={() => handleBrightnessChange(-10)}
               style={{
-                background: C.bg,
+                background: C.p3,
                 border: `1px solid ${C.line}`,
                 borderRadius: 8,
                 width: 44,
@@ -183,7 +183,7 @@ export default function Home() {
             <button
               onClick={() => handleBrightnessChange(10)}
               style={{
-                background: C.bg,
+                background: C.p3,
                 border: `1px solid ${C.line}`,
                 borderRadius: 8,
                 width: 44,
