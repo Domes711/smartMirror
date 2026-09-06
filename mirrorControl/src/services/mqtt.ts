@@ -23,6 +23,9 @@ export const TOPICS = {
   profileReload: "smartmirror/profile/reload", // app → core: re-read pages.js
   // app-originated control surface (consumed by core / HA bridges)
   wake: "smartmirror/control/wake",
+  // display control (DDC/CI monitor control daemon)
+  displayControl: "smartmirror/display/control", // app → daemon: {command, value?}
+  displayState: "smartmirror/display/state", // daemon → app: current state (retained)
 } as const;
 
 export const ALL_TOPICS = "smartmirror/#";

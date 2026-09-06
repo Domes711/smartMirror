@@ -1,16 +1,15 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
-import { MirrorStream } from "@/components/MirrorStream";
-import { MirrorLoader } from "@/components/MirrorLoader";
 import { PillButton, tokens as C, h1 } from "@/components/ui";
 import * as fx from "@/app/thunks";
 import { resolveActiveId } from "@/app/selectors";
+import { useState } from "react";
+import { publish, TOPICS } from "@/services/mqtt";
 
 export default function Home() {
   const dispatch = useAppDispatch();
   const { L } = useT();
   const en = useAppSelector((s) => s.ui.lang === "en");
-  const homeLoading = useAppSelector((s) => s.ui.homeLoading);
   const scenes = useAppSelector((s) => s.scenes.scenes);
   // re-render on each clock tick so the resolved scene tracks the time of day
   useAppSelector((s) => s.ui.time);
@@ -23,54 +22,203 @@ export default function Home() {
   const liveCount = Object.values(regions).reduce((n, a) => n + (a?.length || 0), 0);
   const activeName = mirrorLoading ? "…" : sc ? (en && sc.name_en ? sc.name_en : sc.name) : "—";
 
-  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 2px", borderBottom: `1px solid ${C.line}` }}>
-      <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, textTransform: "uppercase", letterSpacing: ".08em" }}>{label}</span>
-      {children}
+  // Radar data
+  const radarPresence = useAppSelector((s) => s.dev.livePresence);
+  const radarTargets = useAppSelector((s) => s.dev.liveTargets);
+
+  // Brightness control
+  const [brightness, setBrightness] = useState(50);
+
+  const StatCard = ({
+    icon,
+    label,
+    value,
+    valueColor
+  }: {
+    icon: string;
+    label: string;
+    value: string | number;
+    valueColor?: string;
+  }) => (
+    <div style={{
+      background: C.bg,
+      border: `1px solid ${C.line}`,
+      borderRadius: 12,
+      padding: "16px 18px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 20 }}>{icon}</span>
+        <span style={{
+          fontFamily: "var(--mono)",
+          fontSize: 10,
+          color: C.mute,
+          textTransform: "uppercase",
+          letterSpacing: ".08em"
+        }}>
+          {label}
+        </span>
+      </div>
+      <div style={{
+        fontFamily: "var(--mono)",
+        fontSize: 18,
+        fontWeight: 600,
+        color: valueColor || C.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }}>
+        {value}
+      </div>
     </div>
   );
 
+  const handleBrightnessChange = (delta: number) => {
+    const newBrightness = Math.max(0, Math.min(100, brightness + delta));
+    setBrightness(newBrightness);
+    publish(TOPICS.displayControl, { command: "brightness", value: newBrightness });
+  };
+
+  const handleWakeSleep = () => {
+    publish(TOPICS.displayControl, { command: "toggle" });
+  };
+
   return (
-    <section style={{ height: "100%", display: "flex", flexDirection: "column", padding: "18px 22px 0", animation: "scin .28s ease" }}>
-      <h1 style={{ ...h1, marginBottom: 12, flex: "0 0 auto" }}>{L.navMirror}</h1>
-      <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "6px 22px 0" }}>
-        <div style={{ position: "relative", height: "50dvh", overflow: "hidden", borderRadius: 12, background: "#000" }}>
-          {homeLoading ? (
-            <MirrorLoader aspect={false} height="50dvh" />
-          ) : (
-            <div style={{ position: "relative", width: "100%", height: "100%", animation: "mc-fade .45s ease" }}>
-              {/* Always show real mirror stream (MagicMirror on :8080), zoomed out to 0.01% */}
-              <MirrorStream zoom={0.0001} />
-              <div style={{ position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: 6, background: "rgba(26,26,23,.55)", border: "1px solid rgba(229,72,47,.5)", borderRadius: 999, padding: "4px 9px", backdropFilter: "blur(2px)" }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.signal }} />
-                <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: C.signal }}>{L.live}</span>
-              </div>
-            </div>
-          )}
+    <section style={{
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      padding: "18px 22px 0",
+      animation: "scin .28s ease"
+    }}>
+      <h1 style={{ ...h1, marginBottom: 16, flex: "0 0 auto" }}>{L.navMirror}</h1>
+
+      <div className="mc-noscroll" style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        margin: "0 -22px",
+        padding: "0 22px"
+      }}>
+        {/* Stats Cards - 2x2 grid */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          marginBottom: 20
+        }}>
+          <StatCard
+            icon="📋"
+            label={L.activeScene}
+            value={activeName}
+          />
+          <StatCard
+            icon="📡"
+            label="Radar"
+            value={radarPresence === null ? "—" : radarPresence ? `● ${radarTargets.length}` : "○ 0"}
+            valueColor={radarPresence ? C.green : C.mute}
+          />
+          <StatCard
+            icon="🧩"
+            label={L.modsRunning}
+            value={liveCount}
+          />
+          <StatCard
+            icon="🔗"
+            label={L.connection}
+            value={connected ? (liveData ? L.online : "sync…") : "offline"}
+            valueColor={connected ? C.green : C.signal}
+          />
         </div>
 
-        <div style={{ marginTop: 8 }}>
-          <p style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-.01em", color: C.ink, margin: "18px 0 6px" }}>{L.currentInfo}</p>
-          <Row label={L.activeScene}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 13, background: C.butter, color: C.bink, padding: "4px 12px", borderRadius: 999 }}>{activeName}</span>
-          </Row>
-          <Row label={L.profile}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{L.defaultTag}</span>
-          </Row>
-          <Row label={L.connection}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: connected ? C.green : C.signal }}>
-              ● {connected ? `${L.online}${liveData ? "" : " · sync…"}` : (en ? "offline" : "offline")}
-            </span>
-          </Row>
-          <Row label={L.modsRunning}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>{liveCount}</span>
-          </Row>
+        {/* Brightness Control */}
+        <div style={{
+          background: C.bg,
+          border: `1px solid ${C.line}`,
+          borderRadius: 12,
+          padding: "16px 18px",
+          marginBottom: 12
+        }}>
+          <div style={{
+            fontFamily: "var(--mono)",
+            fontSize: 10,
+            color: C.mute,
+            textTransform: "uppercase",
+            letterSpacing: ".08em",
+            marginBottom: 12
+          }}>
+            💡 {en ? "Brightness" : "Jas displeje"}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              onClick={() => handleBrightnessChange(-10)}
+              style={{
+                background: C.bg,
+                border: `1px solid ${C.line}`,
+                borderRadius: 8,
+                width: 44,
+                height: 44,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 20,
+                cursor: "pointer",
+                color: C.ink
+              }}
+            >
+              −
+            </button>
+            <div style={{
+              flex: 1,
+              textAlign: "center",
+              fontFamily: "var(--mono)",
+              fontSize: 24,
+              fontWeight: 600,
+              color: C.ink
+            }}>
+              {brightness}%
+            </div>
+            <button
+              onClick={() => handleBrightnessChange(10)}
+              style={{
+                background: C.bg,
+                border: `1px solid ${C.line}`,
+                borderRadius: 8,
+                width: 44,
+                height: 44,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 20,
+                cursor: "pointer",
+                color: C.ink
+              }}
+            >
+              +
+            </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ flex: "0 0 auto", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", margin: "0 -22px", padding: "14px 22px calc(env(safe-area-inset-bottom) + 14px)", borderTop: `1px solid ${C.line}` }}>
-        <PillButton full onClick={() => dispatch(fx.editResolved("home"))}>{L.editLayout}</PillButton>
-        <PillButton variant="outline" onClick={() => dispatch(fx.wake())}>{L.wake}</PillButton>
+      {/* Quick Actions */}
+      <div style={{
+        flex: "0 0 auto",
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 10,
+        alignItems: "center",
+        margin: "0 -22px",
+        padding: "14px 22px calc(env(safe-area-inset-bottom) + 14px)",
+        borderTop: `1px solid ${C.line}`
+      }}>
+        <PillButton full onClick={() => dispatch(fx.editResolved("home"))}>
+          {L.editLayout}
+        </PillButton>
+        <PillButton variant="outline" onClick={handleWakeSleep}>
+          {en ? "Wake / Sleep" : "Probudit / Uspat"}
+        </PillButton>
       </div>
     </section>
   );
