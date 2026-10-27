@@ -325,7 +325,14 @@ class Supervisor:
             for _ in range(3):   # discard warm-up frames
                 self.picam.capture_array()
             while not self.stop_capture.is_set():
-                frame = self.picam.capture_array()        # RGB888
+                frame = self.picam.capture_array()        # Picamera2's
+                # "RGB888" format is a misnomer — it actually delivers BGR
+                # byte order (named for what OpenCV's BGR convention wants,
+                # not literal channel order; see the Picamera2 manual /
+                # picamera2#848). face_recognition and MediaPipe both expect
+                # genuine RGB, so without this conversion they silently find
+                # nothing — no exception, just an empty detection result.
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 # The camera is mounted upside down on this mirror, so the
                 # seeded default is 180. Read from camera_config, not pinned
                 # in code, because remounting the camera is a config change.
