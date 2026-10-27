@@ -115,6 +115,18 @@ DEVICE_DEFAULTS = {
         "framerate": 15,
         "recognition_timeout_s": 3.0,
         "recognition_tolerance": 0.5,
+        "brightness": 0.0,          # -1.0..1.0
+        "contrast": 1.0,            # 1.0 = normal
+        "saturation": 1.0,          # 1.0 = normal, 0.0 = greyscale
+        "sharpness": 1.0,           # 0.0 = no sharpening
+        "auto_exposure": True,
+        "exposure_time_us": None,   # manual only, microseconds
+        "exposure_value": 0.0,      # EV compensation, works alongside AE
+        "auto_white_balance": True,
+        "awb_mode": "Auto",         # Auto/Incandescent/Tungsten/Fluorescent/
+                                    # Indoor/Daylight/Cloudy/Custom
+        "analogue_gain": None,      # manual only, >=1.0
+        "noise_reduction": "Fast",  # Off/Fast/HighQuality/Minimal
     },
     "monitor": {
         "brightness_day": 80,

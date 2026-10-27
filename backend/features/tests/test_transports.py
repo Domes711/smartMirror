@@ -279,7 +279,7 @@ def test_camera_exposes_every_json_operation_on_mqtt(sandbox, monkeypatch):
 
     assert set(rec.served) == {
         topics.RPC_HEALTH, topics.RPC_MODE_GET, topics.RPC_MODE_SET,
-        topics.RPC_RESOLUTION, topics.RPC_DATASET_LIST,
+        topics.RPC_SETTINGS, topics.RPC_DATASET_LIST,
         topics.RPC_DATASET_DELETE, topics.RPC_CAPTURE, topics.RPC_ENCODE,
         topics.RPC_PROFILES_LIST, topics.RPC_PROFILES_DELETE,
         radar_topics.RPC_SERVICE_GET, radar_topics.RPC_SERVICE_SET,

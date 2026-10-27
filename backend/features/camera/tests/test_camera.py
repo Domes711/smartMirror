@@ -156,3 +156,152 @@ def test_an_unknown_persisted_mode_falls_back_to_the_default(sandbox):
     with open(STATE_FILE, "w") as f:
         f.write("garbage")
     assert Supervisor().load_mode() == DEFAULT_MODE
+
+
+# --------------------------------------------------------------------------- #
+# image/sensor controls
+# --------------------------------------------------------------------------- #
+def test_controls_default_to_camera_control_defaults(sandbox):
+    from features.camera.supervisor import CAMERA_CONTROL_DEFAULTS, Supervisor
+    assert Supervisor().controls == CAMERA_CONTROL_DEFAULTS
+
+
+def test_set_controls_updates_only_the_given_keys(sandbox):
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    sup.set_controls({"brightness": 0.5, "contrast": 1.5})
+    assert sup.controls["brightness"] == 0.5
+    assert sup.controls["contrast"] == 1.5
+    # untouched keys keep their defaults
+    assert sup.controls["saturation"] == 1.0
+
+
+def test_set_controls_ignores_none_values(sandbox):
+    """A caller sends only what it wants to change; `None` means "no
+    change", not "reset to default"."""
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    sup.set_controls({"brightness": 0.3})
+    sup.set_controls({"brightness": None, "contrast": 2.0})
+    assert sup.controls["brightness"] == 0.3
+    assert sup.controls["contrast"] == 2.0
+
+
+def test_set_controls_ignores_unknown_keys(sandbox):
+    from features.camera.supervisor import CAMERA_CONTROL_DEFAULTS, Supervisor
+    sup = Supervisor()
+    sup.set_controls({"nonsense": 123})
+    assert sup.controls == CAMERA_CONTROL_DEFAULTS
+
+
+def test_set_controls_is_a_noop_on_the_hardware_when_no_camera_is_open(sandbox):
+    """`Supervisor()` in these tests never opens a real camera — set_controls
+    must still succeed and just update the in-memory settings."""
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    sup.set_controls({"brightness": 0.7})   # must not raise
+    assert sup.controls["brightness"] == 0.7
+
+
+def test_health_reports_the_current_controls(sandbox):
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    sup.set_controls({"sharpness": 2.0})
+    assert sup.health()["controls"]["sharpness"] == 2.0
+
+
+def test_build_picamera_controls_skips_none_values(sandbox):
+    """None means "leave to sensor default/auto" — must not be sent to
+    Picamera2 at all. AwbMode/NoiseReductionMode are excluded here — they are
+    enum lookups covered by their own tests below, and this one must stay
+    importable without `libcamera` (not installed off the Pi)."""
+    from features.camera.supervisor import CAMERA_CONTROL_DEFAULTS, Supervisor
+    sup = Supervisor()
+    payload = sup._build_picamera_controls(
+        {**CAMERA_CONTROL_DEFAULTS, "awb_mode": None, "noise_reduction": None})
+    assert "ExposureTime" not in payload       # default is None
+    assert "AnalogueGain" not in payload       # default is None
+    assert "AwbMode" not in payload
+    assert "NoiseReductionMode" not in payload
+    assert payload["Brightness"] == 0.0
+    assert payload["AeEnable"] is True
+    assert payload["AwbEnable"] is True
+
+
+def test_build_picamera_controls_sets_manual_exposure_time(sandbox):
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    payload = sup._build_picamera_controls({"exposure_time_us": 5000})
+    assert payload["ExposureTime"] == 5000
+
+
+def test_build_picamera_controls_floors_analogue_gain_at_one(sandbox):
+    """libcamera's documented hard floor: AnalogueGain cannot be below 1.0."""
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    payload = sup._build_picamera_controls({"analogue_gain": 0.3})
+    assert payload["AnalogueGain"] == 1.0
+
+
+def test_build_picamera_controls_ignores_an_invalid_awb_mode(sandbox):
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    payload = sup._build_picamera_controls({"awb_mode": "NotARealMode"})
+    assert "AwbMode" not in payload
+
+
+def test_build_picamera_controls_ignores_an_invalid_noise_reduction_mode(sandbox):
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    payload = sup._build_picamera_controls({"noise_reduction": "Ultra"})
+    assert "NoiseReductionMode" not in payload
+
+
+# --------------------------------------------------------------------------- #
+# service.settings() — the one RPC/HTTP endpoint for resolution + controls
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def svc(sandbox):
+    from features.camera import service
+    from features.camera.supervisor import Supervisor
+    service.mount(Supervisor())
+    return service
+
+
+def test_settings_changes_resolution(svc):
+    result = svc.settings({"width": 1280, "height": 720})
+    assert result["width"] == 1280 and result["height"] == 720
+
+
+def test_settings_changes_controls(svc):
+    result = svc.settings({"brightness": 0.4, "contrast": 1.2})
+    assert result["controls"]["brightness"] == 0.4
+    assert result["controls"]["contrast"] == 1.2
+
+
+def test_settings_persists_controls_to_camera_config(svc):
+    """A control change must survive a camera-supervisor restart — a fresh
+    Supervisor() picks it back up from camera_config."""
+    from features.camera.supervisor import Supervisor
+    svc.settings({"sharpness": 2.5})
+    assert Supervisor().controls["sharpness"] == 2.5
+
+
+def test_settings_persists_resolution_to_camera_config(svc):
+    from features.camera.supervisor import Supervisor
+    svc.settings({"width": 1920, "height": 1080})
+    fresh = Supervisor()
+    assert fresh.width == 1920 and fresh.height == 1080
+
+
+def test_settings_with_only_controls_leaves_resolution_untouched(svc):
+    before = svc.health()
+    svc.settings({"brightness": 0.1})
+    after = svc.health()
+    assert after["width"] == before["width"]
+    assert after["height"] == before["height"]
+
+
+def test_settings_rejects_an_unsupported_resolution(svc):
+    with pytest.raises(ValueError):
+        svc.settings({"width": 1234, "height": 567})

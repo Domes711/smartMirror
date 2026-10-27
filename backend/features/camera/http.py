@@ -58,9 +58,13 @@ def mount(router: Router, sup) -> None:
     router.add("GET", "/healthz", lambda r: service.health())
     router.add("GET", "/mode", lambda r: service.mode_get())
     router.add("POST", "/mode", lambda r: service.mode_set(r.body().get("mode")))
+    # /resolution stays as a thin width/height-only shim over the same
+    # settings() endpoint, for the frontend's existing setResolution() call
+    # (frontend/src/services/api.ts) — /settings is the full surface.
     router.add("POST", "/resolution",
-              lambda r: service.resolution(r.body().get("width"),
-                                           r.body().get("height")))
+              lambda r: service.settings({"width": r.body().get("width"),
+                                          "height": r.body().get("height")}))
+    router.add("POST", "/settings", lambda r: service.settings(r.body()))
     router.add("GET", "/dataset",
               lambda r: service.dataset_list(r.query.get("name", "")))
     router.add("DELETE", "/dataset",

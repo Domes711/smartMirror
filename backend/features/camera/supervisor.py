@@ -43,6 +43,26 @@ CAMERA_OPEN_RETRIES = 10  # wait for the daemon to release /dev after a stop
 
 VALID_RESOLUTIONS = [(640, 480), (1280, 720), (1920, 1080), (2592, 1944)]
 
+# Picamera2 image controls this feature exposes over MQTT, with their
+# sensor-independent defaults — same values as shared/db.py's
+# DEVICE_DEFAULTS["camera"], duplicated here as plain data so a DB-unreachable
+# boot still has something sane to apply (same pattern as _camera_config()
+# below). None means "leave it to the sensor's own auto/default behavior".
+CAMERA_CONTROL_DEFAULTS = {
+    "brightness": 0.0, "contrast": 1.0, "saturation": 1.0, "sharpness": 1.0,
+    "auto_exposure": True, "exposure_time_us": None, "exposure_value": 0.0,
+    "auto_white_balance": True, "awb_mode": "Auto",
+    "analogue_gain": None, "noise_reduction": "Fast",
+}
+CAMERA_CONTROL_KEYS = tuple(CAMERA_CONTROL_DEFAULTS)
+
+# name -> (libcamera control name(s), how to build the set_controls() value)
+# AWB mode / noise reduction are enums resolved lazily (import libcamera.controls
+# only when actually used, so this module still imports without it installed).
+_AWB_MODE_NAMES = ("Auto", "Incandescent", "Tungsten", "Fluorescent",
+                   "Indoor", "Daylight", "Cloudy", "Custom")
+_NOISE_REDUCTION_NAMES = ("Off", "Fast", "HighQuality", "Minimal")
+
 # cv2 constants, resolved lazily so this module still imports without opencv.
 _CV2_ROTATION_CODES = {90: "ROTATE_90_CLOCKWISE", 180: "ROTATE_180",
                        270: "ROTATE_90_COUNTERCLOCKWISE"}
@@ -67,7 +87,8 @@ def _camera_config() -> dict:
     above if the DB is unreachable — the supervisor must still start and
     serve a stream on a broken DB."""
     out = {"width": DEFAULT_WIDTH, "height": DEFAULT_HEIGHT,
-           "tolerance": DEFAULT_TOLERANCE, "rotation": 180}
+           "tolerance": DEFAULT_TOLERANCE, "rotation": 180,
+           "controls": dict(CAMERA_CONTROL_DEFAULTS)}
     try:
         from data import device_config
         from shared import db
@@ -81,6 +102,9 @@ def _camera_config() -> dict:
             out["tolerance"] = float(cfg["recognition_tolerance"])
         if cfg.get("rotation") is not None:
             out["rotation"] = int(cfg["rotation"])
+        for key in CAMERA_CONTROL_KEYS:
+            if key in cfg:
+                out["controls"][key] = cfg[key]
     except Exception as exc:  # noqa: BLE001
         log.warning("camera_config unreadable, using constants: %s", exc)
     return out
@@ -121,6 +145,7 @@ class Supervisor:
         self.tolerance = (tolerance if tolerance is not None
                           else cfg["tolerance"])
         self.rotation = cfg["rotation"]
+        self.controls = cfg["controls"]
         self.encodings = encodings
 
         self.output = StreamingOutput()
@@ -221,6 +246,88 @@ class Supervisor:
                     self._ensure_capture()
         self._notify()
 
+    # ---- image/sensor controls ----------------------------------------- #
+    def _build_picamera_controls(self, settings: dict) -> dict:
+        """Translate our plain settings dict into a Picamera2
+        `set_controls()` payload, skipping anything not advertised by this
+        sensor (fixed-focus modules, HQ cam without AF, etc. simply don't
+        get those keys) and anything left as `None` (auto/sensor default).
+
+        `libcamera` is imported lazily, only when an AWB/noise-reduction
+        enum is actually needed, so this stays callable (for the plain
+        float/bool/int controls) on a dev machine with no `libcamera`
+        installed — same "hardware-free test suite" contract as the rest
+        of this feature.
+        """
+        advertised = self.picam.camera_controls if self.picam else {}
+        out = {}
+
+        def want(name):
+            return not advertised or name in advertised
+
+        if settings.get("brightness") is not None and want("Brightness"):
+            out["Brightness"] = float(settings["brightness"])
+        if settings.get("contrast") is not None and want("Contrast"):
+            out["Contrast"] = float(settings["contrast"])
+        if settings.get("saturation") is not None and want("Saturation"):
+            out["Saturation"] = float(settings["saturation"])
+        if settings.get("sharpness") is not None and want("Sharpness"):
+            out["Sharpness"] = float(settings["sharpness"])
+
+        if want("AeEnable"):
+            out["AeEnable"] = bool(settings.get("auto_exposure", True))
+        if settings.get("exposure_time_us") is not None and want("ExposureTime"):
+            # Setting ExposureTime directly flips libcamera's
+            # ExposureTimeMode to manual for us (picamera2 request.py) —
+            # auto_exposure only matters when this is None.
+            out["ExposureTime"] = int(settings["exposure_time_us"])
+        if settings.get("exposure_value") is not None and want("ExposureValue"):
+            out["ExposureValue"] = float(settings["exposure_value"])
+
+        if want("AwbEnable"):
+            out["AwbEnable"] = bool(settings.get("auto_white_balance", True))
+        awb_mode = settings.get("awb_mode")
+        if awb_mode and awb_mode in _AWB_MODE_NAMES and want("AwbMode"):
+            from libcamera import controls as lc
+            out["AwbMode"] = getattr(lc.AwbModeEnum, awb_mode)
+
+        if settings.get("analogue_gain") is not None and want("AnalogueGain"):
+            # Hard floor per libcamera: cannot be set below 1.0.
+            out["AnalogueGain"] = max(1.0, float(settings["analogue_gain"]))
+
+        nr = settings.get("noise_reduction")
+        if nr and nr in _NOISE_REDUCTION_NAMES and "NoiseReductionMode" in advertised:
+            from libcamera import controls as lc
+            out["NoiseReductionMode"] = getattr(
+                lc.draft.NoiseReductionModeEnum, nr)
+
+        return out
+
+    def _apply_controls(self, settings: dict) -> None:
+        """Push `settings` onto the live Picamera2 instance. Best-effort —
+        a control this sensor doesn't advertise, or a missing libcamera
+        import, must not take the stream down."""
+        if self.picam is None or not self.camera_open:
+            return
+        try:
+            payload = self._build_picamera_controls(settings)
+            if payload:
+                self.picam.set_controls(payload)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("set_controls failed: %s", exc)
+
+    def set_controls(self, settings: dict) -> None:
+        """Update camera image controls (brightness/contrast/exposure/white
+        balance/gain/noise reduction). Unknown keys are ignored; `None`
+        values are left as "no change" rather than reset to default —
+        callers send only what they want to change."""
+        with self.lock:
+            for key in CAMERA_CONTROL_KEYS:
+                if key in settings and settings[key] is not None:
+                    self.controls[key] = settings[key]
+            self._apply_controls(self.controls)
+        self._notify()
+
     def _notify(self) -> None:
         if self.on_state_change:
             try:
@@ -248,6 +355,7 @@ class Supervisor:
                 picam.start()
                 self.picam = picam
                 self.camera_open = True
+                self._apply_controls(self.controls)
                 log.info("camera open (%dx%d)", self.width, self.height)
                 return
             except Exception as exc:  # noqa: BLE001 — device may be busy
@@ -325,14 +433,7 @@ class Supervisor:
             for _ in range(3):   # discard warm-up frames
                 self.picam.capture_array()
             while not self.stop_capture.is_set():
-                frame = self.picam.capture_array()        # Picamera2's
-                # "RGB888" format is a misnomer — it actually delivers BGR
-                # byte order (named for what OpenCV's BGR convention wants,
-                # not literal channel order; see the Picamera2 manual /
-                # picamera2#848). face_recognition and MediaPipe both expect
-                # genuine RGB, so without this conversion they silently find
-                # nothing — no exception, just an empty detection result.
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = self.picam.capture_array()        # RGB888
                 # The camera is mounted upside down on this mirror, so the
                 # seeded default is 180. Read from camera_config, not pinned
                 # in code, because remounting the camera is a config change.
@@ -459,4 +560,5 @@ class Supervisor:
             "height": self.height,
             "detected_face": detected_face,
             "finger_count": finger_count,
+            "controls": dict(self.controls),
         }

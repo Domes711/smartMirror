@@ -64,6 +64,61 @@ def test_service_config_set_applies_input_gain(sandbox, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# input_gain — amixer wants the mixer control device, not the PCM device
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("pcm_device, mixer_device", [
+    ("plughw:CARD=Microphone,DEV=0", "hw:CARD=Microphone"),
+    ("hw:CARD=ET201,DEV=0", "hw:CARD=ET201"),
+    ("default", "default"),       # no CARD= in it — passed through unchanged
+])
+def test_mixer_device_derives_the_amixer_control_name(pcm_device, mixer_device):
+    from features.mic import service
+    assert service._mixer_device(pcm_device) == mixer_device
+
+
+def test_apply_input_gain_calls_amixer_with_the_mixer_device_not_the_pcm_one(
+        sandbox, monkeypatch):
+    """Regression test: `amixer -D <pcm-stream-device>` fails with "Invalid
+    CTL" — it needs the hw:CARD= mixer-control form, confirmed live on
+    hardware. The RPC used to report ok:true while the gain silently never
+    changed."""
+    from features.mic import service
+
+    calls = []
+
+    class FakeResult:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return FakeResult()
+
+    monkeypatch.setattr(service.subprocess, "run", fake_run)
+    service._apply_input_gain("plughw:CARD=Microphone,DEV=0", 60)
+
+    assert calls == [["amixer", "-D", "hw:CARD=Microphone", "sset",
+                      service.ALSA_MIC_CONTROL, "60%"]]
+
+
+def test_apply_input_gain_logs_a_nonzero_amixer_exit(sandbox, monkeypatch, caplog):
+    """A config write must not raise just because the mixer control name
+    differs on this card — but it should be visible in the logs, not
+    silently swallowed."""
+    from features.mic import service
+
+    class FailingResult:
+        returncode = 1
+        stderr = "Invalid CTL"
+
+    monkeypatch.setattr(service.subprocess, "run",
+                        lambda cmd, **kwargs: FailingResult())
+    with caplog.at_level("WARNING"):
+        service._apply_input_gain("plughw:CARD=Microphone,DEV=0", 60)
+    assert "amixer" in caplog.text.lower()
+
+
+# --------------------------------------------------------------------------- #
 # satellite unit regeneration on a unit-affecting config change
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("key, value", [

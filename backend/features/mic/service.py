@@ -14,6 +14,7 @@ loop or mode machine here to justify one.
 
 import logging
 import os
+import re
 import subprocess
 import time
 import uuid
@@ -59,17 +60,39 @@ def config_set(values: dict, profile: str = "default") -> dict:
     return cfg
 
 
+_CARD_RE = re.compile(r"CARD=([^,]+)")
+
+
+def _mixer_device(pcm_device: str) -> str:
+    """`amixer -D` wants the *mixer* control device (`hw:CARD=X`), not the
+    PCM stream device (`plughw:CARD=X,DEV=0`) `arecord`/the satellite use —
+    they look alike but are not interchangeable: `amixer -D
+    plughw:CARD=X,DEV=0` fails with "Invalid CTL" even though the same
+    string is exactly what `arecord -D` wants. Extract the card name and
+    rebuild the `hw:CARD=` form amixer expects. Falls back to the device
+    string unchanged if it is not a `CARD=`-style name (e.g. plain
+    `"default"`) — amixer handles that case itself.
+    """
+    m = _CARD_RE.search(pcm_device or "")
+    return f"hw:CARD={m.group(1)}" if m else pcm_device
+
+
 def _apply_input_gain(device: str, percent: int) -> None:
     """Best-effort `amixer` call — a config write must not fail just because
     the mixer control name differs on this card."""
+    mixer_device = _mixer_device(device)
     try:
-        subprocess.run(
-            ["amixer", "-D", device, "sset", ALSA_MIC_CONTROL, f"{percent}%"],
+        res = subprocess.run(
+            ["amixer", "-D", mixer_device, "sset", ALSA_MIC_CONTROL, f"{percent}%"],
             check=False, capture_output=True, text=True, timeout=10,
             stdin=subprocess.DEVNULL)
+        if res.returncode != 0:
+            log.warning("amixer set %s on %s failed (rc=%d): %s",
+                       ALSA_MIC_CONTROL, mixer_device, res.returncode,
+                       (res.stderr or "").strip())
     except Exception as exc:  # noqa: BLE001
         log.warning("amixer set %s on %s failed: %s", ALSA_MIC_CONTROL,
-                   device, exc)
+                   mixer_device, exc)
 
 
 def _apply_satellite_unit(cfg: dict) -> None:

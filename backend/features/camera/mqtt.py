@@ -30,8 +30,9 @@ def serve_all() -> None:
     def op_mode_set(req):
         return service.mode_set(req.get("mode"))
 
-    def op_resolution(req):
-        return service.resolution(req.get("width"), req.get("height"))
+    def op_settings(req):
+        return service.settings({k: v for k, v in req.items()
+                                 if not k.startswith("_")})
 
     def op_dataset_list(req):
         return service.dataset_list(req.get("name") or "")
@@ -55,7 +56,7 @@ def serve_all() -> None:
     c.serve(topics.RPC_HEALTH, lambda _req: service.health())
     c.serve(topics.RPC_MODE_GET, lambda _req: service.mode_get())
     c.serve(topics.RPC_MODE_SET, op_mode_set)
-    c.serve(topics.RPC_RESOLUTION, op_resolution)
+    c.serve(topics.RPC_SETTINGS, op_settings)
     c.serve(topics.RPC_DATASET_LIST, op_dataset_list)
     c.serve(topics.RPC_DATASET_DELETE, op_dataset_delete)
     c.serve(topics.RPC_CAPTURE, op_capture)

@@ -57,8 +57,34 @@ def mode_set(mode: str) -> dict:
     return _sup.health()
 
 
-def resolution(width: int, height: int) -> dict:
-    _sup.set_resolution(width, height)
+def settings(payload: dict) -> dict:
+    """One endpoint for every camera setting: resolution plus Picamera2
+    image controls (brightness/contrast/exposure/white balance/gain/noise
+    reduction). Callers send only the keys they want to change; unset keys
+    keep their current value. Persisted to `camera_config` so it survives a
+    `camera-supervisor` restart.
+    """
+    from . import supervisor as sup_mod
+    from data import device_config
+
+    if "width" in payload and "height" in payload:
+        _sup.set_resolution(int(payload["width"]), int(payload["height"]))
+
+    controls = {k: payload[k] for k in sup_mod.CAMERA_CONTROL_KEYS
+               if k in payload}
+    if controls:
+        _sup.set_controls(controls)
+
+    to_save = dict(controls)
+    if "width" in payload and "height" in payload:
+        to_save["resolution_width"] = _sup.width
+        to_save["resolution_height"] = _sup.height
+    if to_save:
+        try:
+            device_config.set_many("camera", to_save)
+        except Exception:  # noqa: BLE001
+            log.exception("failed to persist camera settings")
+
     return _sup.health()
 
 

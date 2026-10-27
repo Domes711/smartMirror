@@ -16,7 +16,13 @@ RPC = "smartmirror/camera/rpc"
 RPC_HEALTH = f"{RPC}/health"             # in: {} → health snapshot
 RPC_MODE_GET = f"{RPC}/mode/get"         # in: {} → {"mode": …}
 RPC_MODE_SET = f"{RPC}/mode/set"         # in: {"mode": …} → health
-RPC_RESOLUTION = f"{RPC}/resolution"     # in: {"width","height"} → health
+RPC_SETTINGS = f"{RPC}/settings"         # in: {width,height,brightness,contrast,
+                                         #      saturation,sharpness,auto_exposure,
+                                         #      exposure_time_us,exposure_value,
+                                         #      auto_white_balance,awb_mode,
+                                         #      analogue_gain,noise_reduction}
+                                         # (every key optional — only sent keys
+                                         # change) → health
 RPC_DATASET_LIST = f"{RPC}/dataset/list"      # in: {"name"} → {"photos": […]}
 RPC_DATASET_DELETE = f"{RPC}/dataset/delete"  # in: {"name","file"} → {"photos"}
 RPC_CAPTURE = f"{RPC}/capture"           # in: {"name","file"} → {"file","total"}
