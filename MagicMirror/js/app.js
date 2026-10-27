@@ -226,19 +226,19 @@ function App () {
 		Log.log("Server started ...");
 
 		// Hot-load endpoint: loads a new module's node_helper at runtime without restart.
-		// Called by mirror-console when a brand-new module is placed in the layout editor.
+		// Called by the scenes feature when a brand-new module is placed in a scene.
 		app.use(express.json());
-		app.post("/module/hot-load", async (req, res) => {
-			const { moduleName, moduleId, moduleConfig } = req.body || {};
-			if (!moduleName) {
-				return res.status(400).json({ ok: false, error: "moduleName required" });
-			}
+		// Load a module into the running core. Shared by the HTTP route below
+		// and the MQTT `smartmirror/core/hot-load` handler in profile.js — the
+		// scenes feature drives this over MQTT now, HTTP stays for manual use.
+		const hotLoadModule = async ({ moduleName, moduleId, moduleConfig }) => {
+			if (!moduleName) return { ok: false, error: "moduleName required", status: 400 };
 			Log.info(`[hot-load] Request: ${moduleName} (id: ${moduleId})`);
 
 			if (nodeHelpers.some((h) => h.name === moduleName)) {
 				Log.info(`[hot-load] ${moduleName} already loaded — signalling browser`);
 				io.emit("MODULE_HOT_LOAD", { moduleName, moduleId, moduleConfig });
-				return res.json({ ok: true, alreadyLoaded: true });
+				return { ok: true, alreadyLoaded: true, status: 200 };
 			}
 
 			try {
@@ -251,11 +251,16 @@ function App () {
 					Log.info(`[hot-load] ${moduleName} node_helper started`);
 				}
 				io.emit("MODULE_HOT_LOAD", { moduleName, moduleId, moduleConfig });
-				return res.json({ ok: true });
+				return { ok: true, status: 200 };
 			} catch (e) {
 				Log.error(`[hot-load] Failed for ${moduleName}:`, e.message);
-				return res.status(500).json({ ok: false, error: e.message });
+				return { ok: false, error: e.message, status: 500 };
 			}
+		};
+
+		app.post("/module/hot-load", async (req, res) => {
+			const { status, ...result } = await hotLoadModule(req.body || {});
+			return res.status(status).json(result);
 		});
 
 		const nodePromises = [];
@@ -281,7 +286,7 @@ function App () {
 		});
 
 		// Start core profile manager (presence → layout → Face ID indicator)
-		profileManager = new ProfileManager(global.config, io);
+		profileManager = new ProfileManager(global.config, io, { hotLoadModule });
 		profileManager.start();
 
 		Log.log("Sockets connected & modules started ...");

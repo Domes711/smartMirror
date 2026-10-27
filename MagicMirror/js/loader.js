@@ -127,6 +127,9 @@ const Loader = (function () {
 				name: moduleName,
 				path: `${moduleFolder}/`,
 				file: `${moduleName}.js`,
+				// "region" (default) or "overlay" — whether the profile system
+				// places this instance; see main.js projectLayout.
+				placement: moduleData.placement || "region",
 				position: moduleData.position,
 				animateIn: moduleData.animateIn,
 				animateOut: moduleData.animateOut,

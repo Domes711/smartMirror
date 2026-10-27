@@ -1,0 +1,26 @@
+# Template — setup.sh substitutes the placeholders below and installs the
+# result to /etc/systemd/system/modules.service. Edit this file, not the
+# generator, when the unit shape needs to change.
+[Unit]
+Description=Smart Mirror Modules API (store)
+Documentation=https://github.com/Domes711/smartMirror
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+User=__USER__
+Group=__GROUP__
+WorkingDirectory=__BACKEND_DIR__
+Environment="PYTHONPATH=__BACKEND_DIR__"
+Environment="PYTHONUNBUFFERED=1"
+Environment="MQTT_BROKER=127.0.0.1"
+Environment="MQTT_PORT=1883"
+ExecStart=__PYTHON__ -m features.modules.daemon
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

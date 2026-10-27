@@ -23,7 +23,9 @@ const MM = (function () {
 			wantedById.set(entry.id, entry.position);
 		}
 		for (const mod of modules) {
-			if (!mod.data || !mod.data.id) continue;
+			// Overlay modules (alert) own their own DOM and visibility — moving
+			// or hiding them here would break notifications.
+			if (!mod.data || !mod.data.id || mod.data.placement === "overlay") continue;
 			const pos = wantedById.get(mod.data.id);
 			const elNode = document.getElementById(mod.identifier);
 			if (!elNode) continue;
@@ -152,12 +154,12 @@ const MM = (function () {
 
 		modules.forEach(function (module) {
 			// Placement is driven solely by config/pages.js via the profile system
-			// (projectLayout, matched by module `id`). The config.js `position`
-			// field is intentionally ignored. Build only id-bearing modules — each
-			// parked in the hidden staging area — for the profile system to move
-			// into its region. Modules without an id are not region-placed
-			// (notification modules like `alert` still work via their own mechanism).
-			if (!module.data.id) return;
+			// (projectLayout, matched by module `id`). Every instance has an id;
+			// `placement` says whether the profile system positions it:
+			//   "region"  → park in the hidden staging area, projectLayout moves it
+			//   "overlay" → renders through its own mechanism (alert), so the
+			//               profile system must neither place nor hide it
+			if (module.data.placement === "overlay") return;
 			const wrapper = document.getElementById("mm-hot-staging") || document.body;
 
 			let haveAnimateIn = null;
@@ -807,7 +809,7 @@ const MM = (function () {
 				});
 
 				// Hot-load a brand-new module without a page reload.
-				// Triggered by mirror-console after it registers the module in config.js.
+				// Triggered by the scenes feature after it registers the module in config.js.
 				socket.on("MODULE_HOT_LOAD", async ({ moduleName, moduleId, moduleConfig }) => {
 					Log.info(`[MM] Hot-loading module: ${moduleName} (id: ${moduleId})`);
 

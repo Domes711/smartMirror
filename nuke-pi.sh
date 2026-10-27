@@ -2,10 +2,10 @@
 # nuke-pi.sh — TOTAL Pi reset: everything cleanup-pi.sh does, PLUS deleting the
 # ~/smartMirror checkout itself. Use before a from-scratch bootstrap.
 #
-# Backups are safe: cleanup-pi.sh first copies your real config, enrolled faces
-# (camera/dataset + encoded_faces.pickle) and per-Pi state (radar calibration,
-# layout store) to ~/mirror-backup-<timestamp>/ — OUTSIDE the repo — so deleting
-# ~/smartMirror does NOT lose them.
+# Deliberately does NOT back up anything (neither this script nor
+# cleanup-pi.sh does) — real config, the SQLite DB, enrolled faces, module
+# assets/drafts, all of it is gone once this runs. Back up backend/var/ and
+# MagicMirror/config/config.js yourself first if you need them.
 #
 # Usage (on the Pi):  ~/smartMirror/nuke-pi.sh
 #                or:  bash nuke-pi.sh          (from inside the repo)
@@ -23,31 +23,26 @@ done
 
 echo "════════════════════════════════════════════"
 echo "  Smart Mirror — TOTAL cleanup (nuke)"
-echo "  smaže: $DIR  (+ vše co cleanup-pi.sh)"
+echo "  deletes: $DIR  (+ everything cleanup-pi.sh does)"
 echo "════════════════════════════════════════════"
 
 if [ -n "$CLEAN" ]; then
-  echo "▸ Standardní cleanup ($CLEAN) — zálohy + units/pm2/autostart/sudoers…"
-  bash "$CLEAN" || echo "⚠ cleanup-pi.sh skončil s chybou — pokračuji k mazání složky"
+  echo "▸ Standard cleanup ($CLEAN) — units/pm2/autostart/sudoers (no backup)…"
+  bash "$CLEAN" || echo "⚠ cleanup-pi.sh exited with an error — continuing to delete the directory"
 else
-  echo "⚠ cleanup-pi.sh nenalezen — přeskakuji standardní cleanup."
-  echo "  systemd units / pm2 / autostart NEMUSÍ být odstraněny. Pokud na Pi"
-  echo "  ještě běží mirror, spusť cleanup-pi.sh ručně před nuke."
+  echo "⚠ cleanup-pi.sh not found — skipping standard cleanup."
+  echo "  systemd units / pm2 / autostart may NOT be removed. If the mirror"
+  echo "  is still running on this Pi, run cleanup-pi.sh manually before nuking."
 fi
 
 # cd out of the repo before deleting it (the running script's fd stays valid).
 cd "$HOME"
-echo "▸ Mažu $DIR …"
+echo "▸ Deleting $DIR …"
 rm -rf "$DIR"
 
 echo
 echo "════════════════════════════════════════════"
-echo "✓ Total cleanup hotov — $DIR smazán."
-echo "  Záloha: ~/mirror-backup-*  (config, naučené obličeje, kalibrace, layout)"
+echo "✓ Total cleanup done — $DIR deleted. Nothing was backed up."
 echo "════════════════════════════════════════════"
-echo "Čistý start (clone + full setup) — zkopíruj si setup.sh do ~ a spusť:"
-echo "    bash ~/setup.sh        # mimo repo se sám naklonuje + nasetupuje"
-echo "Po startu obnov ze zálohy:"
-echo "  • ~/mirror-backup-*/MagicMirror-config/config.js → MagicMirror/config/config.js"
-echo "  • ~/mirror-backup-*/dataset/.                     → camera/dataset/"
-echo "  • ~/mirror-backup-*/encoded_faces.pickle          → camera/"
+echo "Clean start (clone + full setup) — copy setup.sh to ~ and run:"
+echo "    bash ~/setup.sh        # outside the repo it self-clones + runs setup"

@@ -4,27 +4,36 @@ __pycache__/
 *.pyd
 .pytest_cache/
 .venv/
+.venv-dev/
 venv/
 
-# Per-Pi runtime radar calibration (not source)
-ld2450/radar_config.json
+# Per-Pi backend runtime state — the SQLite DB (scenes, module catalog,
+# radar calibration, profiles), the face dataset + encodings, module store
+# assets. Backed up by cleanup-pi.sh, never committed.
+backend/var/
 
-# Per-Pi console-generated layout state / modules (not source)
-mirror-console/backend/layout_store.json
-mirror-console/backend/installed_modules.json
+# AI module builder working copies — in-progress drafts and modules being
+# edited, deliberately kept inside the feature folder rather than var/
+# (see docs/features/ai_modules.md). Never committed; deleted on install.
+backend/features/ai_modules/modules/
+
+# MagicMirror per-Pi generated files
+MagicMirror/config/pages.js
+# generated from the DB by the scenes feature (module instances)
+MagicMirror/config/modules.js
 MagicMirror/config/console-modules.js
-MagicMirror/modules/MMM-Profile/pages.js
+MagicMirror/config/config.js.bak.*
 
 # MagicMirror core (fork) — generated at install/runtime, not source
 MagicMirror/vendor/
 MagicMirror/fonts/
 MagicMirror/config/basepath.js
 
-# Private MMM-store repo (cloned separately on each Pi, not tracked here)
-store/
+# Node
+node_modules/
+frontend/dist/
 
 # MagicMirror module artefacts
-node_modules/
 MagicMirror/modules/MMM-Brno-Transit/cache/
 MagicMirror/modules/MMM-Brno-Transit/render-*.png
 MagicMirror/modules/MMM-HA-Reminders/render-*.png

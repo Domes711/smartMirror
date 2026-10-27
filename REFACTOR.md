@@ -4,6 +4,113 @@ Evidence větších refactorů a architektonických změn v projektu.
 
 ---
 
+## 2026-10-25: Schéma DB přepsáno + datová vrstva `backend/data/`
+
+Návrh a zdůvodnění: `docs/db-schema-cs.md`.
+
+**Schéma** (`_m001_initial` přepsána na místě — Pi se maže, žádná migrace
+zachovávající data):
+
+- `profiles.builtin` → **`is_default`**: příznak teď popisuje roli (profil pro
+  nerozpoznaného uživatele), ne nesmazatelnost. Právě jeden řádek, vynuceno
+  partial unique indexem `idx_one_default`. Výchozí profil je normální profil —
+  má vlastní instance, okna i layout.
+- `module_catalog`: PK → **`id`**, sloupec `type` zrušen (duplikoval
+  `module_name`, který je teď UNIQUE). `scope` → **`category`**. `source`:
+  `builtin` sloučen do **`custom`** (oba znamenají „soubory jsou v repu, není
+  co klonovat"); zbývá `custom` / `installed` / `community`, klonuje jen
+  `community`. `remote_image` → tabulka **`module_images`** (1:N).
+- `scene_instances`: `type TEXT` bez FK → **`module_id` FK** s CASCADE. Dřív
+  šlo uložit instanci neexistujícího modulu a odinstalace nechávala sirotky.
+  `config_json` **odstraněn** — byl vždy `{}` a cache derivace by byla past.
+- `module_fields` / `_screenshots` / `_tags` vážou přes `module_id`;
+  `module_install_jobs` zůstává bez FK (job má přežít smazání katalogu).
+- **6 nových HW tabulek** `<device>_config` (radar, camera, monitor, distance,
+  mic, speaker) jako key-value: `profile = 'default'` jsou defaulty, řádek se
+  jménem profilu přepíše jeden klíč. `'default'` místo `NULL`, protože UNIQUE
+  na nullable sloupci v SQLite nehlídá nic a profil `default` reálně existuje,
+  takže FK drží.
+
+**Datová vrstva `backend/data/`** — jeden modul na tabulku, jediné místo se
+SQL. Featury volají funkce; pravidla (validace, „výchozí profil nelze smazat",
+`codegen.module_config()`) zůstávají ve featuře. Výjimka: `device_config.py`
+obsluhuje všech 6 identických HW tabulek jedním kódem — jméno tabulky jde do
+SQL, proto whitelist.
+
+**Zapojeno do kódu** (dřív zadrátované konstanty):
+
+- rotace kamery 180°, rozlišení a tolerance face-reco ← `camera_config`
+- `DEFAULT_MAX_DURATION` / `DEFAULT_TOLERANCE` v recognition daemonu ←
+  `camera_config`
+- `radar/config.py` jede přes `device_config` (umí i per-profil override)
+- jádro (`js/profile.js`) bere dim timeout z nového retained topicu
+  `smartmirror/display/config`, který publikuje display feature — jádro nemá
+  DB driver, takže se mu resolvnuté hodnoty tlačí. Při změně profilu se
+  timeouty přepočítají (dřív se nastavily jednou).
+
+**Opraveno při tom:** `alert` chyběl v `catalog.BUILTIN`. Bez FK to prošlo,
+s FK by se overlay instance zahodila a notifikace z appky by přestaly chodit.
+
+Testy: 171 (z toho 32 na schéma + 13 na HW wiring). Celá suita hardware-free.
+
+---
+
+## 2026-10-20: Backend — feature folders, SQLite, Node odstraněn
+
+Podle `docs/superpowers/specs/2026-10-14-backend-refactor-design.md`.
+Plný záznam včetně rozhodnutí, kde jsem se od specu odchýlil:
+`docs/superpowers/plans/2026-10-20-backend-refactor-report.md`.
+
+### Struktura
+`camera/` + `ld2450/` + `display_control/` + `mirror-console/` → jeden
+`backend/` s pěti samostatnými feature složkami (každá má kód, MQTT topiky,
+systemd unit i vlastní `setup.sh`). `mirrorControl/` → `frontend/` (přesun
+1:1, vnitřek netknutý). `MagicMirror/` beze změny.
+
+### Node z backendu zmizel
+`mirror-console/server/` (Express proxy + MQTT bridge, 191 ř.) i
+`module-ai.js` (853 ř.) jsou pryč. AI builder je Python
+(`features/modules/ai_builder.py`) a dál pohání `claude` CLI — to je externí
+nástroj, ne runtime backendu. Na `:8000` je `backend/gateway.py`: čistá route
+tabulka, protože appka je single-origin PWA, ale features jsou oddělené unity
+(kamera drží exkluzivní HW zámek, AI builder spouští dlouhoběžící subprocesy —
+pád jednoho nesmí shodit editor scén).
+
+### `supervisor.py` (1861 ř.) rozpadnut
+Katalog + store → `features/modules/`, layout + codegen → `features/scenes/`.
+Kamera (HW zámek, mode machine, MJPEG, enrollment) zůstala pohromadě v
+`features/camera/supervisor.py` jako zmenšený nástupce — to jsou věci, co
+musí sdílet jeden proces.
+
+### Persistence: jedna SQLite DB
+`backend/var/smartmirror.db` (WAL mode) nahrazuje `layout_store.json`,
+`installed_modules.json`, `custom_modules.json`, `radar_config.json` i
+externí privátní repo `MMM-store`. Každá feature vlastní tabulky se svým
+prefixem; `profiles` je sdílená tabulka s FK cascade — **smazání profilu teď
+smaže i jeho scény** (dřív zůstávaly osiřelé odkazy). Binární data
+(`encoded_faces.pickle`, screenshoty) zůstala soubory, v DB jen cesta.
+Migrace ze starých JSON souborů jsou jednorázové a idempotentní, spouští je
+`setup.sh` dané feature; originály se nemažou.
+
+### Unity přejmenovány
+`ld2450`→`radar`, `display-control`→`display`, `face_reco`→`camera-recognition`,
+`mirror-console-web`/`-backend` → `mirror-gateway` + `camera-supervisor` +
+`scenes-api` + `modules-api`.
+
+### Opraveno cestou (nebylo v zadání)
+- Injekce do `config.js` rozbíjela jednořádkový `modules: []` — validace přes
+  node to revertla, takže se modul **tiše nikdy nenainjektoval**.
+- Daemony umíraly, když mosquitto nabíhal po nich (`connect()` → `return 1`).
+  Sdílený klient dělá `connect_async` + re-subscribe po reconnectu.
+- Frontend publikoval každou MQTT zprávu dvakrát (REST bridge + WS).
+- Progress instalace modulu se ztrácel při restartu (dict v paměti → tabulka).
+- Radar testy testovaly zrušený protokol a padaly už před refactorem.
+
+### Testy
+117, celá sada běží bez Pi (hardware importy jsou líné).
+
+---
+
 ## 2026-09-06: Zrcadlo (Home) tab — rychlé akce + funkční ovládání
 
 ### Problém

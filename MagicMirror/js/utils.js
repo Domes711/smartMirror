@@ -94,6 +94,41 @@ const checkDeprecatedOptions = (userConfig) => {
  * Loads the config file. Combines it with the defaults and returns the config
  * @returns {object} an object holding full and redacted config
  */
+/**
+ * Read `config/modules.js` — the module instances generated from SQLite by the
+ * scenes feature (`backend/features/scenes/codegen.py`).
+ *
+ * Keeping this a generated JS file rather than reading SQLite here is
+ * deliberate: the core needs no database driver, and the file is loaded by the
+ * same plain `require()` the core already uses for `config/pages.js`.
+ * @returns {object[]} module instances, or [] when the file is absent/invalid
+ */
+const loadModulesFile = () => {
+	const modulesPath = `${global.root_path}/config/modules.js`;
+	try {
+		// Drop the cache so a regenerated file is picked up on reload.
+		delete require.cache[require.resolve(modulesPath)];
+	} catch {
+		// not yet required — nothing to invalidate
+	}
+	try {
+		const mods = require(modulesPath);
+		if (!Array.isArray(mods)) {
+			Log.error("config/modules.js did not export an array — no modules loaded");
+			return [];
+		}
+		Log.log(`Loaded ${mods.length} module instance(s) from config/modules.js`);
+		return mods;
+	} catch (error) {
+		if (error.code === "MODULE_NOT_FOUND") {
+			Log.warn("config/modules.js not found — run the scenes feature to generate it (no modules loaded)");
+		} else {
+			Log.error(`Could not load config/modules.js: ${error.message}`);
+		}
+		return [];
+	}
+};
+
 const loadConfig = () => {
 	Log.log("Loading config ...");
 	const defaults = require("./defaults");
@@ -163,6 +198,14 @@ const loadConfig = () => {
 		} catch (error) {
 			Log.error(`Could not write config/basepath.js file: ${error.message}`);
 		}
+
+		// Module instances come from config/modules.js, generated from SQLite by
+		// the scenes feature — the DB is the single source of truth. The
+		// `modules` array in config.js is ignored: add modules through the app
+		// (Scény), not by editing this file.
+		const dbModules = loadModulesFile();
+		configObj.fullConf.modules = dbModules;
+		if (configObj.redactedConf) configObj.redactedConf.modules = dbModules;
 
 		return configObj;
 

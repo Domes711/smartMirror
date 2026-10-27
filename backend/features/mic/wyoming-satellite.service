@@ -1,0 +1,27 @@
+# Template — setup.sh substitutes the placeholders below and installs the
+# result to /etc/systemd/system/wyoming-satellite.service. Matches the
+# official rhasspy/wyoming-satellite tutorial's unit shape
+# (docs/tutorial_2mic.md). Installed DISABLED — features.mic.service starts/
+# stops it to free the USB mic for a test recording, same idea as
+# camera-recognition being arbitrated by the camera supervisor.
+#
+# `device` (ALSA capture/playback device) comes from mic_config, resolved by
+# setup.sh at install time; changing it later means re-running setup.sh or
+# hand-editing this unit, since wyoming-satellite has no config-reload RPC.
+[Unit]
+Description=Wyoming Satellite
+Wants=network-online.target
+After=network-online.target mosquitto.service
+Requires=wyoming-openwakeword.service
+
+[Service]
+Type=simple
+User=__USER__
+Group=__GROUP__
+ExecStart=__SATELLITE_DIR__/script/run --name '__SATELLITE_NAME__' --uri 'tcp://0.0.0.0:10700' --mic-command 'arecord -D __DEVICE__ -r 16000 -c 1 -f S16_LE -t raw' --snd-command 'aplay -D __DEVICE__ -r 22050 -c 1 -f S16_LE -t raw' --wake-uri 'tcp://127.0.0.1:10400' --wake-word-name '__WAKE_WORD__'
+WorkingDirectory=__SATELLITE_DIR__
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

@@ -24,55 +24,15 @@ let config = {
     timeFormat: 24,
     units: "metric",
 
-    modules: [
-        // MIRROR-CONSOLE:START (auto-managed — module instances from the layout editor; do not edit)
-        // MIRROR-CONSOLE:END
-
-        // ── unmanaged: always visible ──
-        { module: "alert" },
-
-        // ── managed: positioned by the core profile system via config/pages.js ──
-        {
-            id: "clock",
-            module: "clock",
-            config: {
-                displaySeconds: true
-            }
-        },
-        {
-            id: "google-calendar",
-            module: "MMM-GoogleCalendar",
-            config: {
-                calendars: [
-                    {
-                        symbol: "calendar-week",
-                        calendarID: "TVOJE_CALENDAR_ID@group.calendar.google.com"
-                    }
-                ]
-            }
-        },
-        {
-            // Voice-assistant state indicator — sits under the user name.
-            // State arrives over MQTT (mirror/assist/state).
-            id: "assist-status",
-            module: "MMM-Assist-Status",
-            config: {
-                mqttBroker: "mqtt://127.0.0.1:1883",
-                stateTopic: "mirror/assist/state"
-            }
-        },
-        {
-            // Gemini answer panel — sanitized aid-* HTML pushed over MQTT
-            // (mirror/display/set), auto-hides after its TTL.
-            id: "ai-display",
-            module: "MMM-AI-Display",
-            config: {
-                mqttBroker: "mqtt://127.0.0.1:1883",
-                setTopic: "mirror/display/set",
-                clearTopic: "mirror/display/clear"
-            }
-        }
-    ]
+    // Module instances live in the DATABASE, not here.
+    //
+    // `backend/var/smartmirror.db` is the single source of truth; the scenes
+    // feature generates `config/modules.js` from it and the core loads that
+    // (see js/utils.js → loadModulesFile). This array is IGNORED.
+    //
+    // To add a module: install it in the app (Moduly), then add it to a scene
+    // under the profile it belongs to — that is what creates an instance.
+    modules: []
 };
 
 /*************** DO NOT EDIT THE LINE BELOW ***************/

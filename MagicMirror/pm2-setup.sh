@@ -27,11 +27,11 @@ echo "▸ Registering pm2 boot autostart…"
 NODE_BIN_DIR="$(dirname "$(command -v node)")"
 sudo env PATH="$PATH:$NODE_BIN_DIR" "$(command -v pm2)" startup systemd \
   -u "$(id -un)" --hp "$HOME" || \
-  echo "  (pm2 startup selhal — spusť ručně: pm2 startup a vypsaný sudo příkaz)"
+  echo "  (pm2 startup failed — run manually: pm2 startup and the printed sudo command)"
 pm2 save
 
 echo
-echo "✓ MagicMirror je v pm2 (název: MagicMirror) + autostart po rebootu."
-echo "  Stav:    pm2 status MagicMirror"
-echo "  Logy:    pm2 logs MagicMirror"
+echo "✓ MagicMirror is in pm2 (name: MagicMirror) + boot autostart."
+echo "  Status:  pm2 status MagicMirror"
+echo "  Logs:    pm2 logs MagicMirror"
 echo "  Restart: pm2 restart MagicMirror"

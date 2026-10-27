@@ -39,9 +39,9 @@ if [ -f "$CFG" ] && grep -q "modules:" "$CFG" && ! grep -q "console-modules" "$C
   sed -i '0,/let config = {/s//const consoleModules = (() => { try { return require(".\/console-modules.js"); } catch (e) { return []; } })();\n\nlet config = {/' "$CFG"
   sed -i '0,/modules:[[:space:]]*\[/s//modules: [\n    ...consoleModules,/' "$CFG"
   if node -e "require('$CFG')" >/dev/null 2>&1; then
-    echo "  ✓ config.js upraven (záloha: $BK)"
+    echo "  ✓ config.js updated (backup: $BK)"
   else
-    echo "  ✗ úprava rozbila config.js — vracím zálohu"
+    echo "  ✗ the edit broke config.js — restoring backup"
     mv "$BK" "$CFG"
   fi
 fi
@@ -52,6 +52,6 @@ if command -v pm2 >/dev/null 2>&1; then
 else
   echo
   echo "✓ Dependencies installed."
-  echo "  pm2 nenalezen — nainstaluj ho (npm i -g pm2) a spusť ./pm2-setup.sh,"
-  echo "  nebo zrcadlo spusť ručně: ./start-magicmirror.sh"
+  echo "  pm2 not found — install it (npm i -g pm2) and run ./pm2-setup.sh,"
+  echo "  or start the mirror manually: ./start-magicmirror.sh"
 fi

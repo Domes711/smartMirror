@@ -1,0 +1,18 @@
+# Lets the backend features (running as admin) start/stop each other's
+# daemons without a password. Unit names follow the feature folders:
+#   camera-recognition  (features/camera/recognition_daemon.py — the face-reco daemon)
+#   radar               (features/radar/daemon.py)
+#   display             (features/display/daemon.py)
+#   wyoming-satellite   (external unit, arbitrated by features/mic/service.py
+#                        to free the USB mic for a test recording)
+#
+# apply-satellite-unit.sh regenerates wyoming-satellite.service from its
+# template + restarts it, so a `mic_config` change (device/satellite_name/
+# wake_word) over MQTT takes effect on the live unit without a manual
+# setup.sh run. NOPASSWD is scoped to this one script's exact path — not a
+# general `tee`/`daemon-reload`/`restart` grant — because the script itself
+# only ever writes the one wyoming-satellite.service path.
+#
+# Install: sudo cp smartmirror /etc/sudoers.d/smartmirror
+#          sudo visudo -cf /etc/sudoers.d/smartmirror   # verify syntax
+admin ALL=(root) NOPASSWD: /usr/bin/systemctl start camera-recognition, /usr/bin/systemctl stop camera-recognition, /usr/bin/systemctl is-active camera-recognition, /usr/bin/systemctl start radar, /usr/bin/systemctl stop radar, /usr/bin/systemctl is-active radar, /usr/bin/systemctl start display, /usr/bin/systemctl stop display, /usr/bin/systemctl is-active display, /usr/bin/systemctl start wyoming-satellite, /usr/bin/systemctl stop wyoming-satellite, /usr/bin/systemctl is-active wyoming-satellite, /home/admin/smartMirror/backend/features/mic/apply-satellite-unit.sh *

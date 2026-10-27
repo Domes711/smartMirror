@@ -1,0 +1,19 @@
+# Template — setup.sh substitutes the placeholders below and installs the
+# result to /etc/systemd/system/wyoming-openwakeword.service. Matches the
+# official rhasspy/wyoming-satellite tutorial's unit shape
+# (docs/tutorial_2mic.md): ExecStart calls script/run directly, which finds
+# its own .venv — no manual venv activation needed.
+[Unit]
+Description=Wyoming openWakeWord
+
+[Service]
+Type=simple
+User=__USER__
+Group=__GROUP__
+ExecStart=__WAKE_WORD_DIR__/script/run --uri 'tcp://127.0.0.1:10400' --preload-model '__WAKE_WORD__'
+WorkingDirectory=__WAKE_WORD_DIR__
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

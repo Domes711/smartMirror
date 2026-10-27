@@ -41,14 +41,30 @@ const TOPIC_WAKE = "smartmirror/control/wake";
 const TOPIC_MESSAGE = "smartmirror/control/message";
 const TOPIC_PREVIEW = "smartmirror/profile/preview";
 const TOPIC_RELOAD = "smartmirror/profile/reload";
+// The display feature resolves `monitor_config` (defaults + the active
+// profile's overrides) and pushes it here, retained. The core owns the
+// dim/sleep timers but has no database driver, so the values come over the
+// bus rather than being read from SQLite or pinned in config.js.
+const TOPIC_DISPLAY_CONFIG = "smartmirror/display/config";
+// Tells the display feature whose overrides to resolve.
+const TOPIC_DISPLAY_PROFILE = "smartmirror/display/control/profile";
+// Scenes asks the core to load a newly placed module without a pm2 restart.
+// Replaces the HTTP POST /module/hot-load the scenes feature used to make.
+const TOPIC_HOT_LOAD = "smartmirror/core/hot-load";
+const TOPIC_HOT_LOAD_RESULT = "smartmirror/core/hot-load/result";
 
 class ProfileManager {
-	constructor (globalConfig, io) {
+	constructor (globalConfig, io, hooks) {
 		this.cfg = (globalConfig && globalConfig.profile) || {};
 		this.io = io;
+		// Injected by app.js — loads a module into the running core.
+		this.hotLoadModule = (hooks && hooks.hotLoadModule) || null;
 		this.state = "asleep";
 		this.currentUser = null;
 		this.dimTimer = null;
+		// Resolved monitor_config for the active profile, pushed by the
+		// display feature over MQTT (retained).
+		this.displayConfig = null;
 		this.previewTimer = null;
 		this.mqttClient = null;
 		this.pages = null;
@@ -102,7 +118,7 @@ class ProfileManager {
 		this.mqttClient.on("connect", () => {
 			Log.info("[Profile] MQTT connected to " + brokerUrl);
 			this.mqttClient.subscribe(
-				[TOPIC_PRESENCE, TOPIC_RECOGNITION, TOPIC_CONTROL, TOPIC_WAKE, TOPIC_MESSAGE, TOPIC_PREVIEW, TOPIC_RELOAD],
+				[TOPIC_PRESENCE, TOPIC_RECOGNITION, TOPIC_CONTROL, TOPIC_WAKE, TOPIC_MESSAGE, TOPIC_PREVIEW, TOPIC_RELOAD, TOPIC_HOT_LOAD, TOPIC_DISPLAY_CONFIG],
 				(err) => { if (err) Log.error("[Profile] MQTT subscribe error:", err); }
 			);
 		});
@@ -130,6 +146,10 @@ class ProfileManager {
 				this._onWake();
 			} else if (topic === TOPIC_MESSAGE) {
 				this._onMessage(payload);
+			} else if (topic === TOPIC_HOT_LOAD) {
+				// async, deliberately not awaited — guard its promise so a
+				// rejection cannot escape as an unhandled rejection.
+				this._onHotLoad(payload).catch((err) => Log.error("[Profile] hot-load error:", err));
 			} else if (topic === TOPIC_PREVIEW) {
 				const data = JSON.parse(payload);
 				// `{exit:true}` leaves the app's scene-setup preview → restore live state
@@ -147,6 +167,8 @@ class ProfileManager {
 			} else if (topic === TOPIC_RELOAD) {
 				this._loadPages();
 				this._push();
+			} else if (topic === TOPIC_DISPLAY_CONFIG) {
+				this._onDisplayConfig(JSON.parse(payload));
 			}
 		} catch (err) {
 			Log.error("[Profile] MQTT message handling error:", err);
@@ -169,12 +191,53 @@ class ProfileManager {
 		if (!user) return this._onUserUnknown();
 		this.state = "user";
 		this.currentUser = user;
+		// Ask for this person's monitor settings: the timeouts are per
+		// profile, so a recognition must re-resolve them rather than keep the
+		// previous user's.
+		this._requestDisplayConfig(user);
 		this._push();
+	}
+
+	/**
+	 * Resolved `monitor_config` arrived. Only the timers the core owns are
+	 * kept; brightness is applied by the display feature itself.
+	 */
+	_onDisplayConfig (cfg) {
+		if (!cfg || typeof cfg !== "object") return;
+		this.displayConfig = cfg;
+		Log.info("[Profile] monitor config for " + (cfg.profile || "default")
+			+ ": dim=" + cfg.dim_timeout_s + "s");
+		// A dim already counting down was started with the previous value;
+		// restart it so the new timeout applies immediately instead of at the
+		// next absence.
+		if (this.state === "dimming" && this.dimTimer) {
+			this._cancelDimTimer();
+			this._onPresenceOff();
+		}
+	}
+
+	_requestDisplayConfig (profile) {
+		if (!this.mqttClient) return;
+		this.mqttClient.publish(TOPIC_DISPLAY_PROFILE, profile || DEFAULT_USER);
+	}
+
+	/**
+	 * Dim timeout, in order of precedence: the profile's resolved
+	 * monitor_config, then config.js, then the constant.
+	 */
+	_dimTimeoutMs () {
+		const fromDb = this.displayConfig && this.displayConfig.dim_timeout_s;
+		if (typeof fromDb === "number" && fromDb > 0) return fromDb * 1000;
+		return this.cfg.dimTimeoutMs || DEFAULT_DIM_MS;
 	}
 
 	_onUserUnknown () {
 		this.state = "user";
 		this.currentUser = this._defaultUser();
+		// Fall back to the default profile's settings too — otherwise an
+		// unrecognized face would inherit the timeouts of whoever was here
+		// last.
+		this._requestDisplayConfig(this.currentUser);
 		this._push();
 	}
 
@@ -182,7 +245,7 @@ class ProfileManager {
 		if (this.state === "asleep") return;
 		this.state = "dimming";
 		this._cancelDimTimer();
-		const ms = this.cfg.dimTimeoutMs || DEFAULT_DIM_MS;
+		const ms = this._dimTimeoutMs();
 		this.dimTimer = setTimeout(() => {
 			this.dimTimer = null;
 			this.state = "asleep";
@@ -217,6 +280,45 @@ class ProfileManager {
 			message,
 			timer: (data && Number(data.timer)) || 0
 		});
+	}
+
+	/**
+	 * Load a module into the running core on behalf of the scenes feature and
+	 * answer on TOPIC_HOT_LOAD_RESULT. Scenes keys the reply by moduleId and
+	 * falls back to a full pm2 restart if no reply arrives, so a failure here
+	 * must still publish — silence is the one unrecoverable outcome.
+	 */
+	async _onHotLoad (payload) {
+		let data = {};
+		try {
+			data = JSON.parse(payload);
+		} catch {
+			Log.error("[Profile] hot-load: payload is not JSON");
+			return;
+		}
+		const reply = (ok, error) => {
+			try {
+				this.mqttClient.publish(
+					TOPIC_HOT_LOAD_RESULT,
+					JSON.stringify({ moduleId: data.moduleId, moduleName: data.moduleName, ok, error: error || null })
+				);
+			} catch (e) {
+				// Scenes treats no-reply as failure and restarts pm2, so the
+				// module still lands — log and move on.
+				Log.error("[Profile] hot-load: could not publish result:", e.message);
+			}
+		};
+		if (!this.hotLoadModule) {
+			Log.error("[Profile] hot-load: no loader injected");
+			return reply(false, "hot-load unavailable");
+		}
+		try {
+			const result = await this.hotLoadModule(data);
+			reply(Boolean(result && result.ok), result && result.error);
+		} catch (e) {
+			Log.error("[Profile] hot-load failed:", e.message);
+			reply(false, e.message);
+		}
 	}
 
 	_onReset () {
