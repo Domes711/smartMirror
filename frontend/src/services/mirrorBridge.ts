@@ -3,7 +3,6 @@ import { connectMqtt, publish, TOPICS } from "./mqtt";
 import { handleRpcReply, subscribeRpcReplies } from "./mqttRpc";
 import { publishToTopicBus } from "./mqttTopicBus";
 import { devActions } from "@/features/dev/devSlice";
-import { mirrorActions } from "@/features/mirror/mirrorSlice";
 
 type AppStore = typeof Store;
 
@@ -35,10 +34,6 @@ export function startMirrorBridge(store: AppStore): void {
       try {
         if (topic === TOPICS.radarPresence) {
           store.dispatch(devActions.setPresence(payload.trim() === "present"));
-        } else if (topic === TOPICS.displayState) {
-          // { power: 1 (on) | 4 (standby) | null, brightness, … } — VCP D6 value
-          const power = JSON.parse(payload)?.power;
-          store.dispatch(mirrorActions.setDisplayOn(power == null ? null : Number(power) === 1));
         } else if (topic === TOPICS.radarTargets) {
           const data = JSON.parse(payload);
           const targets = Array.isArray(data) ? data : data.targets;

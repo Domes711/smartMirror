@@ -7,7 +7,9 @@ import { BottomSheet, PillButton, Segmented, eyebrow, tokens as C, h1 } from "@/
 import * as fx from "@/app/thunks";
 import { resolveActiveId } from "@/app/selectors";
 import { mirrorDisplayUrl } from "@/services/api";
-import { isConnected, publish, TOPICS } from "@/services/mqtt";
+import { isConnected } from "@/services/mqtt";
+import { useGetDisplayStateQuery, useSetDisplayBrightnessMutation } from "@/app/api/displayApi";
+import { userKeyOf } from "@/app/connect";
 
 /* ---------- quick-action icons ---------- */
 const ico: CSSProperties = { width: 20, height: 20, fill: "none", stroke: C.paper, strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" };
@@ -70,22 +72,21 @@ export default function Home() {
   const scenes = useAppSelector((s) => s.scenes.scenes);
   // re-render on each clock tick so the resolved scene tracks the time of day
   useAppSelector((s) => s.ui.time);
-  const connected = useAppSelector((s) => s.mirror.connected);
-  const liveData = useAppSelector((s) => s.mirror.live);
-  const mirrorLoading = useAppSelector((s) => s.mirror.loading);
-  const profileKeys = useAppSelector((s) => s.mirror.profileKeys);
-  const displayOn = useAppSelector((s) => s.mirror.displayOn);
-  const currentUserKey = useAppSelector((s) => s.mirror.currentUserKey);
+  const currentUserKey = useAppSelector((s) => s.scenes.userKey);
+  const profiles = useAppSelector((s) => s.profiles.profiles);
+  const connected = isConnected();
+  const { data: displayState } = useGetDisplayStateQuery();
+  const displayOn = displayState && displayState.timestamp > 0 ? displayState.power === 1 : null;
 
   const activeId = resolveActiveId(scenes);
   const sc = scenes[activeId];
   const regions = sc?.regions ?? {};
   const liveCount = Object.values(regions).reduce((n, a) => n + (a?.length || 0), 0);
-  const activeName = mirrorLoading ? "…" : sc ? (en && sc.name_en ? sc.name_en : sc.name) : "—";
+  const activeName = sc ? (en && sc.name_en ? sc.name_en : sc.name) : "…";
   const profileName =
     currentUserKey === "default"
       ? (L.defaultTag as string)
-      : Object.keys(profileKeys).find((n) => profileKeys[n] === currentUserKey) || currentUserKey;
+      : profiles.find((p) => userKeyOf(p.name) === currentUserKey)?.name || currentUserKey;
 
   // "Poslat vzkaz" composer
   const [msgOpen, setMsgOpen] = useState(false);
@@ -95,6 +96,7 @@ export default function Home() {
 
   // Brightness control
   const [brightness, setBrightness] = useState(50);
+  const [setDisplayBrightness] = useSetDisplayBrightnessMutation();
 
   // iOS only opens the keyboard for a focus() call that happens inside the tap
   // handler itself — autoFocus on a freshly mounted node is ignored. flushSync
@@ -115,7 +117,7 @@ export default function Home() {
   const handleBrightnessChange = (delta: number) => {
     const newBrightness = Math.max(0, Math.min(100, brightness + delta));
     setBrightness(newBrightness);
-    publish(TOPICS.displayBrightness, String(newBrightness));
+    setDisplayBrightness(newBrightness);
   };
 
   const ActionCard = ({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) => (
@@ -193,7 +195,7 @@ export default function Home() {
           <ActionCard
             icon={displayOn ? Icons.sleep : Icons.wake}
             label={(displayOn ? L.sleepBtn : L.wake) as string}
-            onClick={() => dispatch(fx.toggleDisplay())}
+            onClick={() => dispatch(fx.toggleDisplay(displayOn))}
           />
           <ActionCard icon={Icons.scene} label={L.editLayout as string} onClick={() => dispatch(fx.editResolved("home"))} />
           <ActionCard icon={Icons.message} label={L.sendMessage as string} onClick={openMessage} />
@@ -210,7 +212,7 @@ export default function Home() {
         </Row>
         <Row label={L.connection as string}>
           <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: connected ? C.green : C.signal }}>
-            ● {connected ? `${liveData ? L.online : L.syncing} · ${mirrorHost()}` : L.offline}
+            ● {connected ? `${L.online} · ${mirrorHost()}` : L.offline}
           </span>
         </Row>
         <Row label={L.modsRunning as string}>

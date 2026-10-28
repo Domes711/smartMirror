@@ -1,20 +1,13 @@
-import type { AppDispatch, RootState } from "./store";
-import { mirrorActions } from "@/features/mirror/mirrorSlice";
-import { scenesActions } from "@/features/scenes/scenesSlice";
-import { modulesActions } from "@/features/modules/modulesSlice";
-import { profilesActions } from "@/features/profiles/profilesSlice";
-import { setRuntimeCatalog } from "@/data/catalog";
-import * as api from "@/services/api";
-import type { LayoutStore } from "@/services/api";
-import type { FacePhoto, Module, Profile, Regions, Scene, TimeWindow } from "@/types";
-
-type Thunk<R = void> = (dispatch: AppDispatch, getState: () => RootState) => R;
+import type { ApiWindow, LayoutEntry, LayoutStore } from "@/app/api/scenesApi";
+import { posToRegion, regionToPos } from "@/app/api/scenesApi";
+import type { StoreModule } from "@/app/api/modulesApi";
+import type { Module, Regions, Scene, TimeWindow } from "@/types";
 
 export const userKeyOf = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, "_") || "default";
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /* ---------- store catalog → app Module ---------- */
-export function mapStoreModule(e: api.StoreModule, en: boolean): Module {
+export function mapStoreModule(e: StoreModule, en: boolean): Module {
   const lang = en ? "en" : "cs";
   const c = e.catalog?.name?.[lang] || e.name;
   const d = e.catalog?.description?.[lang] || e.description || "";
@@ -28,27 +21,27 @@ function cronHM(cron: string): { h: number; m: number } {
   const p = (cron || "").trim().split(/\s+/);
   return { m: parseInt(p[0], 10) || 0, h: parseInt(p[1], 10) || 0 };
 }
-const isAllDay = (w: api.ApiWindow) => /^0\s+0\s/.test(w.from) && /^59\s+23\s/.test(w.to);
+const isAllDay = (w: ApiWindow) => /^0\s+0\s/.test(w.from) && /^59\s+23\s/.test(w.to);
 
 /* ---------- layout entries ⇄ regions ---------- */
-function entriesToRegions(layout: api.LayoutEntry[]): Regions {
+function entriesToRegions(layout: LayoutEntry[]): Regions {
   const r: Regions = {};
   for (const e of layout || []) {
-    const reg = api.posToRegion(e.position) as keyof Regions;
+    const reg = posToRegion(e.position) as keyof Regions;
     (r[reg] = r[reg] || []).push(e.id);
   }
   return r;
 }
-export function regionsToEntries(regions: Regions): api.LayoutEntry[] {
-  const out: api.LayoutEntry[] = [];
+export function regionsToEntries(regions: Regions): LayoutEntry[] {
+  const out: LayoutEntry[] = [];
   for (const reg of Object.keys(regions) as (keyof Regions)[]) {
-    for (const id of regions[reg] || []) out.push({ id, position: api.regionToPos(reg as string) });
+    for (const id of regions[reg] || []) out.push({ id, position: regionToPos(reg as string) });
   }
   return out;
 }
 
 /* ---------- window → Scene ---------- */
-function windowToScene(win: api.ApiWindow): Scene {
+function windowToScene(win: ApiWindow): Scene {
   const a = cronHM(win.from);
   const b = cronHM(win.to);
   const startH = a.h;
@@ -91,7 +84,7 @@ export function buildUserScenes(store: LayoutStore, userKey: string, en: boolean
 /** Serialize the current scenes slice back into the layout store for a user. */
 export function scenesToStore(store: LayoutStore, userKey: string, scenes: Record<string, Scene>): LayoutStore {
   const next: LayoutStore = JSON.parse(JSON.stringify(store));
-  const wins: Record<string, api.ApiWindow> = {};
+  const wins: Record<string, ApiWindow> = {};
   for (const id of Object.keys(scenes)) {
     if (id === "__default__") {
       next.defaults[userKey] = regionsToEntries(scenes[id].regions);
@@ -120,124 +113,3 @@ export function scenesToStore(store: LayoutStore, userKey: string, scenes: Recor
   // a duplicate module into config.js (two clocks in the same spot).
   return next;
 }
-
-/* ---------- bootstrap ---------- */
-export const connectMirror = (): Thunk<Promise<void>> => async (dispatch, getState) => {
-  const en = getState().ui.lang === "en";
-  try {
-  // 1. reachability
-  try {
-    const st = await api.health();
-    dispatch(mirrorActions.setConnected(true));
-    void st;
-  } catch {
-    dispatch(mirrorActions.setConnected(false));
-    dispatch(mirrorActions.setError("offline"));
-    return; // stay on seed mocks
-  }
-
-  // 2. store catalog (drives the runtime widget catalog + installed flags)
-  try {
-    const cat = await api.storeCatalog();
-    const all = [...cat.own, ...cat.community];
-    setRuntimeCatalog(all.map((e) => mapStoreModule(e, false)), all.map((e) => mapStoreModule(e, true)));
-  } catch (e) {
-    dispatch(mirrorActions.setError(String(e)));
-  }
-
-  // 3. module catalog + positions (for the editor). The catalog is the full set
-  // of placeable module TYPES (built-in + installed + your own), so the editor
-  // can offer all of them. loaded_by_module lets placement reuse an existing
-  // instance instead of creating a duplicate.
-  let placeableTypes: string[] = [];
-  try {
-    const mods = await api.getModules();
-    dispatch(mirrorActions.setModulesMeta({ positions: mods.positions, catalog: mods.catalog, loadedByModule: mods.loaded_by_module || {} }));
-    placeableTypes = (mods.catalog || []).map((c) => c.type);
-  } catch (e) {
-    dispatch(mirrorActions.setError(String(e)));
-  }
-
-  // 4. layout store → scenes for the default profile. This is REQUIRED for the
-  // scene editor to read/write; only go "live" once it loads, otherwise saves
-  // would silently no-op against a null layout.
-  let layout: LayoutStore | null = null;
-  try {
-    layout = await api.getLayout();
-    dispatch(mirrorActions.setLayout(layout));
-    // editor palette = every placeable catalog type (own + installed + built-in)
-    // + any existing instance ids (so already-placed modules show up too)
-    const ids = new Set<string>(placeableTypes);
-    (layout.instances || []).forEach((i) => ids.add(i.id));
-    if (ids.size) dispatch(modulesActions.setInstalled([...ids]));
-    dispatch(scenesActions.loadFromBackend(buildUserScenes(layout, "default", en)));
-    dispatch(mirrorActions.setCurrentUserKey("default"));
-    dispatch(mirrorActions.setLive(true));
-  } catch (e) {
-    dispatch(mirrorActions.setError("layout: " + String(e)));
-    return; // stay on seed mocks; do not claim live
-  }
-
-  // 5. profiles
-  try {
-    const { profiles } = await api.listProfiles();
-    const keys: Record<string, string> = {};
-    const list: Profile[] = [];
-    for (const p of profiles) {
-      const key = p.builtin ? "default" : userKeyOf(p.name);
-      keys[p.name] = key;
-      if (!p.builtin) list.push({ id: key, name: p.name, photos: p.count, scenes: Object.keys(layout?.windows?.[key] || {}).length });
-    }
-    dispatch(mirrorActions.setProfileKeys(keys));
-    dispatch(profilesActions.loadProfiles(list));
-  } catch (e) {
-    dispatch(mirrorActions.setError(String(e)));
-  }
-
-  // 6. AI builder availability + drafts (best-effort)
-  try {
-    const st = await api.aiStatus();
-    dispatch(modulesActions.setAiAvailable(!!st.claudeCli));
-    const d = await api.aiListDrafts().catch(() => ({ drafts: [] }));
-    dispatch(modulesActions.setServerDrafts(d.drafts || []));
-  } catch {
-    dispatch(modulesActions.setAiAvailable(false));
-  }
-  } finally {
-    dispatch(mirrorActions.setLoading(false));
-  }
-};
-
-/** Re-fetch the store catalog (after install/uninstall) and refresh installed. */
-export const refreshStoreData = (): Thunk<Promise<void>> => async (dispatch, getState) => {
-  if (!getState().mirror.live) return;
-  try {
-    const cat = await api.storeCatalog();
-    const all = [...cat.own, ...cat.community];
-    setRuntimeCatalog(all.map((e) => mapStoreModule(e, false)), all.map((e) => mapStoreModule(e, true)));
-    const mods = await api.getModules();
-    const ids = new Set<string>((mods.catalog || []).map((c) => c.type));
-    (getState().mirror.layout?.instances || []).forEach((i) => ids.add(i.id));
-    dispatch(modulesActions.setInstalled([...ids]));
-    dispatch(mirrorActions.setModulesMeta({ positions: mods.positions, catalog: mods.catalog, loadedByModule: mods.loaded_by_module || {} }));
-  } catch (e) {
-    dispatch(mirrorActions.setError(String(e)));
-  }
-};
-
-/** Load one profile's windows into the scenes slice + its face photos. */
-export const loadProfileLive = (name: string): Thunk<Promise<void>> => async (dispatch, getState) => {
-  const m = getState().mirror;
-  if (!m.live) return;
-  const key = m.profileKeys[name] || userKeyOf(name);
-  dispatch(mirrorActions.setCurrentUserKey(key));
-  const en = getState().ui.lang === "en";
-  if (m.layout) dispatch(scenesActions.loadFromBackend(buildUserScenes(m.layout, key, en)));
-  try {
-    const ds = await api.listDataset(name);
-    const photos: FacePhoto[] = (ds.photos || []).map((file, i) => ({ id: file, file, n: i + 1, hue: (i * 47 + 18) % 360, src: api.photoUrl(name, file) }));
-    dispatch(profilesActions.loadFacePhotos(photos));
-  } catch {
-    /* keep whatever is there */
-  }
-};

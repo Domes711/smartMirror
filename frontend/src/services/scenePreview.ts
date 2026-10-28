@@ -21,7 +21,6 @@ export function startScenePreview(store: AppStore): void {
 
   store.subscribe(() => {
     const s = store.getState();
-    if (!s.mirror.live) return;
     const inEditor = s.ui.screen === "editor" && s.scenes.editing;
 
     if (inEditor) {

@@ -5,12 +5,15 @@ import { modulesActions } from "@/features/modules/modulesSlice";
 import { profilesActions } from "@/features/profiles/profilesSlice";
 import { devActions } from "@/features/dev/devSlice";
 import { LABELS } from "@/i18n/labels";
-import type { Draft, Scene, ScreenId, TabGroup, TaskKind } from "@/types";
+import type { Scene, ScreenId, TabGroup, TaskKind } from "@/types";
 import { publish, TOPICS } from "@/services/mqtt";
 import { STORE } from "@/data/catalog";
-import * as api from "@/services/api";
-import { refreshStoreData, loadProfileLive, scenesToStore, regionsToEntries } from "@/app/connect";
-import { mirrorActions } from "@/features/mirror/mirrorSlice";
+import { scenesToStore, regionsToEntries, buildUserScenes, userKeyOf } from "@/app/connect";
+import { scenesApi } from "@/app/api/scenesApi";
+import { modulesApi } from "@/app/api/modulesApi";
+import { cameraApi } from "@/app/api/cameraApi";
+import { radarApi } from "@/app/api/radarApi";
+import { photoUrl } from "@/services/api";
 import { resolveActiveId } from "@/app/selectors";
 
 type Thunk = (dispatch: AppDispatch, getState: () => RootState) => void;
@@ -23,7 +26,6 @@ let toastT: ReturnType<typeof setTimeout> | undefined;
 let liveT: ReturnType<typeof setTimeout> | undefined;
 let taskInt: ReturnType<typeof setInterval> | undefined;
 let taskDoneT: ReturnType<typeof setTimeout> | undefined;
-let agentTimers: ReturnType<typeof setTimeout>[] = [];
 let scanInt: ReturnType<typeof setInterval> | undefined;
 let scanTo: ReturnType<typeof setTimeout> | undefined;
 let titleClicks = 0;
@@ -89,11 +91,8 @@ export const editBack = (): Thunk => (dispatch, getState) => {
   dispatch(nav(s.editReturn as ScreenId, groupOf(s.editReturn as ScreenId)));
 };
 
-const notConnected = (s: RootState) => (en(s) ? "Mirror not connected — not applied" : "Zrcadlo nepřipojeno — neaplikováno");
-
 export const saveSceneAndBack = (): Thunk => (dispatch, getState) => {
-  if (getState().mirror.live) dispatch(pushLayoutLive()); // toasts apply result
-  else dispatch(toast(notConnected(getState())));
+  dispatch(pushLayoutLive()); // toasts apply result
   const s = getState().scenes;
   dispatch(nav(s.editReturn as ScreenId, groupOf(s.editReturn as ScreenId)));
 };
@@ -104,47 +103,59 @@ export const discardAndBack = (): Thunk => (dispatch, getState) => {
   dispatch(nav(s.editReturn as ScreenId, groupOf(s.editReturn as ScreenId)));
 };
 
-export const confirmDelScene = (): Thunk => (dispatch, getState) => {
+export const confirmDelScene = (): Thunk => (dispatch) => {
   dispatch(scenesActions.confirmDelScene());
-  if (getState().mirror.live) dispatch(pushLayoutLive()); // persist + apply
-  else dispatch(toast(Lof(getState()).tSceneDel));
+  dispatch(pushLayoutLive()); // persist + apply
   dispatch(nav("scenes", "scenes"));
 };
 
 /** Region-plus: place held / move selected, with the right toast. */
 // --- placement helpers (palette TYPE → real instance id) ---
-const isCatalogType = (type: string, m: RootState["mirror"]) => m.catalogEntries.some((c) => c.type === type);
-const reusableInstance = (type: string, m: RootState["mirror"]): string | null =>
-  (m.layout?.instances || []).find((i) => i.type === type)?.id || m.loadedByModule[type]?.[0] || null;
-const requiredFields = (type: string, m: RootState["mirror"]) =>
-  (m.catalogEntries.find((c) => c.type === type)?.fields || []).filter((f) => f.required);
-function freshInstanceId(type: string, m: RootState["mirror"]): string {
-  const taken = new Set<string>([...(m.layout?.instances || []).map((i) => i.id), ...Object.values(m.loadedByModule).flat()]);
+const catalogOf = (s: RootState) => scenesApi.endpoints.getScenesModules.select()(s).data;
+const layoutOf = (s: RootState) => scenesApi.endpoints.getLayout.select()(s).data;
+const loadedByModuleOf = (s: RootState) => catalogOf(s)?.loaded_by_module || {};
+const isCatalogType = (type: string, s: RootState) => (catalogOf(s)?.catalog || []).some((c) => c.type === type);
+const reusableInstance = (type: string, s: RootState): string | null =>
+  (layoutOf(s)?.instances || []).find((i) => i.type === type)?.id || loadedByModuleOf(s)[type]?.[0] || null;
+const requiredFields = (type: string, s: RootState) =>
+  (catalogOf(s)?.catalog || []).find((c) => c.type === type)?.fields?.filter((f) => f.required) || [];
+function freshInstanceId(type: string, s: RootState): string {
+  const taken = new Set<string>([...(layoutOf(s)?.instances || []).map((i) => i.id), ...Object.values(loadedByModuleOf(s)).flat()]);
   let id = type;
   let n = 2;
   while (taken.has(id)) id = `${type}-${n++}`;
   return id;
 }
 
+/** Add a freshly-created instance to the cached layout (persisted on apply). */
+function addInstance(dispatch: AppDispatch, id: string, type: string, values: Record<string, unknown>): void {
+  dispatch(
+    scenesApi.util.updateQueryData("getLayout", undefined, (draft) => {
+      if (!draft.instances) draft.instances = [];
+      if (!draft.instances.some((i) => i.id === id)) draft.instances.push({ id, type, values });
+    })
+  );
+}
+
 /**
  * Resolve a palette id to a real instance id. A palette entry can be a catalog
  * TYPE (built-in / installed / own) — placing it reuses an existing instance of
  * that type (no duplicate), or creates a fresh one. Existing instance ids pass
- * through unchanged. New instances are added to mirror.layout (persisted on apply).
+ * through unchanged. New instances are added to the cached layout (persisted on apply).
  */
 function resolvePlaceId(id: string, dispatch: AppDispatch, getState: () => RootState): string {
-  const m = getState().mirror;
-  if (!m.live || !isCatalogType(id, m)) return id;
-  const reuse = reusableInstance(id, m);
+  const s = getState();
+  if (!isCatalogType(id, s)) return id;
+  const reuse = reusableInstance(id, s);
   if (reuse) return reuse;
-  const newId = freshInstanceId(id, m);
-  dispatch(mirrorActions.addInstance({ id: newId, type: id, values: {} }));
+  const newId = freshInstanceId(id, s);
+  addInstance(dispatch, newId, id, {});
   return newId;
 }
 
 /** A brand-new instance of `type` would need required config we can't infer. */
-const needsConfig = (type: string, m: RootState["mirror"]) =>
-  m.live && isCatalogType(type, m) && !reusableInstance(type, m) && requiredFields(type, m).length > 0;
+const needsConfig = (type: string, s: RootState) =>
+  isCatalogType(type, s) && !reusableInstance(type, s) && requiredFields(type, s).length > 0;
 
 export const regionPlus =
   (rid: import("@/types").RegionId): Thunk =>
@@ -155,7 +166,7 @@ export const regionPlus =
       return;
     }
     if (s.picked) {
-      if (needsConfig(s.picked, getState().mirror)) {
+      if (needsConfig(s.picked, getState())) {
         dispatch(scenesActions.openCfgModal({ type: s.picked, rid }));
         return;
       }
@@ -171,7 +182,7 @@ export const regionPlus =
 export const addModToZone =
   (rid: import("@/types").RegionId, mod: string): Thunk =>
   (dispatch, getState) => {
-    if (needsConfig(mod, getState().mirror)) {
+    if (needsConfig(mod, getState())) {
       dispatch(scenesActions.openCfgModal({ type: mod, rid }));
       return;
     }
@@ -183,16 +194,15 @@ export const addModToZone =
 /** Submit the required-config modal: create the configured instance + place it. */
 export const submitCfg = (): Thunk => (dispatch, getState) => {
   const s = getState().scenes;
-  const m = getState().mirror;
   const type = s.cfgType;
   const rid = s.cfgRid;
   if (!type || !rid) return;
-  if (requiredFields(type, m).some((f) => !(s.cfgValues[f.key] || "").trim())) {
+  if (requiredFields(type, getState()).some((f) => !(s.cfgValues[f.key] || "").trim())) {
     dispatch(toast(Lof(getState()).cfgMissing));
     return;
   }
-  const id = freshInstanceId(type, m);
-  dispatch(mirrorActions.addInstance({ id, type, values: { ...s.cfgValues } }));
+  const id = freshInstanceId(type, getState());
+  addInstance(dispatch, id, type, { ...s.cfgValues });
   dispatch(scenesActions.placeSpecificAt({ rid, id }));
   dispatch(scenesActions.closeCfgModal());
   dispatch(toast(Lof(getState()).tAdded));
@@ -292,49 +302,38 @@ export const addWindow = (): Thunk => (dispatch, getState) => {
 /** Persist the current scenes back to the live layout store + apply to mirror. */
 const pushLayoutLive = (): Thunk => async (dispatch, getState) => {
   const s = getState();
-  let store = s.mirror.layout;
+  let store = layoutOf(s);
   if (!store) {
     try {
-      store = await api.getLayout();
+      store = await dispatch(scenesApi.endpoints.getLayout.initiate(undefined, { forceRefetch: true })).unwrap();
     } catch (e) {
-      dispatch(mirrorActions.setError(String(e)));
+      dispatch(toast(String(e)));
       return;
     }
   }
-  const next = scenesToStore(store, s.mirror.currentUserKey, s.scenes.scenes);
-  dispatch(mirrorActions.setLayout(next));
+  const next = scenesToStore(store, s.scenes.userKey, s.scenes.scenes);
   try {
-    await api.putLayout(next);
-    await api.applyLayout();
+    await dispatch(scenesApi.endpoints.putLayout.initiate(next)).unwrap();
+    await dispatch(scenesApi.endpoints.applyLayout.initiate()).unwrap();
     // Nudge the core to re-read pages.js. The backend also announces the
     // apply on smartmirror/scenes/applied; this publish targets the user
     // whose layout changed so the mirror re-projects immediately.
-    publish(TOPICS.profileReload, { user: s.mirror.currentUserKey });
+    publish(TOPICS.profileReload, { user: s.scenes.userKey });
     // Immediately project the active layout so the change shows at once,
     // instead of waiting for the next presence/recognition event.
     const st = getState();
     const activeId = resolveActiveId(st.scenes.scenes);
     const layout = regionsToEntries(st.scenes.scenes[activeId]?.regions || {});
     publish(TOPICS.profilePreview, { layout });
-    const fresh = await api.getLayout().catch(() => null);
-    if (fresh) dispatch(mirrorActions.setLayout(fresh));
     dispatch(toast(Lof(getState()).tApplied));
   } catch (e) {
-    dispatch(mirrorActions.setError(String(e)));
     dispatch(toast(en(getState()) ? "Apply failed — see Comms" : "Aplikace selhala — viz Komunikace"));
   }
 };
 
-export const applyMirror = (): Thunk => (dispatch, getState) => {
+export const applyMirror = (): Thunk => (dispatch) => {
   dispatch(scenesActions.applyLive());
-  const s = getState();
-  if (s.mirror.live) {
-    dispatch(pushLayoutLive()); // toasts apply result
-  } else {
-    // MQTT-first fallback: tell the core to re-read the active layout.
-    publish(TOPICS.profileReload, { scene: s.scenes.activeScene });
-    dispatch(toast(Lof(s).tApplied));
-  }
+  dispatch(pushLayoutLive()); // toasts apply result
   dispatch(startLiveLoad());
 };
 
@@ -347,7 +346,6 @@ export const wake = (): Thunk => (dispatch, getState) => {
   // power the monitor back on (DDC/CI daemon) and pull the core out of sleep
   publish(TOPICS.displayPower, "on");
   publish(TOPICS.wake, "1");
-  dispatch(mirrorActions.setDisplayOn(true)); // optimistic; daemon confirms via display/state
   dispatch(toast(Lof(getState()).tWake));
   dispatch(startLiveLoad());
 };
@@ -356,15 +354,17 @@ export const wake = (): Thunk => (dispatch, getState) => {
 export const sleep = (): Thunk => (dispatch, getState) => {
   publish(TOPICS.displayPower, "standby");
   publish(TOPICS.controlReset, "1");
-  dispatch(mirrorActions.setDisplayOn(false));
   dispatch(toast(Lof(getState()).tSleep));
 };
 
-/** One button for both: wake a sleeping display, put a running one to sleep. */
-export const toggleDisplay = (): Thunk => (dispatch, getState) => {
-  if (getState().mirror.displayOn === true) dispatch(sleep());
-  else dispatch(wake());
-};
+/** One button for both: wake a sleeping display, put a running one to sleep.
+ * `displayOn` comes from the caller — displayApi's retained-state query. */
+export const toggleDisplay =
+  (displayOn: boolean | null): Thunk =>
+  (dispatch) => {
+    if (displayOn === true) dispatch(sleep());
+    else dispatch(wake());
+  };
 
 /** Show a short note on the mirror (core → alert module). `timer` is in ms. */
 export const sendMirrorMessage =
@@ -376,7 +376,7 @@ export const sendMirrorMessage =
     dispatch(toast(Lof(getState()).tMsgSent));
   };
 
-// --- global async task (progress). Simulated; hook installStatus() for real. ---
+// --- global async task (progress bar), driven to completion by the caller ---
 export const startTask =
   (label: string, opts: { kind: TaskKind; target: string | null; onDone?: () => void }): Thunk =>
   (dispatch, getState) => {
@@ -397,125 +397,31 @@ export const startTask =
     }, 450);
   };
 
+/** Kick the backend install + subscribe to its retained progress topic
+ * (modulesApi.getInstallStatus pushes updates — no polling needed). */
 export const startInstall =
   (name: string): Thunk =>
   (dispatch, getState) => {
     const L = Lof(getState());
-    if (getState().mirror.live) {
-      dispatch(installLive(name));
-      return;
-    }
-    dispatch(
-      startTask(L.taskInstall + " " + name, {
-        kind: "install",
-        target: name,
-        onDone: () => {
-          dispatch(modulesActions.install(name));
-          dispatch(toast(Lof(getState()).tInstalled));
-        },
-      })
-    );
-  };
-
-/** Real install: kick the backend, poll /store/install/status into the task bar. */
-const installLive =
-  (name: string): Thunk =>
-  (dispatch, getState) => {
-    const L = Lof(getState());
     dispatch(uiActions.taskStart({ label: L.taskInstall + " " + name, kind: "install", target: name }));
+    dispatch(modulesApi.endpoints.installModule.initiate(name)).catch((e) => dispatch(toast(String(e))));
     clearInterval(taskInt);
-    api.installModule(name).catch((e) => dispatch(mirrorActions.setError(String(e))));
-    taskInt = setInterval(async () => {
-      try {
-        const st = await api.installStatus(name);
-        dispatch(uiActions.taskProgress(Math.min(99, st.percent || 0)));
-        if (st.done) {
-          clearInterval(taskInt);
-          dispatch(uiActions.taskProgress(100));
-          await dispatch(refreshStoreData());
-          taskDoneT = setTimeout(() => {
-            dispatch(uiActions.taskClear());
-            dispatch(toast(st.ok === false ? String(st.error || "error") : Lof(getState()).tInstalled));
-          }, 500);
-        }
-      } catch (e) {
+    const sub = dispatch(modulesApi.endpoints.getInstallStatus.initiate(name));
+    taskInt = setInterval(() => {
+      const st = modulesApi.endpoints.getInstallStatus.select(name)(getState()).data;
+      if (!st) return;
+      dispatch(uiActions.taskProgress(Math.min(99, st.percent || 0)));
+      if (st.done) {
         clearInterval(taskInt);
-        dispatch(uiActions.taskClear());
-        dispatch(mirrorActions.setError(String(e)));
+        sub.unsubscribe();
+        dispatch(uiActions.taskProgress(100));
+        taskDoneT = setTimeout(() => {
+          dispatch(uiActions.taskClear());
+          dispatch(toast(st.ok === false ? String(st.error || "error") : Lof(getState()).tInstalled));
+        }, 500);
       }
-    }, 700);
+    }, 300);
   };
-
-// --- AI agent (workshop). Simulated 4-step status; swap for streamed LLM. ---
-export const agentSend =
-  (text?: string): Thunk =>
-  (dispatch, getState) => {
-    const m = getState().modules;
-    const v = (text ?? m.chatDraft).trim();
-    if (!v) return;
-    const L = Lof(getState());
-    agentTimers.forEach(clearTimeout);
-    agentTimers = [];
-    const steps = [L.agentStep1, L.agentStep2, L.agentStep3, L.agentStep4];
-    dispatch(modulesActions.chatUserSend(v));
-    dispatch(uiActions.agentStart({ status: steps[0], mod: getState().modules.workshopMod }));
-    let d = 1000;
-    steps.slice(1).forEach((step) => {
-      agentTimers.push(setTimeout(() => dispatch(uiActions.agentStatus(step)), d));
-      d += 1000;
-    });
-    agentTimers.push(
-      setTimeout(() => {
-        dispatch(modulesActions.pushChat({ role: "bot", text: Lof(getState()).wsBot }));
-        dispatch(uiActions.agentDone({ ready: getState().ui.screen !== "workshop" }));
-      }, d + 250)
-    );
-  };
-
-export const openWorkshop =
-  (name: string, asDraft?: boolean): Thunk =>
-  (dispatch, getState) => {
-    const L = Lof(getState());
-    dispatch(modulesActions.openWorkshop({ name, asDraft, greeting: `${L.wsReadyA} ${name} ${L.wsReadyB}` }));
-    dispatch(nav("workshop", "modules"));
-  };
-
-export const doCreate = (): Thunk => (dispatch, getState) => {
-  const name = getState().modules.createName.trim() || "MMM-Test";
-  dispatch(modulesActions.resetCreate());
-  dispatch(openWorkshop(name));
-};
-
-export const wsSaveDraft = (): Thunk => (dispatch, getState) => {
-  const m = getState().modules;
-  const name = m.workshopMod;
-  const draft: Draft = {
-    n: name,
-    c: name.replace(/^MMM-/, ""),
-    ce: name.replace(/^MMM-/, ""),
-    d: m.createDesc || "",
-    de: m.createDesc || "",
-    t: ["rozpracováno"],
-    te: ["draft"],
-    mini: [name.replace(/^MMM-/, "").slice(0, 8).toUpperCase()],
-  };
-  dispatch(modulesActions.saveDraft(draft));
-  dispatch(toast(Lof(getState()).tDraftSaved));
-  dispatch(nav("modules", "modules"));
-};
-
-export const wsInstallNew = (): Thunk => (dispatch, getState) => {
-  const name = getState().modules.workshopMod;
-  dispatch(modulesActions.removeDraft(name));
-  dispatch(startInstall(name));
-  dispatch(nav("modules", "modules"));
-};
-
-export const wsInstallNow = (): Thunk => (dispatch, getState) => {
-  const name = getState().modules.workshopMod;
-  dispatch(modulesActions.removeDraft(name));
-  dispatch(startInstall(name));
-};
 
 export const submitCtrlForm = (): Thunk => (dispatch, getState) => {
   const m = getState().modules;
@@ -536,16 +442,10 @@ export const confirmUninstall = (): Thunk => (dispatch, getState) => {
   const name = getState().modules.uninstallModal;
   if (!name) return;
   dispatch(modulesActions.closeUninstall());
-  if (getState().mirror.live) {
-    api
-      .uninstallModule(name)
-      .then(() => dispatch(refreshStoreData()))
-      .then(() => dispatch(toast(Lof(getState()).tUninstall)))
-      .catch((e) => dispatch(mirrorActions.setError(String(e))));
-    return;
-  }
-  dispatch(modulesActions.uninstall(name));
-  dispatch(toast(Lof(getState()).tUninstall));
+  dispatch(modulesApi.endpoints.uninstallModule.initiate(name))
+    .unwrap()
+    .then(() => dispatch(toast(Lof(getState()).tUninstall)))
+    .catch((e) => dispatch(toast(String(e))));
 };
 
 export const confirmDeleteMod = (): Thunk => (dispatch, getState) => {
@@ -573,12 +473,35 @@ export const openModByName =
   };
 
 // --- profiles ---
+/** Load one profile's windows into the scenes slice + its face photos. */
+const loadProfileLive =
+  (name: string): Thunk =>
+  async (dispatch, getState) => {
+    const key = userKeyOf(name);
+    dispatch(scenesActions.setUserKey(key));
+    const layout = layoutOf(getState());
+    if (layout) {
+      const en = getState().ui.lang === "en";
+      dispatch(scenesActions.loadFromBackend({ userKey: key, ...buildUserScenes(layout, key, en) }));
+    }
+    try {
+      const photos = await dispatch(cameraApi.endpoints.listDataset.initiate(name)).unwrap();
+      dispatch(
+        profilesActions.loadFacePhotos(
+          photos.map((file, i) => ({ id: file, file, n: i + 1, hue: (i * 47 + 18) % 360, src: photoUrl(name, file) }))
+        )
+      );
+    } catch {
+      /* keep whatever is there */
+    }
+  };
+
 export const openProfile =
   (name: string): Thunk =>
-  (dispatch, getState) => {
+  (dispatch) => {
     dispatch(profilesActions.openProfile(name));
     dispatch(nav("profile", "profiles"));
-    if (getState().mirror.live) dispatch(loadProfileLive(name));
+    dispatch(loadProfileLive(name));
   };
 
 export const toggleTempActive = (): Thunk => (dispatch, getState) => {
@@ -594,78 +517,65 @@ export const endTempActive = (): Thunk => (dispatch, getState) => {
 
 export const confirmDeleteProfile = (): Thunk => (dispatch, getState) => {
   const name = getState().profiles.profileName;
-  if (getState().mirror.live) {
-    dispatch(profilesActions.closeProfileDel());
-    api
-      .deleteProfile(name)
-      .then((r) => {
-        const list = r.profiles.filter((p) => !p.builtin).map((p) => ({ id: p.name, name: p.name, photos: p.count, scenes: 0 }));
-        dispatch(profilesActions.loadProfiles(list));
-        dispatch(toast(Lof(getState()).tProfileDeleted));
-        dispatch(nav("profiles", "profiles"));
-      })
-      .catch((e) => dispatch(mirrorActions.setError(String(e))));
-    return;
-  }
-  dispatch(profilesActions.deleteCurrentProfile());
-  dispatch(toast(Lof(getState()).tProfileDeleted));
-  dispatch(nav("profiles", "profiles"));
+  dispatch(profilesActions.closeProfileDel());
+  dispatch(cameraApi.endpoints.deleteCameraProfile.initiate(name))
+    .unwrap()
+    .then(() => {
+      dispatch(toast(Lof(getState()).tProfileDeleted));
+      dispatch(nav("profiles", "profiles"));
+    })
+    .catch((e) => dispatch(toast(String(e))));
 };
 
 const captureLive = (phone: boolean): Thunk => (dispatch, getState) => {
   const name = getState().profiles.profileName;
-  api
-    .capture(name)
+  dispatch(cameraApi.endpoints.capturePhoto.initiate({ name }))
+    .unwrap()
     .then((r) => {
-      dispatch(profilesActions.pushRealPhoto({ file: r.file, src: api.photoUrl(name, r.file) }));
+      dispatch(profilesActions.pushRealPhoto({ file: r.file, src: photoUrl(name, r.file) }));
       dispatch(toast(phone ? Lof(getState()).tPhotoAdded : Lof(getState()).tPhotoTaken));
     })
-    .catch((e) => dispatch(mirrorActions.setError(String(e))));
+    .catch((e) => dispatch(toast(String(e))));
 };
 
 export const takePhoto = (): Thunk => (dispatch, getState) => {
   const phone = getState().profiles.photoSource === "phone";
-  if (getState().mirror.live) return dispatch(captureLive(phone));
-  dispatch(profilesActions.capturePhoto({ toSession: true }));
-  dispatch(toast(phone ? Lof(getState()).tPhotoAdded : Lof(getState()).tPhotoTaken));
+  dispatch(captureLive(phone));
 };
 
-export const shootPhoto = (): Thunk => (dispatch, getState) => {
-  if (getState().mirror.live) return dispatch(captureLive(false));
-  dispatch(profilesActions.capturePhoto({ toSession: true }));
-  dispatch(toast(Lof(getState()).tPhotoTaken));
+export const shootPhoto = (): Thunk => (dispatch) => {
+  dispatch(captureLive(false));
 };
 
 export const usePhotos = (): Thunk => (dispatch, getState) => {
   const L = Lof(getState());
   const name = getState().profiles.profileName;
-  if (getState().mirror.live) {
-    api.setMode("face_detect").catch(() => {});
-    api.encode(name).catch((e) => dispatch(mirrorActions.setError(String(e))));
-  }
-  dispatch(startTask(L.taskRetrain, { kind: "retrain", target: null, onDone: () => dispatch(toast(Lof(getState()).tTaskDone)) }));
+  dispatch(cameraApi.endpoints.setCameraMode.initiate("face_detect")).catch(() => {});
+  dispatch(cameraApi.endpoints.encodeFaces.initiate(name))
+    .unwrap()
+    .then(() => dispatch(toast(Lof(getState()).tTaskDone)))
+    .catch((e) => dispatch(toast(String(e))));
+  dispatch(startTask(L.taskRetrain, { kind: "retrain", target: null }));
   dispatch(nav("profile", "profiles"));
 };
 
 export const confirmDeletePhoto = (): Thunk => (dispatch, getState) => {
   const p = getState().profiles;
-  if (getState().mirror.live) {
-    const ph = p.facePhotos.find((x) => x.id === p.photoDelModal);
-    dispatch(profilesActions.closePhotoDel());
-    if (ph?.file) {
-      api
-        .deletePhoto(p.profileName, ph.file)
-        .then((r) => {
-          const photos = r.photos.map((file, i) => ({ id: file, file, n: i + 1, hue: (i * 47 + 18) % 360, src: api.photoUrl(p.profileName, file) }));
-          dispatch(profilesActions.loadFacePhotos(photos));
-          dispatch(toast(Lof(getState()).tPhotoDel));
-        })
-        .catch((e) => dispatch(mirrorActions.setError(String(e))));
-    }
-    return;
+  const ph = p.facePhotos.find((x) => x.id === p.photoDelModal);
+  dispatch(profilesActions.closePhotoDel());
+  if (ph?.file) {
+    dispatch(cameraApi.endpoints.deleteDatasetPhoto.initiate({ name: p.profileName, file: ph.file }))
+      .unwrap()
+      .then((photos) => {
+        dispatch(
+          profilesActions.loadFacePhotos(
+            photos.map((file, i) => ({ id: file, file, n: i + 1, hue: (i * 47 + 18) % 360, src: photoUrl(p.profileName, file) }))
+          )
+        );
+        dispatch(toast(Lof(getState()).tPhotoDel));
+      })
+      .catch((e) => dispatch(toast(String(e))));
   }
-  dispatch(profilesActions.confirmDeletePhoto());
-  dispatch(toast(Lof(getState()).tPhotoDel));
 };
 
 export const finishWizard = (): Thunk => (dispatch, getState) => {
@@ -689,10 +599,10 @@ export const startWizard = (): Thunk => (dispatch) => {
   dispatch(nav("newprofile", "profiles"));
 };
 
-export const openAddPhotos = (): Thunk => (dispatch, getState) => {
+export const openAddPhotos = (): Thunk => (dispatch) => {
   dispatch(profilesActions.resetSession("mirror"));
   dispatch(nav("addphotos", "profiles"));
-  if (getState().mirror.live) api.setMode("learn").catch(() => {}); // enable capture
+  dispatch(cameraApi.endpoints.setCameraMode.initiate("learn")).catch(() => {}); // enable capture
 };
 
 // --- dev mode ---
@@ -762,9 +672,9 @@ export const searchMirror = (): Thunk => (dispatch, getState) => {
 export const toggleRadar = (): Thunk => (dispatch, getState) => {
   const next = !getState().dev.radarActive;
   dispatch(devActions.setRadarActive(next));
-  // MQTT-first: command the radar daemon; also flip the systemd unit when live.
+  // MQTT-first: command the radar daemon; also flip the systemd unit.
   publish(TOPICS.radarControl, { active: next });
-  if (getState().mirror.live) api.setRadar(next).catch((e) => dispatch(mirrorActions.setError(String(e))));
+  dispatch(radarApi.endpoints.setRadarActive.initiate(next)).catch((e) => dispatch(toast(String(e))));
 };
 
 export const newSceneFromCal =

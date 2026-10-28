@@ -5,7 +5,6 @@ import modules from "@/features/modules/modulesSlice";
 import profiles from "@/features/profiles/profilesSlice";
 import dev from "@/features/dev/devSlice";
 import settings from "@/features/settings/settingsSlice";
-import mirror from "@/features/mirror/mirrorSlice";
 import { cameraApi } from "@/app/api/cameraApi";
 import { scenesApi } from "@/app/api/scenesApi";
 import { modulesApi } from "@/app/api/modulesApi";
@@ -22,7 +21,6 @@ export const store = configureStore({
     profiles,
     dev,
     settings,
-    mirror,
     [cameraApi.reducerPath]: cameraApi.reducer,
     [scenesApi.reducerPath]: scenesApi.reducer,
     [modulesApi.reducerPath]: modulesApi.reducer,

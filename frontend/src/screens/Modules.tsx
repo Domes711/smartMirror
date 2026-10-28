@@ -3,26 +3,25 @@ import { useT } from "@/i18n/useT";
 import { MiniThumb } from "@/components/MiniThumb";
 import { PillButton, tokens as C, h1 } from "@/components/ui";
 import { modulesActions } from "@/features/modules/modulesSlice";
-import { STORE, BROWSE_COUNT, CATEGORIES } from "@/data/catalog";
+import { STORE, CATEGORIES } from "@/data/catalog";
 import * as fx from "@/app/thunks";
 
 export default function Modules() {
   const dispatch = useAppDispatch();
   const { L, en } = useT();
   const m = useAppSelector((s) => s.modules);
-  const live = useAppSelector((s) => s.mirror.live);
 
   const all = STORE(en).filter((x) => !m.deletedMods.includes(x.n));
   const isInstalled = (x: { n: string; installed?: boolean }) => x.installed ?? m.installed.includes(x.n);
-  const ownCount = live ? all.filter((x) => x.own).length : all.length;
-  const installedCount = live ? all.filter(isInstalled).length : m.installed.length;
-  const browseCount = live ? all.filter((x) => !x.own).length : BROWSE_COUNT;
+  const ownCount = all.filter((x) => x.own).length;
+  const installedCount = all.filter(isInstalled).length;
+  const browseCount = all.filter((x) => !x.own).length;
 
   let mods = all;
-  if (m.modFilter === "mine") mods = live ? all.filter((x) => x.own) : all;
+  if (m.modFilter === "mine") mods = all.filter((x) => x.own);
   else if (m.modFilter === "installed") mods = all.filter(isInstalled);
   else if (m.modFilter === "search") {
-    mods = live ? all.filter((x) => !x.own) : all;
+    mods = all.filter((x) => !x.own);
     if (m.searchCat) mods = mods.filter((x) => x.t.includes(m.searchCat!));
     if (m.search.trim()) {
       const q = m.search.trim().toLowerCase();

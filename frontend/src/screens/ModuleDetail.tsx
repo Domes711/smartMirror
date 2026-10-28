@@ -12,7 +12,6 @@ export default function ModuleDetail() {
   const { L } = useT();
   const detail = useAppSelector((s) => s.modules.detailMod);
   const installed = useAppSelector((s) => s.modules.installed);
-  const aiOn = useAppSelector((s) => s.mirror.live && s.modules.aiAvailable);
   const task = useAppSelector((s) => s.ui);
   if (!detail) return null;
 
@@ -46,7 +45,7 @@ export default function ModuleDetail() {
       <div style={{ display: "flex", gap: 10 }}>
         {isInstalled && (
           <>
-            <button onClick={() => dispatch(aiOn ? ai.openAiWorkshop(detail.n, "installed") : fx.openWorkshop(detail.n))} style={btn(true)}>{L.edit}</button>
+            <button onClick={() => dispatch(ai.openAiEdit(detail.n))} style={btn(true)}>{L.edit}</button>
             <button onClick={() => detail.own ? dispatch(modulesActions.openDeleteMod(detail.n)) : dispatch(modulesActions.openUninstall(detail.n))} style={{ ...btn(false), borderColor: C.signal, color: C.signal, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               <svg viewBox="0 0 24 24" style={{ width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6M10 11v6M14 11v6" /></svg>
               {detail.own ? L.delModBtn : L.remove}

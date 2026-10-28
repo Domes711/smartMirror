@@ -2,53 +2,33 @@ import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { BackButton, Spinner } from "@/components/shell";
-import { Segmented, Toggle, tokens as C } from "@/components/ui";
+import { Segmented, tokens as C } from "@/components/ui";
 import { modulesActions } from "@/features/modules/modulesSlice";
 import * as fx from "@/app/thunks";
 import * as ai from "@/app/ai";
-import { aiDemoUrl } from "@/services/api";
+import { aiDraftZipUrl } from "@/app/api/aiModulesApi";
 
 export default function Workshop() {
   const dispatch = useAppDispatch();
-  const { L, en, raw } = useT();
+  const { L, raw } = useT();
   const m = useAppSelector((s) => s.modules);
   const ui = useAppSelector((s) => s.ui);
-  const aiOn = useAppSelector((s) => s.mirror.live && s.modules.aiAvailable);
   const chatRef = useRef<HTMLDivElement>(null);
 
   const installing = ui.taskKind === "install" && ui.taskTarget === m.workshopMod;
   const isInstalled = m.installed.includes(m.workshopMod) && !installing && !m.wsEditing;
   const canInstall = !installing && (!m.installed.includes(m.workshopMod) || m.wsEditing);
-  const streaming = aiOn ? m.aiStreaming : ui.agentBusy;
-  const send = (t?: string) => dispatch(aiOn ? ai.aiSend(t) : fx.agentSend(t));
+  const streaming = m.aiStreaming;
+  const send = (t?: string) => dispatch(ai.aiSend(t));
   const lastBot = m.chat[m.chat.length - 1]?.role === "bot" ? m.chat[m.chat.length - 1].text : "";
 
   useEffect(() => {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [m.chat.length, lastBot, streaming, m.ctrlFormOpen]);
+  }, [m.chat.length, lastBot, streaming]);
 
-  const back = () => {
-    // AI drafts are persisted server-side — just leave (install via the button)
-    if (aiOn) {
-      dispatch(fx.nav("modules", "modules"));
-      return;
-    }
-    const done = installing || (m.installed.includes(m.workshopMod) && !m.wsEditing);
-    if (done) dispatch(fx.nav("modules", "modules"));
-    else dispatch(modulesActions.openWsBack());
-  };
-
-  const reminders = [
-    { t: en ? "Pay the rent" : "Zaplatit nájem", imp: true },
-    { t: en ? "Submit Q2 report" : "Odevzdat report", imp: true },
-    { t: en ? "Buy milk" : "Koupit mléko", imp: false },
-    { t: en ? "Call the doctor" : "Zavolat doktorovi", imp: false },
-    { t: en ? "Pick up parcel" : "Vyzvednout balík", imp: true },
-    { t: en ? "Water the plants" : "Zalít kytky", imp: false },
-    { t: en ? "Meeting 15:00" : "Schůzka 15:00", imp: true },
-  ];
-  const previewList = (m.wsImportantOnly ? reminders.filter((r) => r.imp) : reminders).slice(0, m.wsMaxCount);
+  // AI drafts are persisted server-side — just leave (install via the button)
+  const back = () => dispatch(fx.nav("modules", "modules"));
 
   return (
     <section style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", padding: "18px 22px 0", animation: "scin .28s ease" }}>
@@ -56,7 +36,7 @@ export default function Workshop() {
         <BackButton onClick={back} />
         <h2 style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>{m.workshopMod}</h2>
         {canInstall && (
-          <button onClick={() => dispatch(aiOn ? ai.aiInstall() : fx.wsInstallNow())} className="mc-lift" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--mono)", fontSize: 11, borderRadius: 999, padding: "9px 14px", cursor: "pointer", border: `1px solid ${C.ink}`, background: C.ink, color: C.paper }}>
+          <button onClick={() => dispatch(ai.aiInstall())} className="mc-lift" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--mono)", fontSize: 11, borderRadius: 999, padding: "9px 14px", cursor: "pointer", border: `1px solid ${C.ink}`, background: C.ink, color: C.paper }}>
             <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }}><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
             {L.toMirror}
           </button>
@@ -101,11 +81,10 @@ export default function Workshop() {
                 </div>
               );
             })}
-            {m.ctrlFormOpen && <CtrlForm />}
             {streaming && (
               <div style={{ alignSelf: "center", display: "inline-flex", alignItems: "center", gap: 10, padding: "9px 16px", border: `1px solid ${C.line}`, borderRadius: 999, background: C.p2, animation: "scin .26s ease" }}>
                 <Spinner color="#6B6212" track="#D8D7CB" size={15} />
-                <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.bink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{aiOn ? L.agentWorking : ui.agentStatus || L.agentWorking}</span>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.bink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{L.agentWorking}</span>
               </div>
             )}
           </div>
@@ -129,79 +108,17 @@ export default function Workshop() {
             </button>
           </div>
         </div>
-      ) : aiOn ? (
-        <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "0 22px 18px" }}>
-          <div style={{ position: "relative", background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "9 / 14" }}>
-            <span style={{ position: "absolute", top: 12, left: 14, zIndex: 2, fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: "#a9a89d" }}>{L.preview}</span>
-            <span style={{ position: "absolute", top: 12, right: 14, zIndex: 2, fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: C.signal }}>● {L.live}</span>
-            <iframe key={m.aiRev} src={aiDemoUrl(m.workshopMod, m.aiScope, m.aiRev)} title="demo" style={{ width: "100%", height: "100%", border: "none", background: "#000" }} />
-          </div>
-          <p style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: C.mute, lineHeight: 1.6, margin: "12px 2px 0" }}>{en ? "Live preview of the module — refreshes as the agent edits." : "Živý náhled modulu — obnovuje se, jak ho agent upravuje."}</p>
-        </div>
       ) : (
         <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "0 22px 18px" }}>
           <div style={{ background: C.ink, borderRadius: 14, padding: 24, minHeight: 266, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative" }}>
             <span style={{ position: "absolute", top: 14, left: 16, fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: "#a9a89d" }}>{L.preview}</span>
-            <span style={{ position: "absolute", top: 14, right: 16, fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: C.signal }}>● {L.live}</span>
-            <div style={{ width: "100%", marginTop: 18, fontFamily: "var(--mono)", color: C.paper, textAlign: "left" }}>
-              <div style={{ fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: "#8e8d83", marginBottom: 12 }}>{en ? "Reminders" : "Připomínky"}</div>
-              {previewList.map((r, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i ? "1px solid rgba(233,232,221,.1)" : "none" }}>
-                  <span style={{ color: r.imp ? C.signal : "#6f6e66", fontSize: 13, flex: "0 0 auto", lineHeight: 1 }}>{r.imp ? "★" : "○"}</span>
-                  <span style={{ fontSize: 14, color: r.imp ? C.paper : "#b9b8ad" }}>{r.t}</span>
-                </div>
-              ))}
-            </div>
+            <p style={{ fontFamily: "var(--mono)", fontSize: 12, color: "#8e8d83", textAlign: "center", padding: "0 10px" }}>{L.wsPreviewUnavailable}</p>
           </div>
-
-          <div style={{ background: C.p2, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, marginTop: 14 }}>
-            <div style={{ marginBottom: 14 }}>
-              <p style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: C.mute, margin: "0 0 4px" }}>{L.ctrlTitle}</p>
-              <p style={{ fontSize: 13, lineHeight: 1.45, color: C.ink2, margin: 0 }}>{L.ctrlHint}</p>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 0", borderTop: `1px solid ${C.line}` }}>
-              <span style={{ fontSize: 13.5, color: C.ink }}>{L.ctrlImportant}</span>
-              <Toggle on={m.wsImportantOnly} onClick={() => dispatch(modulesActions.toggleWsImportant())} />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 0", borderTop: `1px solid ${C.line}` }}>
-              <span style={{ fontSize: 13.5, color: C.ink }}>{L.ctrlMax}</span>
-              <Segmented options={[3, 5, 8].map((n) => ({ value: n, label: String(n) }))} value={m.wsMaxCount} onChange={(v) => dispatch(modulesActions.setWsMax(v))} size="sm" />
-            </div>
-            <button onClick={() => dispatch(fx.addCtrl())} className="mc-lift" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 14, fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "11px 18px", cursor: "pointer", border: "1px dashed #B7B6AA", background: "transparent", color: C.mute }}>
-              <span style={{ fontFamily: "var(--grotesk)", fontWeight: 700, fontSize: 15, lineHeight: 1 }}>+</span>{L.addCtrl}
-            </button>
-          </div>
+          <p style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: C.mute, lineHeight: 1.6, margin: "12px 2px 0" }}>
+            {L.wsPreviewHint} <a href={aiDraftZipUrl(m.workshopMod)} style={{ color: C.bink }}>{L.wsPreviewDownload}</a>
+          </p>
         </div>
       )}
     </section>
   );
 }
-
-function CtrlForm() {
-  const dispatch = useAppDispatch();
-  const { L } = useT();
-  const m = useAppSelector((s) => s.modules);
-  return (
-    <div style={{ alignSelf: "flex-start", width: "92%", background: C.p2, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, animation: "scin .26s ease" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-        <span style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: C.ink }}>{L.ctrlFormTitle}</span>
-      </div>
-      <label style={lbl}>{L.cfQ1}</label>
-      <input value={m.ctrlWhat} onChange={(e) => dispatch(modulesActions.setCtrlWhat(e.target.value))} placeholder={L.cfQ1Ph} style={fld} />
-      <label style={lbl}>{L.cfQ2}</label>
-      <div style={{ marginBottom: 14 }}>
-        <Segmented
-          options={[{ value: "toggle", label: L.cfTypeToggle }, { value: "select", label: L.cfTypeSelect }, { value: "slider", label: L.cfTypeSlider }]}
-          value={m.ctrlType}
-          onChange={(v) => dispatch(modulesActions.setCtrlType(v))}
-        />
-      </div>
-      <label style={lbl}>{L.cfQ3}</label>
-      <input value={m.ctrlDefault} onChange={(e) => dispatch(modulesActions.setCtrlDefault(e.target.value))} placeholder={L.cfQ3Ph} style={fld} />
-      <button onClick={() => dispatch(fx.submitCtrlForm())} style={{ width: "100%", fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "11px 18px", cursor: "pointer", border: `1px solid ${C.ink}`, background: C.ink, color: C.paper }}>{L.cfSubmit}</button>
-    </div>
-  );
-}
-
-const lbl: React.CSSProperties = { display: "block", fontFamily: "var(--mono)", fontSize: 10.5, color: C.mute, marginBottom: 6 };
-const fld: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: C.p3, border: `1px solid ${C.line}`, borderRadius: 11, padding: "11px 13px", fontSize: 13.5, color: C.ink, marginBottom: 14 };

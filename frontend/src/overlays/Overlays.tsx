@@ -8,6 +8,7 @@ import { modulesActions } from "@/features/modules/modulesSlice";
 import { profilesActions } from "@/features/profiles/profilesSlice";
 import { devActions } from "@/features/dev/devSlice";
 import { REGIONS, fmod } from "@/data/catalog";
+import { useGetScenesModulesQuery } from "@/app/api/scenesApi";
 import * as fx from "@/app/thunks";
 import { SearchOverlay } from "./SearchOverlay";
 import type { RegionId } from "@/types";
@@ -226,8 +227,8 @@ function ZoneSheet() {
   const { L, en } = useT();
   const s = useAppSelector((st) => st.scenes);
   const installed = useAppSelector((st) => st.modules.installed);
-  const catalogEntries = useAppSelector((st) => st.mirror.catalogEntries);
-  const label = (id: string) => catalogEntries.find((c) => c.type === id)?.label || fmod(id, en);
+  const { data: scenesModules } = useGetScenesModulesQuery();
+  const label = (id: string) => scenesModules?.catalog.find((c) => c.type === id)?.label || fmod(id, en);
   const rid = s.zoneOpen as RegionId | null;
   if (!rid || !s.editing) return null;
   const reg = s.scenes[s.editing].regions[rid] || [];
@@ -278,7 +279,8 @@ function ConfigModal() {
   const open = useAppSelector((s) => s.scenes.cfgOpen);
   const type = useAppSelector((s) => s.scenes.cfgType);
   const values = useAppSelector((s) => s.scenes.cfgValues);
-  const entry = useAppSelector((s) => s.mirror.catalogEntries.find((c) => c.type === type));
+  const { data: scenesModules } = useGetScenesModulesQuery();
+  const entry = scenesModules?.catalog.find((c) => c.type === type);
   const [mapKey, setMapKey] = useState<string | null>(null);
   if (!open || !type || !entry) return null;
   const fields = entry.fields || [];

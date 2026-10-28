@@ -4,7 +4,7 @@ import { BottomSheet, Segmented, tokens as C, h2, eyebrow } from "@/components/u
 import { devActions } from "@/features/dev/devSlice";
 import { TOPICS, isConnected, resolveMqttUrl } from "@/services/mqtt";
 import * as fx from "@/app/thunks";
-import { listProfiles, type ApiProfile } from "@/services/api";
+import { useGetCameraProfilesQuery } from "@/app/api/cameraApi";
 import { useEffect, useState } from "react";
 
 export default function Comms() {
@@ -14,20 +14,14 @@ export default function Comms() {
   const name = useAppSelector((s) => s.dev.commsName);
   const panel = useAppSelector((s) => s.dev.commsPanel);
   const connected = isConnected();
-  const [profiles, setProfiles] = useState<ApiProfile[]>([]);
+  const { data: allProfiles } = useGetCameraProfilesQuery();
+  const profiles = (allProfiles ?? []).filter((p) => !p.is_default);
   const [selectedTarget, setSelectedTarget] = useState<"user" | "monitor">("user");
 
-  // Load user profiles
+  // Default the comms target to the first non-default profile, once loaded.
   useEffect(() => {
-    listProfiles().then((data) => {
-      const userProfiles = data.profiles.filter((p) => p.name !== "default");
-      setProfiles(userProfiles);
-      // Set first profile as default if available
-      if (userProfiles.length > 0 && !name) {
-        dispatch(devActions.setCommsName(userProfiles[0].name));
-      }
-    }).catch(() => {});
-  }, [dispatch, name]);
+    if (profiles.length > 0 && !name) dispatch(devActions.setCommsName(profiles[0].name));
+  }, [dispatch, name, profiles]);
 
   // User mode presets: radar, mirror control, and face recognition
   const userModePresets: { label: string; topic: string; payload: string; dot: string }[] = [

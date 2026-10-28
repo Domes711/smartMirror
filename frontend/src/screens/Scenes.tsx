@@ -1,14 +1,15 @@
 import type { MouseEvent } from "react";
-import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { useAppDispatch } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { Calendar, useSceneCards, HOUR_PX } from "@/components/Calendar";
 import { LoadingBar, PillButton, tokens as C, h1 } from "@/components/ui";
+import { useGetLayoutQuery } from "@/app/api/scenesApi";
 import * as fx from "@/app/thunks";
 
 export default function Scenes() {
   const dispatch = useAppDispatch();
   const { L } = useT();
-  const loading = useAppSelector((s) => s.mirror.loading);
+  const { isLoading: loading } = useGetLayoutQuery();
   const cards = useSceneCards({ onOpen: (id) => dispatch(fx.editScene(id, "scenes")) });
 
   // tap an empty slot on the calendar → new scene at that hour

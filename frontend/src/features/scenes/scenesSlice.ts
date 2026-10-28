@@ -6,6 +6,8 @@ const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
 export interface ScenesState {
   scenes: Record<string, Scene>;
+  /** backend layout-store user key whose windows are currently loaded/edited */
+  userKey: string;
   activeScene: string;
   live: Regions | null;
   dirty: number;
@@ -48,6 +50,7 @@ const seedScenes: Record<string, Scene> = {
 
 const initialState: ScenesState = {
   scenes: seedScenes,
+  userKey: "default",
   activeScene: "day",
   live: null,
   dirty: 0,
@@ -82,7 +85,8 @@ const scenesSlice = createSlice({
   initialState,
   reducers: {
     /** Replace the scene set from the live mirror (per-profile windows). */
-    loadFromBackend(s, a: PayloadAction<{ scenes: Record<string, Scene>; activeScene: string; windows: TimeWindow[] }>) {
+    loadFromBackend(s, a: PayloadAction<{ userKey: string; scenes: Record<string, Scene>; activeScene: string; windows: TimeWindow[] }>) {
+      s.userKey = a.payload.userKey;
       s.scenes = a.payload.scenes;
       s.activeScene = a.payload.activeScene;
       s.windows = a.payload.windows;
@@ -92,6 +96,9 @@ const scenesSlice = createSlice({
       s.selChip = null;
     },
     /** Snapshot current activeScene regions into `live`. */
+    setUserKey(s, a: PayloadAction<string>) {
+      s.userKey = a.payload;
+    },
     syncLiveFromActive(s) {
       s.live = clone(s.scenes[s.activeScene].regions);
     },

@@ -6,6 +6,7 @@ import { BackButton } from "@/components/shell";
 import { tokens as C } from "@/components/ui";
 import { scenesActions } from "@/features/scenes/scenesSlice";
 import { STORE, fmod } from "@/data/catalog";
+import { useGetScenesModulesQuery } from "@/app/api/scenesApi";
 import * as fx from "@/app/thunks";
 import type { Module, RegionId } from "@/types";
 
@@ -15,14 +16,14 @@ export default function Editor() {
   const s = useAppSelector((st) => st.scenes);
   const installed = useAppSelector((st) => st.modules.installed);
   const deletedMods = useAppSelector((st) => st.modules.deletedMods);
-  const catalogEntries = useAppSelector((st) => st.mirror.catalogEntries);
+  const { data: scenesModules } = useGetScenesModulesQuery();
 
   const editing = s.editing;
   const sc = editing ? s.scenes[editing] : null;
   if (!sc) return null;
 
   // prefer the live catalog label (Hodiny, Počasí…) for a placeable type
-  const label = (id: string) => catalogEntries.find((c) => c.type === id)?.label || fmod(id, en);
+  const label = (id: string) => scenesModules?.catalog.find((c) => c.type === id)?.label || fmod(id, en);
 
   const name = en && sc.name_en ? sc.name_en : sc.name;
   const editMods = Object.values(sc.regions).flat().length;
