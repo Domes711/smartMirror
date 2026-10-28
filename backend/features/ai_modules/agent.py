@@ -93,9 +93,10 @@ def run(scope: str, name: str, prompt: str, cwd: str,
     assistant_text = ""
     files = []
     session_id = claude_session_id
+    reported_error = False
 
     def handle_line(line: str) -> None:
-        nonlocal touched, assistant_text, session_id
+        nonlocal touched, assistant_text, session_id, reported_error
         if not line.strip():
             return
         try:
@@ -122,6 +123,7 @@ def run(scope: str, name: str, prompt: str, cwd: str,
         elif msg.get("type") == "result":
             sub = msg.get("subtype")
             if msg.get("is_error") or (sub and sub != "success"):
+                reported_error = True
                 detail = msg.get("result") or msg.get("error") or sub
                 on_event({
                     "type": "error",
@@ -138,7 +140,7 @@ def run(scope: str, name: str, prompt: str, cwd: str,
     stderr_tail = proc.stderr.read()
     code = proc.wait()
 
-    if code != 0 and not assistant_text:
+    if code != 0 and not assistant_text and not reported_error:
         log.error("claude CLI exited %s: %s", code, stderr_tail[-500:])
         on_event({
             "type": "error",
