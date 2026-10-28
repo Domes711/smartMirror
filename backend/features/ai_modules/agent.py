@@ -104,7 +104,7 @@ def run(scope: str, name: str, prompt: str, cwd: str,
             return
         if msg.get("session_id"):
             session_id = msg["session_id"]
-        if msg.get("type") == "assistant":
+        if msg.get("type") == "assistant" and not msg.get("error"):
             for block in (msg.get("message") or {}).get("content") or []:
                 if block.get("type") == "text" and block.get("text"):
                     assistant_text += block["text"]
@@ -121,7 +121,7 @@ def run(scope: str, name: str, prompt: str, cwd: str,
                              "file": f})
         elif msg.get("type") == "result":
             sub = msg.get("subtype")
-            if sub and sub != "success":
+            if msg.get("is_error") or (sub and sub != "success"):
                 detail = msg.get("result") or msg.get("error") or sub
                 on_event({
                     "type": "error",
