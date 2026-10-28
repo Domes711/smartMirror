@@ -53,15 +53,22 @@ export const openAiEdit =
     }
   };
 
-/** Create a real scaffolded draft from the create form, then open it. */
+/** Create a real scaffolded draft from the create form, open it, then kick
+ * off the agent's first turn with the user's description — draft_create()
+ * only writes the static scaffold, it never calls the agent itself. */
 export const aiCreateAndOpen = (): Thunk => async (dispatch, getState) => {
   const m = getState().modules;
   const name = m.createName.trim();
+  const description = m.createDesc.trim();
   if (!name) return;
   try {
-    const r = await dispatch(aiModulesApi.endpoints.createAiDraft.initiate({ name, description: m.createDesc.trim() })).unwrap();
+    const r = await dispatch(aiModulesApi.endpoints.createAiDraft.initiate({ name, description })).unwrap();
     dispatch(modulesActions.resetCreate());
-    dispatch(openAiWorkshop(r.name));
+    dispatch(modulesActions.aiOpen({ name: r.name, scope: "draft" }));
+    dispatch(nav("workshop", "modules"));
+    const s = await dispatch(aiModulesApi.endpoints.getAiSession.initiate({ scope: "draft", name: r.name })).unwrap();
+    dispatch(modulesActions.aiSetSession({ messages: mapMsgs(s.messages), rev: 1 }));
+    if (description) dispatch(aiSend(description));
   } catch (e) {
     dispatch(modulesActions.aiError(String(e)));
   }
