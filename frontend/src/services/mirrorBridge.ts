@@ -1,5 +1,7 @@
 import type { store as Store } from "@/app/store";
 import { connectMqtt, publish, TOPICS } from "./mqtt";
+import { handleRpcReply, subscribeRpcReplies } from "./mqttRpc";
+import { publishToTopicBus } from "./mqttTopicBus";
 import { devActions } from "@/features/dev/devSlice";
 import { mirrorActions } from "@/features/mirror/mirrorSlice";
 
@@ -14,11 +16,19 @@ export function startMirrorBridge(store: AppStore): void {
   connectMqtt({
     onConnect: () => {
       store.dispatch(devActions.logMsg(line("←", "#3bd17a", "system", "mqtt connected")));
+      subscribeRpcReplies(); // re-subscribe on every (re)connect — the broker forgets across a drop
       // ask the display daemon for a fresh state (the retained one may be stale)
       publish(TOPICS.displayGetState, "1");
     },
     onClose: () => store.dispatch(devActions.logMsg(line("←", "#8C8C81", "system", "mqtt closed"))),
     onMessage: (topic, payload) => {
+      if (handleRpcReply(topic, payload)) return; // RPC reply, not mirror state — don't log/parse it as one
+
+      // Fan out to any RTK Query onCacheEntryAdded subscriber (app/api/*.ts)
+      // before anything else — a retained-state topic update must reach the
+      // cache even if the legacy handling below doesn't know about it.
+      publishToTopicBus(topic, payload);
+
       // live monitor (dev → Komunikace)
       store.dispatch(devActions.logMsg(line("←", "#ffc34d", topic, payload)));
 
