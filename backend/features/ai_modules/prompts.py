@@ -40,7 +40,19 @@ def _common(name: str) -> str:
     return f"""TECHNICAL RULES (silent — never mention in chat):
 - NO INTERACTION: the mirror is a DISPLAY ONLY, mounted behind glass with NO touch screen, keyboard or pointer. The module must NEVER contain clickable or interactive elements the user would have to operate — no buttons, links, navigation, tabs, menus, form inputs, toggles or anything expecting a click/tap/hover. It only DISPLAYS information. Any state must change by itself from data, time or configuration — never from a user action. (This rule is about the module shown on the mirror, NOT about demo.html.)
 - demo.html MUST always stay a WORKING standalone preview: stub window.Module/window.Log/window.MM, load {name}.js, call getDom(), mount it. Drive with hard-coded SAMPLE data when the module uses real data.
-- demo.html STATES: populate window.DEMO_STATES = [{{ id, label, apply(mod){{…}} }}] with every meaningful state of the module (e.g. loading, empty, normal, error, long/edge values). Each apply(mod) feeds realistic sample data as node_helper would (mod.socketNotificationReceived(...) or set fields) then the harness re-renders. The app's control panel lists these states and the live preview reacts — keep the existing DEMO_STATES + postMessage wiring in demo.html intact.
+- demo.html STATES: populate window.DEMO_STATES = [{{ id, label, apply(mod){{…}} }}] with every meaningful state of the module (e.g. loading, empty, normal, error, long/edge values). Each apply(mod) feeds realistic sample data as node_helper would (mod.socketNotificationReceived(...) or set fields) then calls mod.updateDom() to re-render.
+- demo.html HOST WIRING (exact contract — the app embeds demo.html in an <iframe> and talks to it over postMessage; copy this verbatim, it never changes between modules):
+    window.addEventListener("message", (ev) => {{
+      const msg = ev.data || {{}};
+      if (msg.type === "set-state" && msg.id) {{
+        const s = window.DEMO_STATES.find((x) => x.id === msg.id);
+        if (s) s.apply(mod);
+      }}
+    }});
+    if (window.parent !== window) {{
+      window.parent.postMessage({{ type: "states", states: window.DEMO_STATES.map(({{ id, label }}) => ({{ id, label }})) }}, "*");
+    }}
+  Apply the first state in DEMO_STATES on load so the preview is never blank.
 - CSS classes stay namespaced to the module. API calls, secrets and file I/O go in node_helper.js only.
 - Work only inside the current working directory. The chat transcript and CLAUDE.md are managed by the backend, not by you — never write or edit them."""
 

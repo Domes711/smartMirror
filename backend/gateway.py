@@ -10,8 +10,10 @@ subscribes instead of polling. This gateway therefore shrinks to two jobs:
        /photo                  binary JPEG                         (camera)
        /module-assets/*        store screenshots                   (modules)
        /module-installed/*     a live module's own files            (modules)
-       /module-draft/*         AI draft preview (zip, unpacked      (ai_modules)
-                                client-side into the preview iframe)
+       /module-draft/*         AI draft working copy, zipped        (ai_modules)
+       /module-preview/*       AI draft's demo.html + assets,       (ai_modules)
+                                served directly for the Workshop's
+                                live <iframe> preview
        /mic/recording          test recording WAV bytes             (mic)
   2. the JSON twins kept as a **migration shim** while the frontend moves to
      MQTT screen by screen. Each twin calls the same handler as its RPC
@@ -24,7 +26,7 @@ Routing (prefix → feature):
     /healthz /mode /resolution /stream.mjpg /photo /capture /encode
     /dataset /profiles /radar                       → camera      :8001
     /store /module-assets /module-installed         → modules     :8003
-    /module-draft                                   → ai_modules  :8004
+    /module-draft /module-preview                   → ai_modules  :8004
     /mic                                             → mic         :8005
 
 The scenes feature is **not** here: it is MQTT-only and has no port.
@@ -73,7 +75,7 @@ ROUTES = [
     ("/store", MODULES), ("/module-assets", MODULES),
     ("/module-installed", MODULES),
 
-    ("/module-draft", AI_MODULES),
+    ("/module-draft", AI_MODULES), ("/module-preview", AI_MODULES),
 
     ("/mic", MIC),
 ]

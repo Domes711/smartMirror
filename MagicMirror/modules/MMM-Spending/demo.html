@@ -54,70 +54,7 @@
         };
         mod.sendSocketNotification = function () {};
 
-        const scenarios = {
-            // 2 transakce — odpovídá reálným datům z 2026-04-27
-            real: () => ({
-                state: "data",
-                data: {
-                    total: 432.99,
-                    currency: "CZK",
-                    count: 2,
-                    recent: [
-                        { payee: "TOP TABAK",  amount: 173,    currency: "CZK" },
-                        { payee: "ONTHATASS",  amount: 259.99, currency: "CZK" }
-                    ],
-                    generatedAt: new Date().toISOString()
-                }
-            }),
-            // 0 položek — prázdný den
-            empty: () => ({
-                state: "data",
-                data: {
-                    total: 0,
-                    currency: "CZK",
-                    count: 0,
-                    recent: [],
-                    generatedAt: new Date().toISOString()
-                }
-            }),
-            // hodně transakcí — investice + běžné výdaje
-            heavy: () => ({
-                state: "data",
-                data: {
-                    total: 2841.50,
-                    currency: "CZK",
-                    count: 7,
-                    recent: [
-                        { payee: "Wolt",                 amount: 376,    currency: "CZK" },
-                        { payee: "Restaurant & Pub Pivni", amount: 260,  currency: "CZK" },
-                        { payee: "2111495412/2700",      amount: 615,    currency: "CZK" }
-                    ],
-                    generatedAt: new Date().toISOString()
-                }
-            }),
-            // velká částka — test layoutu pro 5+ ciferné sumy
-            big: () => ({
-                state: "data",
-                data: {
-                    total: 18450,
-                    currency: "CZK",
-                    count: 4,
-                    recent: [
-                        { payee: "Alza.cz",     amount: 12990, currency: "CZK" },
-                        { payee: "Lidl Brno",   amount: 1240,  currency: "CZK" },
-                        { payee: "Zabka Brno",  amount: 89,    currency: "CZK" }
-                    ],
-                    generatedAt: new Date().toISOString()
-                }
-            }),
-            loading: () => ({ state: "loading" }),
-            error:   () => ({ state: "error", errorMsg: "API token expired (HTTP 401)" })
-        };
-
-        function apply() {
-            const name = (location.hash || "#real").slice(1);
-            const maker = scenarios[name] || scenarios.real;
-            const s = maker();
+        function feed(mod, s) {
             if (s.state === "loading") {
                 mod.data = null;
                 mod.errorMsg = null;
@@ -130,8 +67,75 @@
             }
             mod.updateDom();
         }
-        window.addEventListener("hashchange", apply);
-        apply();
+
+        // DEMO_STATES: the contract the AI module builder's preview iframe
+        // (Workshop's Preview tab) drives over postMessage (see HOST WIRING
+        // below) — each state feeds mod with realistic sample data the way
+        // node_helper would, then re-renders.
+        window.DEMO_STATES = [
+            { id: "real", label: "Dnešní útrata", apply: (mod) => feed(mod, {
+                state: "data",
+                data: {
+                    total: 432.99, currency: "CZK", count: 2,
+                    recent: [
+                        { payee: "TOP TABAK",  amount: 173,    currency: "CZK" },
+                        { payee: "ONTHATASS",  amount: 259.99, currency: "CZK" }
+                    ],
+                    generatedAt: new Date().toISOString()
+                }
+            }) },
+            { id: "empty", label: "Žádné transakce", apply: (mod) => feed(mod, {
+                state: "data",
+                data: { total: 0, currency: "CZK", count: 0, recent: [], generatedAt: new Date().toISOString() }
+            }) },
+            { id: "heavy", label: "Hodně transakcí", apply: (mod) => feed(mod, {
+                state: "data",
+                data: {
+                    total: 2841.50, currency: "CZK", count: 7,
+                    recent: [
+                        { payee: "Wolt",                   amount: 376, currency: "CZK" },
+                        { payee: "Restaurant & Pub Pivni",  amount: 260, currency: "CZK" },
+                        { payee: "2111495412/2700",         amount: 615, currency: "CZK" }
+                    ],
+                    generatedAt: new Date().toISOString()
+                }
+            }) },
+            { id: "big", label: "Velká částka", apply: (mod) => feed(mod, {
+                state: "data",
+                data: {
+                    total: 18450, currency: "CZK", count: 4,
+                    recent: [
+                        { payee: "Alza.cz",    amount: 12990, currency: "CZK" },
+                        { payee: "Lidl Brno",  amount: 1240,  currency: "CZK" },
+                        { payee: "Zabka Brno", amount: 89,    currency: "CZK" }
+                    ],
+                    generatedAt: new Date().toISOString()
+                }
+            }) },
+            { id: "loading", label: "Načítání", apply: (mod) => feed(mod, { state: "loading" }) },
+            { id: "error", label: "Chyba API", apply: (mod) => feed(mod, { state: "error", errorMsg: "API token expired (HTTP 401)" }) }
+        ];
+
+        function applyState(id) {
+            const s = window.DEMO_STATES.find((x) => x.id === id) || window.DEMO_STATES[0];
+            s.apply(mod);
+        }
+        function applyFromHash() {
+            applyState((location.hash || "#real").slice(1));
+        }
+        window.addEventListener("hashchange", applyFromHash);
+
+        // HOST WIRING — the app embeds demo.html in an <iframe> and talks to
+        // it over postMessage; this block is verbatim across every module.
+        window.addEventListener("message", (ev) => {
+            const msg = ev.data || {};
+            if (msg.type === "set-state" && msg.id) applyState(msg.id);
+        });
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: "states", states: window.DEMO_STATES.map(({ id, label }) => ({ id, label })) }, "*");
+        }
+
+        applyFromHash();
     </script>
 </body>
 </html>

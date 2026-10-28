@@ -68,6 +68,13 @@ export function onAiStream(scope: AiScope, name: string, onEvent: (e: AiStreamEv
  * because MQTT can't carry a directory (see ai_modules/http.py). */
 export const aiDraftZipUrl = (name: string) => `/module-draft/${encodeURIComponent(name)}`;
 
+/** The working copy's demo.html, served directly for the Workshop's live
+ * <iframe> preview (see ai_modules/daemon.py's static mount). Cache-busted
+ * with aiRev so a fresh agent turn (which may have rewritten demo.html)
+ * reloads the iframe instead of showing a stale cached copy. */
+export const aiPreviewUrl = (name: string, rev: number) =>
+  `/module-preview/${encodeURIComponent(name)}/demo.html?rev=${rev}`;
+
 export const aiModulesApi = createApi({
   reducerPath: "aiModulesApi",
   baseQuery: mqttBaseQuery,

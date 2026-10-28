@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { BackButton, Spinner } from "@/components/shell";
@@ -6,7 +6,12 @@ import { Segmented, tokens as C } from "@/components/ui";
 import { modulesActions } from "@/features/modules/modulesSlice";
 import * as fx from "@/app/thunks";
 import * as ai from "@/app/ai";
-import { aiDraftZipUrl } from "@/app/api/aiModulesApi";
+import { aiDraftZipUrl, aiPreviewUrl } from "@/app/api/aiModulesApi";
+
+interface DemoState {
+  id: string;
+  label: string;
+}
 
 export default function Workshop() {
   const dispatch = useAppDispatch();
@@ -14,6 +19,10 @@ export default function Workshop() {
   const m = useAppSelector((s) => s.modules);
   const ui = useAppSelector((s) => s.ui);
   const chatRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLIFrameElement>(null);
+  const [previewStates, setPreviewStates] = useState<DemoState[]>([]);
+  const [activeStateId, setActiveStateId] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState(false);
 
   const installing = ui.taskKind === "install" && ui.taskTarget === m.workshopMod;
   const isInstalled = m.installed.includes(m.workshopMod) && !installing && !m.wsEditing;
@@ -26,6 +35,46 @@ export default function Workshop() {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [m.chat.length, lastBot, streaming]);
+
+  // Reset preview state whenever a different draft is opened or the agent
+  // finishes a turn (aiRev bumps) — a stale demo.html may no longer exist.
+  // demo.html not existing yet (scaffold has none — see templates.py) comes
+  // back as a 404 JSON body the iframe loads "successfully" (no error
+  // event), so detect it by timeout: a working demo.html announces its
+  // states within a second of loading.
+  useEffect(() => {
+    setPreviewStates([]);
+    setActiveStateId(null);
+    setPreviewError(false);
+    const timer = setTimeout(() => {
+      setPreviewStates((cur) => {
+        if (cur.length === 0) setPreviewError(true);
+        return cur;
+      });
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [m.workshopMod, m.aiRev]);
+
+  // demo.html (see ai_modules/prompts.py HOST WIRING) announces its states
+  // on load via postMessage({type:"states"}); filter by source so another
+  // iframe on the page (or a malicious page in general) can't spoof this.
+  useEffect(() => {
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.source !== previewRef.current?.contentWindow) return;
+      const msg = ev.data || {};
+      if (msg.type === "states" && Array.isArray(msg.states)) {
+        setPreviewStates(msg.states);
+        setActiveStateId((cur) => cur ?? msg.states[0]?.id ?? null);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  const setPreviewState = (id: string) => {
+    setActiveStateId(id);
+    previewRef.current?.contentWindow?.postMessage({ type: "set-state", id }, "*");
+  };
 
   // AI drafts are persisted server-side — just leave (install via the button)
   const back = () => dispatch(fx.nav("modules", "modules"));
@@ -110,10 +159,43 @@ export default function Workshop() {
         </div>
       ) : (
         <div className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", margin: "0 -22px", padding: "0 22px 18px" }}>
-          <div style={{ background: C.ink, borderRadius: 14, padding: 24, minHeight: 266, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative" }}>
-            <span style={{ position: "absolute", top: 14, left: 16, fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: "#a9a89d" }}>{L.preview}</span>
-            <p style={{ fontFamily: "var(--mono)", fontSize: 12, color: "#8e8d83", textAlign: "center", padding: "0 10px" }}>{L.wsPreviewUnavailable}</p>
+          <div style={{ background: C.ink, borderRadius: 14, padding: 16, minHeight: 266, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: "#a9a89d", marginBottom: 10 }}>{L.preview}</span>
+            {previewError ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px" }}>
+                <p style={{ fontFamily: "var(--mono)", fontSize: 12, color: "#8e8d83", textAlign: "center" }}>{L.wsPreviewLoadError}</p>
+              </div>
+            ) : (
+              <iframe
+                ref={previewRef}
+                key={`${m.workshopMod}:${m.aiRev}`}
+                src={aiPreviewUrl(m.workshopMod, m.aiRev)}
+                title={L.preview}
+                onError={() => setPreviewError(true)}
+                style={{ flex: 1, minHeight: 250, border: "none", borderRadius: 8, background: "#000" }}
+              />
+            )}
           </div>
+
+          {previewStates.length > 0 && (
+            <div className="mc-noscroll" style={{ display: "flex", gap: 8, margin: "12px 0 0", overflowX: "auto" }}>
+              {previewStates.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setPreviewState(s.id)}
+                  className="mc-lift"
+                  style={{
+                    flex: "0 0 auto", whiteSpace: "nowrap", fontFamily: "var(--mono)", fontSize: 11,
+                    border: `1px solid ${s.id === activeStateId ? C.ink : C.line}`, borderRadius: 999, padding: "7px 12px",
+                    cursor: "pointer", background: s.id === activeStateId ? C.ink : "transparent", color: s.id === activeStateId ? C.paper : C.mute,
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <p style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: C.mute, lineHeight: 1.6, margin: "12px 2px 0" }}>
             {L.wsPreviewHint} <a href={aiDraftZipUrl(m.workshopMod)} style={{ color: C.bink }}>{L.wsPreviewDownload}</a>
           </p>

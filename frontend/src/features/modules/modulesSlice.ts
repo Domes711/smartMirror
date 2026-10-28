@@ -249,9 +249,10 @@ const modulesSlice = createSlice({
       s.chatDraft = "";
     },
     aiAppendText(s, a: PayloadAction<string>) {
-      const last = s.chat[s.chat.length - 1];
-      if (last && last.role === "bot") last.text += a.payload;
-      else s.chat.push({ role: "bot", text: a.payload });
+      // Each text event is a separate content block from the agent (e.g. one
+      // before a tool call, one after) — give it its own bubble rather than
+      // concatenating everything the turn says into a single wall of text.
+      s.chat.push({ role: "bot", text: a.payload });
     },
     aiStreamDone(s, a: PayloadAction<{ rev: number }>) {
       s.aiStreaming = false;

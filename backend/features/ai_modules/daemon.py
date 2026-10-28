@@ -46,7 +46,11 @@ def main() -> int:
 
     router = Router()
     ai_http.mount(router)
-    serve(router, HOST, PORT)   # blocks — this is what keeps the process alive
+    # /module-preview/<name>/demo.html (+ its .js/.css) for the Workshop's
+    # live iframe preview — the working copy, not the installed module.
+    serve(router, HOST, PORT, static={
+        "/module-preview": paths.AI_MODULES_WORKSPACE_DIR,
+    })   # blocks — this is what keeps the process alive
     return 0
 
 
