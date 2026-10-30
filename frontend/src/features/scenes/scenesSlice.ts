@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { RegionId, Scene, SelChip, Regions, TimeWindow } from "@/types";
+import type { ChatMsg, RegionId, Scene, SelChip, Regions, TimeWindow } from "@/types";
 import { resolveActiveId } from "@/app/selectors";
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
@@ -40,6 +40,16 @@ export interface ScenesState {
   cfgType: string | null;
   cfgRid: RegionId | null;
   cfgValues: Record<string, string>;
+  /** "ai" = setup chat with the agent (default when the AI is available),
+   * "form" = the plain required-fields form */
+  cfgMode: "ai" | "form";
+  cfgChatId: string | null;
+  cfgChat: ChatMsg[];
+  cfgChatDraft: string;
+  cfgBusy: boolean;
+  /** latest values the agent proposed — any JSON, stored on the instance as-is */
+  cfgAiValues: Record<string, unknown>;
+  cfgAiReady: boolean;
 }
 
 const seedScenes: Record<string, Scene> = {
@@ -78,6 +88,22 @@ const initialState: ScenesState = {
   cfgType: null,
   cfgRid: null,
   cfgValues: {},
+  cfgMode: "form",
+  cfgChatId: null,
+  cfgChat: [],
+  cfgChatDraft: "",
+  cfgBusy: false,
+  cfgAiValues: {},
+  cfgAiReady: false,
+};
+
+const resetCfgChat = (s: ScenesState) => {
+  s.cfgChatId = null;
+  s.cfgChat = [];
+  s.cfgChatDraft = "";
+  s.cfgBusy = false;
+  s.cfgAiValues = {};
+  s.cfgAiReady = false;
 };
 
 const scenesSlice = createSlice({
@@ -199,11 +225,13 @@ const scenesSlice = createSlice({
       }
     },
     // --- config modal (required fields for a new instance) ---
-    openCfgModal(s, a: PayloadAction<{ type: string; rid: RegionId }>) {
+    openCfgModal(s, a: PayloadAction<{ type: string; rid: RegionId; mode?: "ai" | "form" }>) {
       s.cfgOpen = true;
       s.cfgType = a.payload.type;
       s.cfgRid = a.payload.rid;
       s.cfgValues = {};
+      s.cfgMode = a.payload.mode || "form";
+      resetCfgChat(s);
       s.picked = null;
       s.selChip = null;
       s.zoneOpen = null;
@@ -216,6 +244,46 @@ const scenesSlice = createSlice({
       s.cfgType = null;
       s.cfgRid = null;
       s.cfgValues = {};
+      resetCfgChat(s);
+    },
+    // --- setup chat (AI fills the config instead of the form) ---
+    /** Switch to the form, prefilled with whatever the agent collected. */
+    cfgToForm(s) {
+      s.cfgMode = "form";
+      for (const [k, v] of Object.entries(s.cfgAiValues)) {
+        if (v === null || v === undefined) continue;
+        s.cfgValues[k] = typeof v === "string" ? v : JSON.stringify(v);
+      }
+    },
+    cfgToAi(s) {
+      s.cfgMode = "ai";
+    },
+    cfgChatStart(s, a: PayloadAction<string>) {
+      resetCfgChat(s);
+      s.cfgChatId = a.payload;
+      s.cfgBusy = true;
+    },
+    setCfgChatDraft(s, a: PayloadAction<string>) {
+      s.cfgChatDraft = a.payload;
+    },
+    cfgUserSend(s, a: PayloadAction<string>) {
+      s.cfgChat.push({ role: "me", text: a.payload });
+      s.cfgChatDraft = "";
+      s.cfgBusy = true;
+    },
+    cfgBotText(s, a: PayloadAction<string>) {
+      s.cfgChat.push({ role: "bot", text: a.payload });
+    },
+    cfgProposal(s, a: PayloadAction<{ values: Record<string, unknown>; ready: boolean }>) {
+      s.cfgAiValues = a.payload.values;
+      s.cfgAiReady = a.payload.ready;
+    },
+    cfgTurnDone(s) {
+      s.cfgBusy = false;
+    },
+    cfgChatError(s, a: PayloadAction<string>) {
+      s.cfgBusy = false;
+      s.cfgChat.push({ role: "bot", kind: "status", text: a.payload });
     },
 
     /** Place a specific (already-resolved) id into a region; clears `picked`. */

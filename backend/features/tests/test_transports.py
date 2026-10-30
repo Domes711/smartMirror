@@ -204,7 +204,8 @@ def test_ai_modules_exposes_every_operation_on_mqtt(sandbox, monkeypatch):
 
     expected = {constants.STATUS, constants.LIST, constants.DRAFT_CREATE,
                constants.EDIT_OPEN, constants.MESSAGE, constants.SESSION,
-               constants.INSTALL}
+               constants.INSTALL, constants.CONFIG_START,
+               constants.CONFIG_MESSAGE, constants.CONFIG_END}
     assert expected == set(rec.served)
 
 

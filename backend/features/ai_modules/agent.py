@@ -16,6 +16,8 @@ log = logging.getLogger("ai_modules.agent")
 MODEL = os.environ.get("MODULE_AI_MODEL", "claude-opus-4-8")
 
 ALLOWED_TOOLS = "Read,Write,Edit,Glob,Grep,WebFetch,WebSearch"
+# The setup chat only reads the module and the web — it never edits files.
+READ_ONLY_TOOLS = "Read,Glob,Grep,WebFetch,WebSearch"
 
 
 def find_claude():
@@ -64,9 +66,11 @@ def make_claude_md(name: str, description: str, history: list) -> str:
 
 
 def run(scope: str, name: str, prompt: str, cwd: str,
-        claude_session_id: str = None, on_event=None) -> dict:
+        claude_session_id: str = None, on_event=None,
+        system_prompt: str = None, allowed_tools: str = None) -> dict:
     """One agent turn. Streams events to `on_event(event_dict)` as they
     happen, then returns {assistant_text, claude_session_id, touched_files}.
+    `system_prompt`/`allowed_tools` default to the module builder's.
     """
     on_event = on_event or (lambda event: None)
 
@@ -83,8 +87,9 @@ def run(scope: str, name: str, prompt: str, cwd: str,
         "--verbose",
         "--model", MODEL,
         "--permission-mode", "dontAsk",
-        "--allowedTools", ALLOWED_TOOLS,
-        "--append-system-prompt", prompts.system_prompt(scope, name),
+        "--allowedTools", allowed_tools or ALLOWED_TOOLS,
+        "--append-system-prompt",
+        system_prompt or prompts.system_prompt(scope, name),
     ]
     if claude_session_id:
         args += ["--resume", claude_session_id]

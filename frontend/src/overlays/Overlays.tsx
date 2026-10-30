@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { Modal, BottomSheet, tokens as C } from "@/components/ui";
 import { StopMap } from "@/components/StopMap";
+import { Spinner } from "@/components/shell";
 import { scenesActions } from "@/features/scenes/scenesSlice";
 import { modulesActions } from "@/features/modules/modulesSlice";
 import { profilesActions } from "@/features/profiles/profilesSlice";
@@ -10,6 +11,7 @@ import { devActions } from "@/features/dev/devSlice";
 import { REGIONS, fmod } from "@/data/catalog";
 import { useGetScenesModulesQuery } from "@/app/api/scenesApi";
 import * as fx from "@/app/thunks";
+import * as ai from "@/app/ai";
 import { SearchOverlay } from "./SearchOverlay";
 import type { RegionId } from "@/types";
 
@@ -279,12 +281,19 @@ function ConfigModal() {
   const open = useAppSelector((s) => s.scenes.cfgOpen);
   const type = useAppSelector((s) => s.scenes.cfgType);
   const values = useAppSelector((s) => s.scenes.cfgValues);
+  const mode = useAppSelector((s) => s.scenes.cfgMode);
+  const aiAvailable = useAppSelector((s) => s.modules.aiAvailable);
+  const missing = useAppSelector((s) => fx.missingCfgFields(s).length > 0);
   const { data: scenesModules } = useGetScenesModulesQuery();
   const entry = scenesModules?.catalog.find((c) => c.type === type);
   const [mapKey, setMapKey] = useState<string | null>(null);
   if (!open || !type || !entry) return null;
+  if (mode === "ai") return <ConfigChat label={entry.label || type} fields={entry.fields || []} />;
   const fields = entry.fields || [];
-  const missing = fields.some((f) => f.required && !(values[f.key] || "").trim());
+  const close = () => {
+    dispatch(ai.cfgAiEnd());
+    dispatch(scenesActions.closeCfgModal());
+  };
 
   if (mapKey) {
     return (
@@ -297,7 +306,7 @@ function ConfigModal() {
   }
 
   return (
-    <Modal open onClose={() => dispatch(scenesActions.closeCfgModal())}>
+    <Modal open onClose={close}>
       <p style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: C.mute, margin: "0 0 4px" }}>{L.cfgTitle}</p>
       <Title>{entry.label || type}</Title>
       <p style={{ fontSize: 13, lineHeight: 1.5, color: C.ink2, margin: "0 0 16px" }}>{L.cfgHint}</p>
@@ -334,11 +343,118 @@ function ConfigModal() {
           </div>
         );
       })}
+      {aiAvailable && (
+        <button onClick={() => dispatch(scenesActions.cfgToAi())} style={linkBtn}>{L.cfgUseAi}</button>
+      )}
       <Actions>
-        {cancelBtn(() => dispatch(scenesActions.closeCfgModal()), L.cancel)}
-        {solidBtn(() => dispatch(fx.submitCfg()), L.cfgAdd, !missing)}
+        {cancelBtn(close, L.cancel)}
+        {solidBtn(() => { dispatch(ai.cfgAiEnd()); dispatch(fx.submitCfg()); }, L.cfgAdd, !missing)}
       </Actions>
     </Modal>
+  );
+}
+
+/* ---------- setup chat: the AI collects the config instead of the form ---------- */
+const SECRET_RE = /pass|token|secret|api.?key/i;
+
+function ConfigChat({ label, fields }: { label: string; fields: { key: string; label: string; required?: boolean }[] }) {
+  const dispatch = useAppDispatch();
+  const { L } = useT();
+  const chatId = useAppSelector((s) => s.scenes.cfgChatId);
+  const chat = useAppSelector((s) => s.scenes.cfgChat);
+  const draft = useAppSelector((s) => s.scenes.cfgChatDraft);
+  const busy = useAppSelector((s) => s.scenes.cfgBusy);
+  const values = useAppSelector((s) => s.scenes.cfgAiValues);
+  const ready = useAppSelector((s) => s.scenes.cfgAiReady);
+  const missing = useAppSelector((s) => fx.missingCfgFields(s).length > 0);
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  // First open (or back from the form with no chat yet): let the agent start.
+  useEffect(() => {
+    if (!chatId) dispatch(ai.cfgAiStart());
+  }, [chatId, dispatch]);
+
+  const lastText = chat[chat.length - 1]?.text;
+  useEffect(() => {
+    const el = chatRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chat.length, lastText, busy]);
+
+  const close = () => {
+    dispatch(ai.cfgAiEnd());
+    dispatch(scenesActions.closeCfgModal());
+  };
+  const send = () => dispatch(ai.cfgAiSend());
+  const add = () => {
+    if (missing) return;
+    dispatch(ai.cfgAiEnd());
+    dispatch(fx.submitCfg());
+  };
+
+  const labelOf = (k: string) => fields.find((f) => f.key === k)?.label || k;
+  const shown = Object.entries(values).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== "");
+  const fmt = (k: string, v: unknown) => {
+    const str = typeof v === "string" ? v : JSON.stringify(v);
+    return SECRET_RE.test(k) && str.length > 4 ? `${"•".repeat(6)}${str.slice(-4)}` : str;
+  };
+
+  return (
+    <BottomSheet open onClose={close} fill>
+      <div style={{ flex: "0 0 auto" }}>
+        <p style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".18em", textTransform: "uppercase", color: C.mute, margin: "0 0 4px" }}>{L.cfgUseAi}</p>
+        <Title>{label}</Title>
+        <p style={{ fontSize: 13, lineHeight: 1.5, color: C.ink2, margin: "0 0 12px" }}>{L.cfgAiHint}</p>
+      </div>
+
+      <div ref={chatRef} className="mc-noscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, paddingBottom: 10 }}>
+        {chat.map((c, i) => {
+          const me = c.role === "me";
+          const status = c.kind === "status";
+          return (
+            <div key={i} style={{ maxWidth: "88%", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", alignSelf: me ? "flex-end" : "flex-start", background: me ? C.ink : status ? "transparent" : C.bsoft, color: me ? C.paper : status ? C.signal : C.ink, border: status ? `1px solid ${C.signal}` : "none", padding: "10px 13px", borderRadius: me ? "14px 14px 4px 14px" : "14px 14px 14px 4px" }}>
+              {c.text}
+            </div>
+          );
+        })}
+        {busy && (
+          <div style={{ alignSelf: "center", display: "inline-flex", alignItems: "center", gap: 10, padding: "8px 15px", border: `1px solid ${C.line}`, borderRadius: 999, background: C.p2 }}>
+            <Spinner color="#6B6212" track="#D8D7CB" size={14} />
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.bink }}>{chat.length ? L.agentWorking : L.cfgAiStarting}</span>
+          </div>
+        )}
+      </div>
+
+      {shown.length > 0 && (
+        <div style={{ flex: "0 0 auto", border: `1px solid ${ready ? C.bline : C.line}`, background: ready ? C.bsoft : "transparent", borderRadius: 12, padding: "9px 12px", margin: "4px 0 10px" }}>
+          <p style={{ fontFamily: "var(--mono)", fontSize: 9.5, letterSpacing: ".14em", textTransform: "uppercase", color: ready ? C.bink : C.mute, margin: "0 0 5px" }}>
+            {L.cfgCollected}{ready ? ` · ${L.cfgAiReady}` : ""}
+          </p>
+          {shown.map(([k, v]) => (
+            <div key={k} style={{ display: "flex", gap: 8, fontFamily: "var(--mono)", fontSize: 11, lineHeight: 1.6 }}>
+              <span style={{ color: C.mute, flex: "0 0 auto" }}>{labelOf(k)}</span>
+              <span style={{ color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fmt(k, v)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ flex: "0 0 auto", display: "flex", gap: 10, alignItems: "center", borderTop: `1px solid ${C.line}`, paddingTop: 12 }}>
+        <input
+          value={draft}
+          onChange={(e) => dispatch(scenesActions.setCfgChatDraft(e.target.value))}
+          onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+          placeholder={L.cfgAiComposer}
+          style={{ flex: 1, background: C.p3, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 14px", fontSize: 14, color: C.ink }}
+        />
+        <button onClick={send} disabled={busy} style={{ width: 44, height: 44, flex: "0 0 44px", borderRadius: "50%", border: `1px solid ${C.ink}`, background: C.ink, opacity: busy ? 0.4 : 1, cursor: busy ? "default" : "pointer", display: "grid", placeItems: "center" }}>
+          <svg viewBox="0 0 24 24" style={{ width: 17, height: 17, fill: C.paper }}><path d="M3 11l18-8-8 18-2-7-8-3z" /></svg>
+        </button>
+      </div>
+      <div style={{ flex: "0 0 auto", display: "flex", gap: 10, marginTop: 12 }}>
+        {cancelBtn(() => dispatch(scenesActions.cfgToForm()), L.cfgManual)}
+        {solidBtn(add, L.cfgAdd, !missing && !busy)}
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -422,6 +538,7 @@ function NpSheet() {
 }
 
 /* ---------- helpers ---------- */
+const linkBtn: React.CSSProperties = { display: "block", width: "100%", margin: "0 0 12px", padding: "6px 0", border: "none", background: "transparent", fontFamily: "var(--mono)", fontSize: 11.5, color: C.bink, textDecoration: "underline", cursor: "pointer" };
 const lbl: React.CSSProperties = { display: "block", fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 7, textTransform: "uppercase", letterSpacing: ".08em" };
 const fld: React.CSSProperties = { width: "100%", background: C.p3, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", fontSize: 14, color: C.ink, marginBottom: 14 };
 function arrowBtn(disabled: boolean): React.CSSProperties {

@@ -157,6 +157,9 @@ function resolvePlaceId(id: string, dispatch: AppDispatch, getState: () => RootS
 const needsConfig = (type: string, s: RootState) =>
   isCatalogType(type, s) && !reusableInstance(type, s) && requiredFields(type, s).length > 0;
 
+/** New instances are set up through the AI chat when the agent is available. */
+const cfgMode = (s: RootState): "ai" | "form" => (s.modules.aiAvailable ? "ai" : "form");
+
 export const regionPlus =
   (rid: import("@/types").RegionId): Thunk =>
   (dispatch, getState) => {
@@ -167,7 +170,7 @@ export const regionPlus =
     }
     if (s.picked) {
       if (needsConfig(s.picked, getState())) {
-        dispatch(scenesActions.openCfgModal({ type: s.picked, rid }));
+        dispatch(scenesActions.openCfgModal({ type: s.picked, rid, mode: cfgMode(getState()) }));
         return;
       }
       const id = resolvePlaceId(s.picked, dispatch, getState);
@@ -183,7 +186,7 @@ export const addModToZone =
   (rid: import("@/types").RegionId, mod: string): Thunk =>
   (dispatch, getState) => {
     if (needsConfig(mod, getState())) {
-      dispatch(scenesActions.openCfgModal({ type: mod, rid }));
+      dispatch(scenesActions.openCfgModal({ type: mod, rid, mode: cfgMode(getState()) }));
       return;
     }
     const id = resolvePlaceId(mod, dispatch, getState);
@@ -191,18 +194,29 @@ export const addModToZone =
     dispatch(toast(Lof(getState()).tAdded));
   };
 
+/** A config value counts as filled when it isn't empty/whitespace. */
+const filled = (v: unknown) => v !== null && v !== undefined && String(v).trim() !== "";
+
+/** Required fields the current config modal (form or AI chat) still lacks. */
+export const missingCfgFields = (s: RootState) => {
+  const sc = s.scenes;
+  if (!sc.cfgType) return [];
+  const values: Record<string, unknown> = sc.cfgMode === "ai" ? sc.cfgAiValues : sc.cfgValues;
+  return requiredFields(sc.cfgType, s).filter((f) => !filled(values[f.key]));
+};
+
 /** Submit the required-config modal: create the configured instance + place it. */
 export const submitCfg = (): Thunk => (dispatch, getState) => {
   const s = getState().scenes;
   const type = s.cfgType;
   const rid = s.cfgRid;
   if (!type || !rid) return;
-  if (requiredFields(type, getState()).some((f) => !(s.cfgValues[f.key] || "").trim())) {
+  if (missingCfgFields(getState()).length) {
     dispatch(toast(Lof(getState()).cfgMissing));
     return;
   }
   const id = freshInstanceId(type, getState());
-  addInstance(dispatch, id, type, { ...s.cfgValues });
+  addInstance(dispatch, id, type, s.cfgMode === "ai" ? { ...s.cfgAiValues } : { ...s.cfgValues });
   dispatch(scenesActions.placeSpecificAt({ rid, id }));
   dispatch(scenesActions.closeCfgModal());
   dispatch(toast(Lof(getState()).tAdded));

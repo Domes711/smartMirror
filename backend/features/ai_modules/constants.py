@@ -14,6 +14,16 @@ MESSAGE = f"{BASE}/message"               # in: {"name","scope","message"} -> {o
 SESSION = f"{BASE}/session"               # in: {"name","scope"} -> session state
 INSTALL = f"{BASE}/install"               # in: {"name","scope","overwrite"} -> {ok, installedTo}
 
+# Setup chat: configure a new instance of an already-installed module by
+# talking to the agent instead of filling a form. Not a draft — nothing is
+# written to disk; the agent only reads the module and proposes config
+# values, streamed back as a {"type":"config"} event on
+# stream_topic(CONFIG_SCOPE, chatId).
+CONFIG_START = f"{BASE}/config/start"     # in: {"chatId","module":{type,module,label,fields}} -> {ok}
+CONFIG_MESSAGE = f"{BASE}/config/message" # in: {"chatId","message"} -> {ok}
+CONFIG_END = f"{BASE}/config/end"         # in: {"chatId"} -> {ok}
+CONFIG_SCOPE = "config"
+
 # The agent's live token stream. One topic per session; payloads are the
 # event objects the SSE stream used to carry ({type:"text"|"tool"|...}).
 #   smartmirror/ai_modules/stream/<scope>/<name>

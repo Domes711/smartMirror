@@ -3,7 +3,9 @@ import { modulesActions } from "@/features/modules/modulesSlice";
 import { uiActions } from "@/features/ui/uiSlice";
 import { LABELS } from "@/i18n/labels";
 import type { ChatMsg } from "@/types";
-import { aiModulesApi, onAiStream } from "@/app/api/aiModulesApi";
+import { scenesActions } from "@/features/scenes/scenesSlice";
+import { scenesApi } from "@/app/api/scenesApi";
+import { aiModulesApi, onAiConfigStream, onAiStream } from "@/app/api/aiModulesApi";
 import type { AiMsg } from "@/app/api/aiModulesApi";
 import { nav } from "./thunks";
 
@@ -136,4 +138,62 @@ export const aiInstall = (): Thunk => async (dispatch, getState) => {
     dispatch(uiActions.taskClear());
     dispatch(modulesActions.aiError(String(e)));
   }
+};
+
+// --- setup chat: the agent collects a new instance's config instead of the form ---
+let unsubCfgStream: (() => void) | undefined;
+
+/** Open a setup chat for the module in the config modal and let the agent
+ * open the conversation. Its replies + config proposals arrive over MQTT. */
+export const cfgAiStart = (): Thunk => async (dispatch, getState) => {
+  const type = getState().scenes.cfgType;
+  const entry = scenesApi.endpoints.getScenesModules.select()(getState()).data?.catalog.find((c) => c.type === type);
+  if (!type || !entry || getState().scenes.cfgChatId) return; // already running
+  const chatId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  dispatch(scenesActions.cfgChatStart(chatId));
+
+  unsubCfgStream?.();
+  unsubCfgStream = onAiConfigStream(chatId, (ev) => {
+    if (getState().scenes.cfgChatId !== chatId) return; // modal closed / restarted
+    if (ev.type === "text" && ev.text) dispatch(scenesActions.cfgBotText(ev.text));
+    else if (ev.type === "config" && ev.values) dispatch(scenesActions.cfgProposal({ values: ev.values, ready: !!ev.ready }));
+    else if (ev.type === "done") dispatch(scenesActions.cfgTurnDone());
+    else if (ev.type === "error") dispatch(scenesActions.cfgChatError(ev.text || "error"));
+  });
+
+  const module = {
+    type: entry.type,
+    module: entry.module,
+    label: entry.label,
+    fields: (entry.fields || []).map((f) => ({ key: f.key, label: f.label, required: f.required, help: f.help })),
+  };
+  try {
+    const r = await dispatch(aiModulesApi.endpoints.startAiConfig.initiate({ chatId, module })).unwrap();
+    if (!r.ok) dispatch(scenesActions.cfgChatError(r.error || "error"));
+  } catch (e) {
+    dispatch(scenesActions.cfgChatError(String((e as { message?: string })?.message || e)));
+  }
+};
+
+export const cfgAiSend =
+  (text?: string): Thunk =>
+  async (dispatch, getState) => {
+    const s = getState().scenes;
+    const v = (text ?? s.cfgChatDraft).trim();
+    if (!v || s.cfgBusy || !s.cfgChatId) return;
+    dispatch(scenesActions.cfgUserSend(v));
+    try {
+      const r = await dispatch(aiModulesApi.endpoints.sendAiConfigMessage.initiate({ chatId: s.cfgChatId, message: v })).unwrap();
+      if (!r.ok) dispatch(scenesActions.cfgChatError(r.error || "error"));
+    } catch (e) {
+      dispatch(scenesActions.cfgChatError(String((e as { message?: string })?.message || e)));
+    }
+  };
+
+/** Drop the setup chat (server-side memory + our stream subscription). */
+export const cfgAiEnd = (): Thunk => (dispatch, getState) => {
+  const chatId = getState().scenes.cfgChatId;
+  unsubCfgStream?.();
+  unsubCfgStream = undefined;
+  if (chatId) dispatch(aiModulesApi.endpoints.endAiConfig.initiate(chatId));
 };

@@ -115,7 +115,7 @@ export function Modal({ open, onClose, children, width = 320 }: { open: boolean;
  * iOS would otherwise leave it pinned to the layout viewport bottom — behind the
  * keyboard. `visualViewport` reports how much of the screen the keyboard eats.
  */
-export function BottomSheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+export function BottomSheet({ open, onClose, children, fill }: { open: boolean; onClose: () => void; children: ReactNode; fill?: boolean }) {
   const [kbInset, setKbInset] = useState(0);
 
   useEffect(() => {
@@ -142,6 +142,8 @@ export function BottomSheet({ open, onClose, children }: { open: boolean; onClos
           borderTop: `1px solid ${C.line}`, padding: "20px 22px calc(22px + env(safe-area-inset-bottom))",
           animation: "mc-sheet .26s ease", maxHeight: "80%", overflowY: "auto",
           marginBottom: kbInset, transition: "margin-bottom .18s ease",
+          // fill: a fixed-height sheet whose children manage their own scrolling (chat)
+          ...(fill ? { height: `calc(85% - ${kbInset}px)`, maxHeight: "none", overflowY: "hidden", display: "flex", flexDirection: "column" } : {}),
         }}
       >
         <div style={{ width: 38, height: 4, borderRadius: 999, background: C.line, margin: "0 auto 16px" }} />

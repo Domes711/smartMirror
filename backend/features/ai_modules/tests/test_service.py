@@ -146,3 +146,111 @@ def test_install_writes_claude_md_into_the_installed_module(sandbox,
 
 def test_install_on_an_unknown_module_fails(sandbox):
     assert service.install("draft", "MMM-Nope")["ok"] is False
+
+
+# --------------------------------------------------------------------------- #
+# setup chat
+# --------------------------------------------------------------------------- #
+ENTRY = {"type": "MMM-Spending", "module": "MMM-Spending", "label": "Útraty",
+         "fields": [{"key": "token", "label": "Wallet API token",
+                     "required": True}]}
+
+
+def _capture(monkeypatch):
+    events = []
+    monkeypatch.setattr(service, "_stream_publisher",
+                        lambda scope, name, ev: events.append((scope, name, ev)))
+    return events
+
+
+def _fake_config_run(text, seen=None):
+    def run(scope, name, prompt, cwd, claude_session_id=None, on_event=None,
+            system_prompt=None, allowed_tools=None):
+        if seen is not None:
+            seen.append({"prompt": prompt, "cwd": cwd,
+                         "resume": claude_session_id,
+                         "system_prompt": system_prompt,
+                         "allowed_tools": allowed_tools})
+        on_event({"type": "text", "text": text})
+        on_event({"type": "done", "touched": False})
+        return {"assistant_text": text, "claude_session_id": "cfg-sess",
+                "touched_files": []}
+    return run
+
+
+def _wait_idle(chat_id):
+    for _ in range(100):
+        if not service._config_chats[chat_id]["busy"]:
+            return
+        time.sleep(0.01)
+
+
+def test_config_block_is_parsed_and_hidden_from_the_chat(sandbox, monkeypatch):
+    events = _capture(monkeypatch)
+    seen = []
+    monkeypatch.setattr(agent, "run", _fake_config_run(
+        'Jaký máš token?\n<config>{"values": {"token": ""}, "ready": false}</config>',
+        seen))
+
+    assert service.config_start("c1", ENTRY) == {"ok": True}
+    _wait_idle("c1")
+
+    assert seen[0]["allowed_tools"] == agent.READ_ONLY_TOOLS
+    assert "token" in seen[0]["system_prompt"]
+    payloads = [ev for scope, name, ev in events
+                if scope == "config" and name == "c1"]
+    assert payloads == [
+        {"type": "text", "text": "Jaký máš token?"},
+        {"type": "config", "values": {"token": ""}, "ready": False},
+        {"type": "done", "touched": False},
+    ]
+
+
+def test_config_message_resumes_the_same_claude_session(sandbox, monkeypatch):
+    _capture(monkeypatch)
+    seen = []
+    monkeypatch.setattr(agent, "run", _fake_config_run(
+        '<config>{"values": {"token": "abc"}, "ready": true}</config>', seen))
+    service.config_start("c2", ENTRY)
+    _wait_idle("c2")
+
+    assert service.config_message("c2", "abc") == {"ok": True}
+    _wait_idle("c2")
+    assert seen[1]["prompt"] == "abc"
+    assert seen[1]["resume"] == "cfg-sess"
+
+
+def test_config_message_on_an_unknown_chat_is_a_404(sandbox):
+    result = service.config_message("nope", "hi")
+    assert result["ok"] is False and result["status"] == 404
+
+
+def test_config_message_while_busy_is_refused(sandbox, monkeypatch):
+    _capture(monkeypatch)
+    monkeypatch.setattr(agent, "run", _fake_config_run("hi"))
+    service.config_start("c3", ENTRY)
+    _wait_idle("c3")
+    service._config_chats["c3"]["busy"] = True
+    assert service.config_message("c3", "x")["status"] == 409
+
+
+def test_config_end_forgets_the_chat(sandbox, monkeypatch):
+    _capture(monkeypatch)
+    monkeypatch.setattr(agent, "run", _fake_config_run("hi"))
+    service.config_start("c4", ENTRY)
+    _wait_idle("c4")
+    assert service.config_end("c4") == {"ok": True}
+    assert "c4" not in service._config_chats
+
+
+def test_parse_config_block_takes_the_last_valid_block():
+    text = ('<config>{"values": {"a": 1}}</config> later '
+            '<config>{"values": {"a": 2}, "ready": true}</config>')
+    assert service.parse_config_block(text) == {"values": {"a": 2},
+                                                "ready": True}
+    assert service.parse_config_block("no block") is None
+    assert service.parse_config_block("<config>not json</config>") is None
+
+
+def test_strip_config_block_drops_an_unclosed_block():
+    assert service.strip_config_block('Hotovo. <config>{"values"') == "Hotovo."

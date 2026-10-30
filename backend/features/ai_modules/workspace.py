@@ -22,6 +22,17 @@ def path_for(name: str) -> str:
     return os.path.join(paths.AI_MODULES_WORKSPACE_DIR, name)
 
 
+def installed_path(module_name: str) -> str:
+    """Where an installed module's source lives: MagicMirror/modules/<name>/,
+    or modules/default/<name>/ for the core's built-ins (clock, weather, …).
+    Falls back to the modules root when neither exists."""
+    for d in (os.path.join(paths.MM_MODULES_DIR, module_name),
+              os.path.join(paths.MM_MODULES_DIR, "default", module_name)):
+        if module_name and os.path.isdir(d):
+            return d
+    return paths.MM_MODULES_DIR
+
+
 def write_files(name: str, files: dict) -> None:
     """Write a {filename: content} dict into the working copy, creating it
     if needed. Used by scaffold (new draft)."""

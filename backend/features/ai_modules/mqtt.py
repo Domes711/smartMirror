@@ -32,6 +32,9 @@ class AiModulesMqtt:
         self.client.serve(constants.MESSAGE, self._message)
         self.client.serve(constants.SESSION, self._session_get)
         self.client.serve(constants.INSTALL, self._install)
+        self.client.serve(constants.CONFIG_START, self._config_start)
+        self.client.serve(constants.CONFIG_MESSAGE, self._config_message)
+        self.client.serve(constants.CONFIG_END, self._config_end)
         log.info("Serving ai_modules RPC endpoints under %s", constants.BASE)
 
     def _draft_create(self, req: dict) -> dict:
@@ -51,3 +54,14 @@ class AiModulesMqtt:
     def _install(self, req: dict) -> dict:
         return service.install(req.get("scope") or "", req.get("name") or "",
                                bool(req.get("overwrite")))
+
+    def _config_start(self, req: dict) -> dict:
+        return service.config_start(req.get("chatId") or "",
+                                    req.get("module") or {})
+
+    def _config_message(self, req: dict) -> dict:
+        return service.config_message(req.get("chatId") or "",
+                                      req.get("message") or "")
+
+    def _config_end(self, req: dict) -> dict:
+        return service.config_end(req.get("chatId") or "")

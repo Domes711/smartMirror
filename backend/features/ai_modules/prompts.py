@@ -94,6 +94,56 @@ HARD TECHNICAL RULES:
 {_reference()}"""
 
 
+def _lang_instruction() -> str:
+    lang = sys_config.language()
+    return (f'LANGUAGE: Always reply in the mirror\'s configured language (language code: "{lang}"). '
+            f'If "{lang}" is "cs", write in Czech. If "en", write in English. '
+            f"Match the language exactly — never switch.")
+
+
+def config_system_prompt(entry: dict) -> str:
+    """The setup chat: help the user configure ONE new instance of an
+    installed module. The agent proposes values; the app stores them."""
+    label = entry.get("label") or entry.get("type") or ""
+    module = entry.get("module") or entry.get("type") or ""
+    fields = entry.get("fields") or []
+    if fields:
+        listed = "\n".join(
+            f'  - "{f.get("key")}" — {f.get("label") or f.get("key")}'
+            f'{" (REQUIRED)" if f.get("required") else " (optional)"}'
+            f'{" — " + f["help"] if f.get("help") else ""}'
+            for f in fields)
+    else:
+        listed = "  (none declared — infer what the module needs from its source)"
+
+    return f"""{_lang_instruction()}
+
+{_TONE}
+
+You are helping a user set up the smart-mirror widget "{label}" (MagicMirror module "{module}") before it is added to their mirror. Your ONLY job is to collect the configuration values it needs — through a short, friendly conversation.
+
+HOW TO WORK:
+- The working directory is the module's source. Read it (README, the main .js defaults, node_helper.js) to understand what each setting means and what valid values look like. Never edit or create files.
+- Ask for one or two things at a time. For anything the user has to obtain (API key, token, calendar ID, URL, entity name…), explain in plain words where to find it, step by step. Use web search if you are unsure how.
+- When the user gives a value, sanity-check it (format, obvious typos) and say so if it looks wrong.
+- Offer a sensible default for optional settings instead of asking about each one.
+- When everything required is known, tell the user in one sentence that the widget is ready to be added.
+
+CONFIG KEYS the app expects:
+{listed}
+You may add other keys the module's own config supports if the user wants to change them — they are passed to the module as-is.
+
+OUTPUT CONTRACT (mandatory, silent — never mention it):
+End EVERY reply with exactly one block on its own line:
+<config>{{"values": {{...}}, "ready": true|false}}</config>
+- "values": EVERY value known so far (not just new ones), as valid JSON. Use strings unless the module clearly needs a number or boolean.
+- "ready": true only when all REQUIRED keys have a real value from the user.
+The app hides this block from the user and shows the values in a summary instead."""
+
+
+CONFIG_START_PROMPT = """Look at this module's source, then greet the user in one short sentence saying what the widget shows, and ask for the first thing you need. If it needs nothing at all, say it is ready to add."""
+
+
 # Sent as the first agent turn when a community module is opened in the AI
 # builder for the first time (edit_open() on a module with no prior
 # session), so the agent understands it before the user's first real

@@ -80,6 +80,36 @@ context" step does not exist: the CLI remembers on its own.
 2., 3. — identical to Flow A's `new_message`/`install`. `install()`
    overwrites the live module and deletes the working copy again.
 
+## Flow C — setup chat (configuring a new widget instance)
+
+When the user adds a module that has required config to a scene, the app no
+longer shows only the form: if the agent is available
+(`status.claudeCli`), a chat sheet opens instead and the agent collects the
+values in conversation (where to find an API key, what a calendar ID looks
+like, …). The form is still one tap away ("Vyplnit ručně"), prefilled with
+whatever the agent already collected, and is the only path when the agent
+is unavailable.
+
+1. `config/start` `{chatId, module: {type, module, label, fields}}` — the app
+   picks `chatId`; the agent runs **read-only** (`agent.READ_ONLY_TOOLS`) with
+   its cwd in the module's installed source (`workspace.installed_path()`,
+   which also finds the core's `modules/default/<name>`) and
+   `prompts.config_system_prompt(entry)` instead of the builder prompt.
+2. `config/message` `{chatId, message}` — resumes the same Claude session.
+   One turn at a time per chat (`409` while busy).
+3. `config/end` `{chatId}` — forget it (modal closed or widget added).
+
+Events stream on `stream/config/<chatId>`. The agent ends every reply with
+`<config>{"values": {...}, "ready": bool}</config>`; `service.py` strips
+that block from the `text` events and publishes it as its own
+`{"type": "config", "values", "ready"}` event just before `done`. The app
+stores `values` on the new instance exactly like the form's values, so
+`scenes/codegen.py`'s `module_config()` mapping applies unchanged.
+
+Setup chats are **in memory** (`service._config_chats`, capped at 20), not
+in `ai_module_sessions`: nothing about them needs to outlive the modal. A
+daemon restart mid-chat just means starting the chat again.
+
 ## Transport: MQTT only, one HTTP route
 
 Every operation (`status`, `list`, `draft/create`, `edit/open`, `message`,

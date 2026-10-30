@@ -6,11 +6,13 @@ all plain workers that know nothing about each other — only service.py calls
 more than one of them, and only service.py decides what happens next.
 """
 
+import json
 import logging
+import re
 import threading
 
 from data import ai_module_messages, ai_module_sessions, module_catalog
-from features.ai_modules import agent, prompts, templates, workspace
+from features.ai_modules import agent, constants, prompts, templates, workspace
 
 log = logging.getLogger("ai_modules.service")
 
@@ -133,3 +135,114 @@ def install(scope: str, name: str, overwrite: bool = False) -> dict:
     workspace.delete_working_copy(name)
 
     return {"ok": True, "installedTo": dest}
+
+
+# --------------------------------------------------------------------------- #
+# Setup chat — configure a new instance of an installed module by talking to
+# the agent. Deliberately in memory, not in ai_module_sessions: it is a
+# throwaway conversation behind one modal, nothing outlives "Add widget"
+# except the values the app stores on the instance itself. A daemon restart
+# mid-chat just means the user starts the chat again.
+# --------------------------------------------------------------------------- #
+_CONFIG_RE = re.compile(r"<config>(.*?)</config>", re.S)
+_CONFIG_OPEN_RE = re.compile(r"<config>.*\Z", re.S)
+_MAX_CONFIG_CHATS = 20
+
+_config_chats: dict = {}   # chatId -> {"entry", "claude_session_id", "busy"}
+_config_lock = threading.Lock()
+
+
+def strip_config_block(text: str) -> str:
+    """Remove the machine-readable <config> block (or a dangling, unclosed
+    start of one) from text shown to the user."""
+    text = _CONFIG_RE.sub("", text or "")
+    return _CONFIG_OPEN_RE.sub("", text).strip()
+
+
+def parse_config_block(text: str):
+    """The LAST <config>{...}</config> block in a reply, as
+    {"values": dict, "ready": bool} — or None if missing/invalid."""
+    blocks = _CONFIG_RE.findall(text or "")
+    if not blocks:
+        return None
+    try:
+        data = json.loads(blocks[-1].strip())
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("values"), dict):
+        return None
+    return {"values": data["values"], "ready": bool(data.get("ready"))}
+
+
+def _config_turn(chat_id: str, prompt: str) -> None:
+    chat = _config_chats.get(chat_id)
+    if chat is None:
+        return
+    entry = chat["entry"]
+    scope = constants.CONFIG_SCOPE
+    full_text = []
+
+    def on_event(event: dict) -> None:
+        if event.get("type") == "text":
+            full_text.append(event.get("text") or "")
+            shown = strip_config_block(event.get("text"))
+            if shown:
+                _publish(scope, chat_id, {"type": "text", "text": shown})
+            return
+        if event.get("type") == "done":
+            proposal = parse_config_block("".join(full_text))
+            if proposal is not None:
+                _publish(scope, chat_id, {"type": "config", **proposal})
+        _publish(scope, chat_id, event)
+
+    try:
+        result = agent.run(
+            scope, chat_id, prompt,
+            workspace.installed_path(entry.get("module") or entry.get("type")),
+            chat["claude_session_id"], on_event,
+            system_prompt=prompts.config_system_prompt(entry),
+            allowed_tools=agent.READ_ONLY_TOOLS)
+        if result.get("claude_session_id"):
+            chat["claude_session_id"] = result["claude_session_id"]
+    finally:
+        chat["busy"] = False
+
+
+def _start_config_turn(chat_id: str, prompt: str) -> dict:
+    with _config_lock:
+        chat = _config_chats.get(chat_id)
+        if chat is None:
+            return {"ok": False, "error": "chat neexistuje", "status": 404}
+        if chat["busy"]:
+            return {"ok": False, "error": "agent ještě odpovídá", "status": 409}
+        chat["busy"] = True
+    threading.Thread(target=_config_turn, args=(chat_id, prompt),
+                     daemon=True).start()
+    return {"ok": True}
+
+
+def config_start(chat_id: str, entry: dict) -> dict:
+    """Open a setup chat for one catalog entry ({type, module, label,
+    fields}) and run the agent's opening turn."""
+    if not chat_id or not isinstance(entry, dict) or not entry.get("type"):
+        return {"ok": False, "error": "chybí chatId nebo modul", "status": 400}
+    with _config_lock:
+        if chat_id not in _config_chats and \
+                len(_config_chats) >= _MAX_CONFIG_CHATS:
+            # forget the oldest abandoned chat (dicts keep insertion order)
+            _config_chats.pop(next(iter(_config_chats)))
+        _config_chats[chat_id] = {"entry": entry, "claude_session_id": None,
+                                  "busy": False}
+    return _start_config_turn(chat_id, prompts.CONFIG_START_PROMPT)
+
+
+def config_message(chat_id: str, message: str) -> dict:
+    if not message.strip():
+        return {"ok": False, "error": "prázdná zpráva", "status": 400}
+    return _start_config_turn(chat_id, message)
+
+
+def config_end(chat_id: str) -> dict:
+    with _config_lock:
+        _config_chats.pop(chat_id, None)
+    return {"ok": True}

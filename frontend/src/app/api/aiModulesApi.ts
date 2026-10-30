@@ -16,6 +16,9 @@ const TOPIC = {
   message: `${BASE}/message`,
   session: `${BASE}/session`,
   install: `${BASE}/install`,
+  configStart: `${BASE}/config/start`,
+  configMessage: `${BASE}/config/message`,
+  configEnd: `${BASE}/config/end`,
   stream: `${BASE}/stream`, // + /<scope>/<name>
 } as const;
 
@@ -46,14 +49,31 @@ export interface AiSession {
  * Subscribe directly via the topic bus; this is not an RTK Query endpoint
  * because it's a continuous event feed, not a single cacheable value. */
 export interface AiStreamEvent {
-  type: "connected" | "text" | "tool" | "error" | "done";
+  type: "connected" | "text" | "tool" | "error" | "done" | "config";
   text?: string;
   tool?: string;
   file?: string;
   rev?: number;
   touched?: boolean;
+  /** type "config" (setup chat only): the agent's current proposal */
+  values?: Record<string, unknown>;
+  ready?: boolean;
 }
-export function onAiStream(scope: AiScope, name: string, onEvent: (e: AiStreamEvent) => void): () => void {
+
+/** Catalog entry handed to the setup chat — the agent reads the module's
+ * source on its own, this just tells it which module and which keys. */
+export interface AiConfigModule {
+  type: string;
+  module: string;
+  label: string;
+  fields: { key: string; label: string; required?: boolean; help?: string }[];
+}
+
+/** The setup chat streams on stream/config/<chatId> (constants.CONFIG_SCOPE). */
+export const onAiConfigStream = (chatId: string, onEvent: (e: AiStreamEvent) => void) =>
+  onAiStream("config", chatId, onEvent);
+
+export function onAiStream(scope: AiScope | "config", name: string, onEvent: (e: AiStreamEvent) => void): () => void {
   const topic = `${TOPIC.stream}/${scope}/${name}`;
   return onTopic(topic, (payload) => {
     try {
@@ -116,6 +136,18 @@ export const aiModulesApi = createApi({
     installAiModule: build.mutation<{ ok: boolean; installedTo?: string; error?: string }, { scope: AiScope; name: string; overwrite?: boolean }>({
       query: (args) => ({ topic: TOPIC.install, payload: { ...args } }),
       invalidatesTags: ["AiDrafts", "AiStatus"],
+    }),
+
+    startAiConfig: build.mutation<{ ok: boolean; error?: string }, { chatId: string; module: AiConfigModule }>({
+      query: (args) => ({ topic: TOPIC.configStart, payload: { ...args } }),
+    }),
+
+    sendAiConfigMessage: build.mutation<{ ok: boolean; error?: string }, { chatId: string; message: string }>({
+      query: (args) => ({ topic: TOPIC.configMessage, payload: { ...args } }),
+    }),
+
+    endAiConfig: build.mutation<{ ok: boolean }, string>({
+      query: (chatId) => ({ topic: TOPIC.configEnd, payload: { chatId } }),
     }),
   }),
 });
