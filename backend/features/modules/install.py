@@ -21,8 +21,10 @@ from . import catalog
 
 log = logging.getLogger("modules.install")
 
-# A module directory/name we are willing to clone + place on disk.
-MODULE_NAME_RE = re.compile(r"^MMM-[A-Za-z0-9_.-]{1,60}$")
+# A module directory/name we are willing to clone + place on disk. Not just
+# `MMM-*`: the community store has modules like `DWD-RealtimeIrishRail` or
+# `mmm-amazon-photos`. Still one plain path segment — no `/`, no leading dot.
+MODULE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 
 _lock = threading.Lock()
 
@@ -105,7 +107,9 @@ def install(mtype: str) -> dict:
     # cloning an arbitrary URL chosen by catalog data.
     if not (url.startswith("https://github.com/")
             or url.startswith("https://gitlab.com/")):
-        raise ValueError("nepodporovaný zdroj (jen github/gitlab https)")
+        raise ValueError("modul nemá repozitář na GitHubu/GitLabu — nejde "
+                         "nainstalovat" if not url else
+                         "nepodporovaný zdroj (jen github/gitlab https)")
 
     dest = os.path.join(paths.MM_MODULES_DIR, name)
     if os.path.exists(dest):

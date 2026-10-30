@@ -418,12 +418,28 @@ export const startInstall =
   (dispatch, getState) => {
     const L = Lof(getState());
     dispatch(uiActions.taskStart({ label: L.taskInstall + " " + name, kind: "install", target: name }));
-    dispatch(modulesApi.endpoints.installModule.initiate(name)).catch((e) => dispatch(toast(String(e))));
-    clearInterval(taskInt);
     const sub = dispatch(modulesApi.endpoints.getInstallStatus.initiate(name));
+    clearInterval(taskInt);
+    // A refused install (unknown module, no repo URL, already running…) never
+    // produces progress — surface the error instead of sitting at 0 %.
+    // Until the backend accepted THIS install, a status from an earlier
+    // attempt (cached / retained "done" or "error") must not end the bar.
+    let started = false;
+    dispatch(modulesApi.endpoints.installModule.initiate(name))
+      .unwrap()
+      .then(() => {
+        dispatch(modulesApi.util.updateQueryData("getInstallStatus", name, () => ({ phase: "starting", percent: 2, done: false })));
+        started = true;
+      })
+      .catch((e: { message?: string }) => {
+        clearInterval(taskInt);
+        sub.unsubscribe();
+        dispatch(uiActions.taskClear());
+        dispatch(toast(e?.message || String(e)));
+      });
     taskInt = setInterval(() => {
       const st = modulesApi.endpoints.getInstallStatus.select(name)(getState()).data;
-      if (!st) return;
+      if (!started || !st) return;
       dispatch(uiActions.taskProgress(Math.min(99, st.percent || 0)));
       if (st.done) {
         clearInterval(taskInt);

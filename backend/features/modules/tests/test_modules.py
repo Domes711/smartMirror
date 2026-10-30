@@ -182,3 +182,22 @@ def test_raw_readme_urls(sandbox, url, host):
 
 
 
+
+
+def test_install_accepts_community_names_without_the_mmm_prefix(mods, monkeypatch):
+    catalog, _p = mods
+    from features.modules import install
+    monkeypatch.setattr(install, "_worker", lambda *a: None)
+    catalog.upsert({"type": "DWD-RealtimeIrishRail",
+                    "module": "DWD-RealtimeIrishRail",
+                    "url": "https://github.com/x/DWD-RealtimeIrishRail"},
+                   "community")
+    assert install.install("DWD-RealtimeIrishRail")["started"] is True
+
+
+def test_install_without_a_repo_url_says_so(mods):
+    catalog, _p = mods
+    from features.modules import install
+    catalog.upsert({"type": "MMM-NoRepo", "module": "MMM-NoRepo"}, "community")
+    with pytest.raises(ValueError, match="nemá repozitář"):
+        install.install("MMM-NoRepo")
