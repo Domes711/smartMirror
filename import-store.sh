@@ -16,6 +16,14 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
 PY="$(command -v python3 || echo /usr/bin/python3)"
 
+# MMM-store is private: clone it the same way this repo was cloned. An SSH
+# origin here (git@github.com:…) means the Pi has a GitHub SSH key, so use it
+# for MMM-store too. MMM_STORE_REPO overrides.
+if [ -z "${MMM_STORE_REPO:-}" ] && \
+   git -C "$REPO" remote get-url origin 2>/dev/null | grep -q '^git@github.com:'; then
+  export MMM_STORE_REPO="git@github.com:Domes711/MMM-store.git"
+fi
+
 printf '\033[1;36m▸ Importing the module store (MMM-store)…\033[0m\n'
 cd "$REPO/backend"
 "$PY" -m features.modules.store_import "$@"

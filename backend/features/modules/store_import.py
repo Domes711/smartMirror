@@ -63,6 +63,9 @@ def sync_repo(dest: str, repo: str = STORE_REPO,
               branch: str = STORE_BRANCH) -> None:
     """Shallow-clone the store, or fast-forward an existing checkout."""
     if os.path.isdir(os.path.join(dest, ".git")):
+        # follow a changed remote (e.g. https → ssh) instead of the old one
+        subprocess.run(["git", "-C", dest, "remote", "set-url", "origin",
+                        repo], check=True)
         subprocess.run(["git", "-C", dest, "fetch", "--depth", "1", "origin",
                         branch], check=True)
         subprocess.run(["git", "-C", dest, "reset", "--hard",
