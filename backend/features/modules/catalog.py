@@ -213,16 +213,17 @@ def full_catalog() -> dict:
         module_id, name = r["id"], r["module_name"]
         shots = _screenshots_for(module_id)
         remote = module_images.urls_for(module_id)
+        # Kept lean: with the whole MMM-store imported this is ~1400 entries
+        # in ONE MQTT reply, so nothing is sent twice (the description lives
+        # only under catalog.description, the preview only as `image`).
         entry = {
             "id": name, "name": name,
             "url": r["repo_url"],
-            "description": r["description_cs"] or r["description_en"] or "",
             "category": r["category"], "maintainer": r["maintainer"],
             "stars": r["stars"],
             # A locally generated screenshot always beats the upstream image —
             # it shows the module as it actually renders on this mirror.
             "image": shots[0] if shots else (remote[0] if remote else None),
-            "images": shots or remote,
             "installed": r["source"] in catalog_data.ON_DISK or name in dirs,
             "own": r["source"] == "custom",
             "catalog": {
@@ -230,7 +231,6 @@ def full_catalog() -> dict:
                 "description": {"cs": r["description_cs"],
                                 "en": r["description_en"]},
                 "tags": module_tags.for_module(module_id),
-                "screenshots": shots,
             },
         }
         (own if entry["own"] else community).append(entry)

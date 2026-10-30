@@ -27,7 +27,7 @@ export interface StoreModule {
   id: string;
   name: string;
   url: string;
-  description: string;
+  description?: string;
   category: string;
   maintainer?: string;
   stars?: number | null;
@@ -58,7 +58,10 @@ export const modulesApi = createApi({
   tagTypes: ["StoreCatalog", "InstallStatus"],
   endpoints: (build) => ({
     getStoreCatalog: build.query<StoreCatalog, void>({
-      query: () => ({ topic: TOPIC.rpcCatalog }),
+      // The whole store (~1400 modules, ~1.5 MB) in one reply — mosquitto's
+      // websocket listener is slow with a payload that size, so the default
+      // 8 s RPC timeout is not enough on the Pi.
+      query: () => ({ topic: TOPIC.rpcCatalog, timeoutMs: 45000 }),
       providesTags: ["StoreCatalog"],
     }),
 

@@ -27,7 +27,19 @@ startScenePreview(store);
 startProfileSync(store);
 store.dispatch(scenesApi.endpoints.getLayout.initiate());
 store.dispatch(scenesApi.endpoints.getScenesModules.initiate());
-store.dispatch(modulesApi.endpoints.getStoreCatalog.initiate());
+// The store catalog is the one big reply (whole MMM-store) — if it fails
+// (timeout, broker not up yet) keep retrying, otherwise the Modules screen
+// is stuck on the built-in seed list until a reload.
+const loadStoreCatalog = (): void => {
+  store
+    .dispatch(modulesApi.endpoints.getStoreCatalog.initiate(undefined, { forceRefetch: true }))
+    .unwrap()
+    .catch((e) => {
+      console.warn("[store] catalog load failed, retrying in 10 s:", e);
+      setTimeout(loadStoreCatalog, 10000);
+    });
+};
+loadStoreCatalog();
 store
   .dispatch(aiModulesApi.endpoints.getAiStatus.initiate())
   .unwrap()
