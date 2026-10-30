@@ -14,17 +14,14 @@ import { rpcCall, RpcError } from "@/services/mqttRpc";
 export interface MqttQueryArgs {
   topic: string;
   payload?: Record<string, unknown>;
-  /** override the default RPC timeout (large replies) */
-  timeoutMs?: number;
 }
 
 export const mqttBaseQuery: BaseQueryFn<MqttQueryArgs, unknown, { message: string; status?: number }> = async ({
   topic,
   payload,
-  timeoutMs,
 }) => {
   try {
-    const data = await rpcCall(topic, payload ?? {}, timeoutMs);
+    const data = await rpcCall(topic, payload ?? {});
     return { data };
   } catch (e) {
     const err = e instanceof RpcError ? e : new RpcError(String(e));

@@ -7,7 +7,6 @@ import { onTopicJson } from "@/services/mqttTopicBus";
 // with the store here.
 const RPC = "smartmirror/modules/rpc";
 const TOPIC = {
-  rpcCatalog: `${RPC}/catalog`,
   rpcReadme: `${RPC}/readme`,
   rpcInstall: `${RPC}/install`,
   rpcInstallStatus: `${RPC}/install/status`,
@@ -57,11 +56,19 @@ export const modulesApi = createApi({
   baseQuery: mqttBaseQuery,
   tagTypes: ["StoreCatalog", "InstallStatus"],
   endpoints: (build) => ({
+    // HTTP, not MQTT: the whole store (~1400 modules, ~1.5 MB) is one big
+    // page-load read — exactly the payload shape that stays on HTTP
+    // (GET /store/catalog via the gateway, see backend/features/modules/http.py).
     getStoreCatalog: build.query<StoreCatalog, void>({
-      // The whole store (~1400 modules, ~1.5 MB) in one reply — mosquitto's
-      // websocket listener is slow with a payload that size, so the default
-      // 8 s RPC timeout is not enough on the Pi.
-      query: () => ({ topic: TOPIC.rpcCatalog, timeoutMs: 45000 }),
+      async queryFn() {
+        try {
+          const r = await fetch("/store/catalog");
+          if (!r.ok) return { error: { message: `HTTP ${r.status}`, status: r.status } };
+          return { data: (await r.json()) as StoreCatalog };
+        } catch (e) {
+          return { error: { message: String(e) } };
+        }
+      },
       providesTags: ["StoreCatalog"],
     }),
 
