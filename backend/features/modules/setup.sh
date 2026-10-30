@@ -16,13 +16,8 @@ init_db
 # No seed call here — features.modules.daemon's main() already calls
 # catalog.seed_builtins() on every boot (idempotent, no network).
 
-# The community catalog comes from the MMM-store repo (clone/pull into
-# var/mmm-store + import into module_catalog/module_fields). Network-bound,
-# so a failure only warns — re-run by hand with
-#   python3 -m features.modules.store_import
-echo "▸ Importing the module store (MMM-store)…"
-(cd "$BACKEND_DIR" && "$PY" -m features.modules.store_import) \
-  || echo "⚠ Module store import failed — run it again later: cd $BACKEND_DIR && $PY -m features.modules.store_import"
+# The community catalog (MMM-store) is a one-time import, not part of setup:
+# run ../../../import-store.sh by hand.
 
 FEATURE_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "▸ Installing modules.service…"

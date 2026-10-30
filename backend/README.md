@@ -557,8 +557,9 @@ instance is silently dropped and app notifications stop arriving.
 function at all. Nothing is fetched at request time — the store screen reads
 SQLite.
 
-The **community catalog** is imported by `store_import.py` (run by
-`setup.sh`, or by hand: `python3 -m features.modules.store_import`):
+The **community catalog** is a one-time import by `store_import.py`, run by
+hand via the repo-root `./import-store.sh` (arguments pass through) — not by
+`setup.sh`/`deploy.sh`:
 
 1. clone/pull github.com/Domes711/MMM-store into `var/mmm-store`
    (`--src DIR` uses an existing checkout; `MMM_STORE_REPO` /

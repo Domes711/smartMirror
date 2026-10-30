@@ -72,6 +72,8 @@ echo "Automated: sudoers, SQLite schema + catalog seed, UART (raspi-config), pm2
 echo
 echo "Manual (sensitive / needs a decision):"
 echo "  • REBOOT if UART was just enabled (radar then sees /dev/ttyAMA0)."
+echo "  • Import the community module store ONCE (MMM-store → SQLite):"
+echo "       ./import-store.sh"
 echo "  • Restore the REAL config (calendar ID, passwords) from your own backup, if any:"
 echo "       MagicMirror/config/config.js"
 echo
