@@ -90,8 +90,10 @@ React **`frontend/`**, and the vendored **`MagicMirror/`** fork.
     available), `install.py` (clone/uninstall) are the workers; `service.py`
     orchestrates; `mqtt.py`/`http.py` are transport (`:8003`, unit
     `modules`); `daemon.py` is the entrypoint, seeding `catalog.seed_builtins()`
-    on every boot. The community-catalog import (`seed.py`) was removed —
-    there is no network fetch anywhere in this feature any more. The AI
+    on every boot. The community catalog comes from the **MMM-store** repo
+    (github.com/Domes711/MMM-store — `mm-store.json` per module: names,
+    descriptions, tags, screenshots and the `wizard` config fields) via
+    `store_import.py`, a hand-run/`setup.sh` script, never the daemon. The AI
     module builder is a separate feature, `backend/features/ai_modules/`
     (`:8004`, unit `ai-modules`) — MQTT-only, its one HTTP route
     (`/module-draft/*`) is a zip the pub/sub transport cannot carry.
@@ -409,8 +411,11 @@ cd ~/smartMirror && ./setup.sh   # backend (all features) + MagicMirror + fronte
 
 The module catalog is **seeded into SQLite**, not cloned from a private repo —
 `features.modules.daemon`'s `main()` calls `catalog.seed_builtins()` on every
-boot (idempotent, no network), writing the in-repo built-ins. There is no
-community-catalog import any more.
+boot (idempotent, no network), writing the in-repo built-ins. The community
+catalog is imported from the MMM-store repo by
+`cd backend && python3 -m features.modules.store_import` (clone/pull into
+`var/mmm-store`, repo URLs + stars from modules.magicmirror.builders;
+`features/modules/setup.sh` runs it, a failure only warns).
 
 **Cleanup before a fresh start:**
 

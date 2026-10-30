@@ -329,7 +329,7 @@ function ConfigModal() {
                 value={v}
                 onChange={(e) => set(e.target.value)}
                 placeholder={f.placeholder || ""}
-                type={f.type === "number" ? "number" : "text"}
+                type={f.type === "number" ? "number" : f.type === "password" ? "password" : "text"}
                 style={{ ...fld, marginBottom: 0, borderColor: f.required && !v.trim() ? C.line : C.line }}
               />
             )}

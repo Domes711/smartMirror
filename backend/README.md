@@ -554,9 +554,28 @@ instance is silently dropped and app notifications stop arriving.
 
 `daemon.py`'s `main()` calls `catalog.seed_builtins()` on every boot
 (idempotent, no network) — the in-repo built-ins must exist for the mirror to
-function at all. There is no community-catalog import any more (`seed.py` and
-its `import_community()` were removed); nothing is fetched at request time or
-at setup time — the store screen reads SQLite.
+function at all. Nothing is fetched at request time — the store screen reads
+SQLite.
+
+The **community catalog** is imported by `store_import.py` (run by
+`setup.sh`, or by hand: `python3 -m features.modules.store_import`):
+
+1. clone/pull github.com/Domes711/MMM-store into `var/mmm-store`
+   (`--src DIR` uses an existing checkout; `MMM_STORE_REPO` /
+   `MMM_STORE_BRANCH` override the remote);
+2. fetch modules.magicmirror.builders' `modules.json` for what the store
+   lacks — repo URL (needed to install), maintainer, stars, category
+   (`--no-upstream` skips it; an earlier import's values are kept);
+3. per `modules/<name>/mm-store.json`: `name`/`description` →
+   `module_catalog` label/description cs+en, `wizard` → `module_fields`
+   (label cs/en, required, type, help, options, `default` as placeholder),
+   `tags` → `module_tags`, `screenshots` → copied to
+   `var/module-assets/<name>/` + `module_screenshots`.
+
+`custom`/`ai` rows are never touched, `installed` rows keep their source,
+and `community` rows no longer in the store are deleted (`--keep-stale` to
+keep them). `scope` (`global`/`per-user`) has no column yet and is not
+stored.
 
 ---
 
