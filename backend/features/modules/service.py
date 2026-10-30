@@ -30,6 +30,10 @@ def catalog_full() -> dict:
     return catalog.full_catalog()
 
 
+def catalog_page(offset: int, limit: int, q: str = "", tag: str = "") -> dict:
+    return catalog.catalog_page(offset, limit, q, tag)
+
+
 def readme(mtype: str, url: str = "") -> dict:
     return install.readme(mtype, url)
 

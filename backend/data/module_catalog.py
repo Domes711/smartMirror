@@ -35,6 +35,41 @@ def list_on_disk() -> list[dict]:
         "ORDER BY module_name", ON_DISK)]
 
 
+def _browse_where(q: str, tag: str) -> tuple[str, list]:
+    """Rows the store's browse list shows (everything but our own `custom`
+    modules), optionally narrowed by free text and/or one tag."""
+    where, args = ["source != 'custom'"], []
+    if q:
+        like = f"%{q}%"
+        where.append(
+            "(module_name LIKE ? OR label_cs LIKE ? OR label_en LIKE ? OR "
+            "description_cs LIKE ? OR description_en LIKE ? OR EXISTS ("
+            "SELECT 1 FROM module_tags t WHERE t.module_id = module_catalog.id "
+            "AND t.tag LIKE ?))")
+        args += [like] * 6
+    if tag:
+        where.append("EXISTS (SELECT 1 FROM module_tags t WHERE "
+                     "t.module_id = module_catalog.id AND t.tag = ?)")
+        args.append(tag)
+    return " AND ".join(where), args
+
+
+def browse_page(q: str = "", tag: str = "", offset: int = 0,
+                limit: int = 30) -> list[dict]:
+    """One page of the browse list, by name."""
+    where, args = _browse_where(q, tag)
+    return [_row(r) for r in db.query(
+        f"SELECT {_COLS} FROM module_catalog WHERE {where} "
+        "ORDER BY module_name COLLATE NOCASE LIMIT ? OFFSET ?",
+        (*args, limit, offset))]
+
+
+def browse_count(q: str = "", tag: str = "") -> int:
+    where, args = _browse_where(q, tag)
+    return db.one(f"SELECT COUNT(*) c FROM module_catalog WHERE {where}",
+                  args)["c"]
+
+
 def get(module_id: int) -> dict | None:
     r = db.one(f"SELECT {_COLS} FROM module_catalog WHERE id = ?", (module_id,))
     return _row(r) if r else None

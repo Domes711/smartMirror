@@ -273,9 +273,12 @@ Hot-loading a new module into the running core is MQTT too
 - `/photo`, `/module-assets/*`, `/module-installed/*` — binary files / a
   live module's own static tree (`modules`, `:8003`)
 - `/module-draft/*` — the AI builder's working-copy zip (`ai_modules`, `:8004`)
-- `/store/catalog` — the whole module store (~1400 modules, ~1.5 MB) in one
-  page-load read; too big for one MQTT message (`modules`, `:8003`). The app
-  loads it over HTTP only, never through the MQTT `rpc/catalog` twin.
+- `/store/catalog` — the module store (~1400 modules), too big for one MQTT
+  message (`modules`, `:8003`). The app loads it **lazily over HTTP**:
+  `?limit=0` → own + installed modules + the browse-list `total` (shown
+  right away), then `?offset=&limit=30&q=&tag=` pages while scrolling, search
+  filtered server-side. No `limit` = the whole store (the MQTT `rpc/catalog`
+  twin's shape, unused by the app).
 
 `/api/modules/*` (chat, chat/stream SSE, draft/session CRUD) is **not**
 routed any more — it was the AI builder's pre-MQTT HTTP surface and does not

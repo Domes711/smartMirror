@@ -3,7 +3,9 @@ import { useT } from "@/i18n/useT";
 import { MiniThumb } from "@/components/MiniThumb";
 import { tokens as C } from "@/components/ui";
 import { modulesActions } from "@/features/modules/modulesSlice";
-import { STORE, CATEGORIES } from "@/data/catalog";
+import { CATEGORIES } from "@/data/catalog";
+import { useStoreBrowse } from "@/app/useStoreBrowse";
+import { useGetStoreCatalogQuery } from "@/app/api/modulesApi";
 import * as fx from "@/app/thunks";
 
 const ROWS = [
@@ -20,13 +22,12 @@ export function SearchOverlay() {
   const searchCat = useAppSelector((s) => s.modules.searchCat);
   const installed = useAppSelector((s) => s.modules.installed);
   const deletedMods = useAppSelector((s) => s.modules.deletedMods);
+  // suggestions = the first page of the same server-side search the list uses
+  const browse = useStoreBrowse(search, searchCat, en, !open);
+  const total = useGetStoreCatalogQuery().data?.total ?? "…";
   if (!open) return null;
 
-  let sugg = STORE(en).filter((m) => !deletedMods.includes(m.n));
-  if (searchCat) sugg = sugg.filter((m) => m.t.includes(searchCat));
-  const q = search.trim().toLowerCase();
-  if (q) sugg = sugg.filter((m) => (m.n + " " + m.c + " " + m.d + " " + m.t.join(" ")).toLowerCase().includes(q));
-  const suggArr = sugg.slice(0, 20);
+  const suggArr = browse.mods.filter((m) => !deletedMods.includes(m.n)).slice(0, 20);
 
   const Key = ({ ch }: { ch: string }) => (
     <button onClick={() => dispatch(modulesActions.appendSearch(ch))} style={{ flex: 1, minWidth: 0, height: 42, borderRadius: 7, border: "none", background: C.paper, fontFamily: "var(--grotesk)", fontSize: 16, cursor: "pointer", boxShadow: "0 1px 0 rgba(0,0,0,.12)" }}>{ch}</button>
@@ -37,7 +38,7 @@ export function SearchOverlay() {
       <div style={{ padding: "calc(16px + env(safe-area-inset-top)) 18px 12px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${C.line}` }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 9, background: C.p3, border: `1px solid ${C.line}`, borderRadius: 12, padding: "11px 13px" }}>
           <svg viewBox="0 0 24 24" style={{ width: 16, height: 16, fill: "none", stroke: C.mute, strokeWidth: 1.8, strokeLinecap: "round" }}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input autoFocus value={search} onChange={(e) => dispatch(modulesActions.setSearch(e.target.value))} placeholder={L.searchPh} style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontFamily: "var(--mono)", fontSize: 13, color: C.ink }} />
+          <input autoFocus value={search} onChange={(e) => dispatch(modulesActions.setSearch(e.target.value))} placeholder={L.searchPh.replace("{n}", String(total))} style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontFamily: "var(--mono)", fontSize: 13, color: C.ink }} />
           {search && <button onClick={() => dispatch(modulesActions.clearSearch())} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.mute, fontSize: 16 }}>×</button>}
         </div>
         <button onClick={() => dispatch(modulesActions.setSearchOpen(false))} style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: "var(--mono)", fontSize: 12, color: C.ink }}>{L.searchCancel}</button>

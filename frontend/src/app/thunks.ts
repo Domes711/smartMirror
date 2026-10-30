@@ -445,6 +445,8 @@ export const startInstall =
         clearInterval(taskInt);
         sub.unsubscribe();
         dispatch(uiActions.taskProgress(100));
+        // the module is on disk now: refresh own/installed + its browse-list flag
+        if (st.ok !== false) dispatch(modulesApi.util.invalidateTags(["StoreCatalog"]));
         taskDoneT = setTimeout(() => {
           dispatch(uiActions.taskClear());
           dispatch(toast(st.ok === false ? String(st.error || "error") : Lof(getState()).tInstalled));

@@ -34,11 +34,12 @@ export function startProfileSync(store: AppStore): void {
       }
     }
 
-    // 2. runtime widget catalog ← store catalog (own + community)
+    // 2. runtime widget catalog ← own + installed modules (the browse list
+    //    pages in lazily on the Modules screen, it is not part of this)
     const catalogSel = modulesApi.endpoints.getStoreCatalog.select()(s);
     if (catalogSel.data && catalogSel.fulfilledTimeStamp !== lastCatalogTs) {
       lastCatalogTs = catalogSel.fulfilledTimeStamp || 0;
-      const all = [...catalogSel.data.own, ...catalogSel.data.community];
+      const all = [...catalogSel.data.own, ...(catalogSel.data.installed || [])];
       setRuntimeCatalog(all.map((e) => mapStoreModule(e, false)), all.map((e) => mapStoreModule(e, true)));
       store.dispatch(modulesActions.setInstalled(all.filter((e) => e.installed).map((e) => e.id)));
     }

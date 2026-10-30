@@ -201,3 +201,27 @@ def test_install_without_a_repo_url_says_so(mods):
     catalog.upsert({"type": "MMM-NoRepo", "module": "MMM-NoRepo"}, "community")
     with pytest.raises(ValueError, match="nemá repozitář"):
         install.install("MMM-NoRepo")
+
+
+def test_catalog_page_lazy_loads_the_browse_list(mods):
+    catalog, _p = mods
+    for i in range(5):
+        catalog.upsert({"type": f"MMM-C{i}", "module": f"MMM-C{i}",
+                        "label_cs": f"Modul {i}",
+                        "tags": ["weather"] if i % 2 else ["news"]},
+                       "community")
+
+    head = catalog.catalog_page(0, 0)
+    assert head["community"] == []
+    assert head["total"] == 5
+    assert all(e["own"] for e in head["own"])        # the seeded built-ins
+
+    p1 = catalog.catalog_page(0, 2)
+    p3 = catalog.catalog_page(4, 2)
+    assert [e["id"] for e in p1["community"]] == ["MMM-C0", "MMM-C1"]
+    assert [e["id"] for e in p3["community"]] == ["MMM-C4"]
+
+    assert catalog.catalog_page(0, 10, tag="weather")["total"] == 2
+    found = catalog.catalog_page(0, 10, q="modul 3")
+    assert [e["id"] for e in found["community"]] == ["MMM-C3"]
+    assert found["total"] == 1
