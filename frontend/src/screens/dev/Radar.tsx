@@ -23,10 +23,9 @@ export default function Radar() {
   const zl = xP(d.zoneCx - d.zoneW / 2);
   const zr = xP(d.zoneCx + d.zoneW / 2);
 
-  // prefer live MQTT targets; fall back to a demo target
-  const targets = d.liveTargets.length
-    ? d.liveTargets.map((t) => ({ x: t.x / 1000, y: t.y / 1000 }))
-    : [{ x: 1.16, y: 1.45 }];
+  // Real MQTT targets only — an empty array means the radar confirmed
+  // nobody is in range, so the map must show nothing, not a stale demo dot.
+  const targets = d.liveTargets.map((t) => ({ x: t.x / 1000, y: t.y / 1000 }));
 
   const Slider = ({ label, value, min, max, step, on, fmt }: { label: string; value: number; min: number; max: number; step: number; on: (v: number) => void; fmt?: (v: number) => string }) => (
     <div style={{ marginTop: 16 }}>
