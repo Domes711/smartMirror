@@ -14,6 +14,10 @@ export interface DevState {
   // live radar targets (from MQTT smartmirror/radar/targets)
   liveTargets: { x: number; y: number; speed?: number }[];
   livePresence: boolean | null;
+  // distance sensor (HC-SR04, from MQTT smartmirror/distance/reading + /status)
+  distanceActive: boolean;
+  distanceCm: number | null;
+  distanceNear: boolean;
   // connection scan (settings)
   connState: ConnState;
   scanIp: string;
@@ -34,6 +38,9 @@ const initialState: DevState = {
   zoneFar: 1.3,
   liveTargets: [],
   livePresence: null,
+  distanceActive: true,
+  distanceCm: null,
+  distanceNear: false,
   connState: "idle",
   scanIp: "",
   commsPanel: false,
@@ -91,6 +98,13 @@ const devSlice = createSlice({
     },
     setPresence(s, a: PayloadAction<boolean>) {
       s.livePresence = a.payload;
+    },
+    setDistanceActive(s, a: PayloadAction<boolean>) {
+      s.distanceActive = a.payload;
+    },
+    setDistanceReading(s, a: PayloadAction<{ cm: number | null; near: boolean }>) {
+      s.distanceCm = a.payload.cm;
+      s.distanceNear = a.payload.near;
     },
     // connection scan
     setConnState(s, a: PayloadAction<ConnState>) {

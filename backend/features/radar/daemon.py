@@ -63,6 +63,14 @@ EXCL_RADIUS_MM = 250     # drop targets within this of a learned ghost spot
 BASELINE_GRID_MM = 150   # quantize baseline ghost points to this grid
 
 
+def _decode_signed(raw: int) -> int:
+    """LD2450 encodes signed fields as sign-flag + magnitude, not two's
+    complement: bit 15 set means positive, bit 15 clear means negative, and
+    the low 15 bits are the magnitude."""
+    magnitude = raw & 0x7FFF
+    return magnitude if (raw & 0x8000) else -magnitude
+
+
 def parse_frame(data: bytes) -> list:
     """Parse LD2450 Engineering mode frame. Returns list of (x, y, speed) tuples.
 
@@ -72,6 +80,9 @@ def parse_frame(data: bytes) -> list:
     - Target 2: X(2) Y(2) Speed(2) Reserved(2) = 8 bytes
     - Target 3: X(2) Y(2) Speed(2) Reserved(2) = 8 bytes
     - Footer: 55 CC (2 bytes)
+
+    X, Y and speed are all sign-flag + magnitude 16-bit fields (see
+    _decode_signed) — not plain unsigned, and Y is not a single cm byte.
     """
     if len(data) != FRAME_LEN:
         return []
@@ -85,11 +96,10 @@ def parse_frame(data: bytes) -> list:
     targets = []
 
     for i in range(0, 24, 8):  # 3 targets, 8 bytes each
-        x = struct.unpack_from('<H', payload, i)[0]      # unsigned 16-bit X (mm)
-        y_cm = payload[i+2]                               # Y in centimeters!
-        y = y_cm * 10                                     # convert cm to mm
-        speed = struct.unpack_from('<H', payload, i+4)[0] # unsigned 16-bit speed
-        # Bytes i+3, i+6, i+7 - unknown/reserved
+        x = _decode_signed(struct.unpack_from('<H', payload, i)[0])     # mm
+        y = _decode_signed(struct.unpack_from('<H', payload, i + 2)[0]) # mm
+        speed = _decode_signed(struct.unpack_from('<H', payload, i + 4)[0])
+        # Bytes i+6, i+7 - unknown/reserved (resolution, per datasheet)
 
         # Filter out empty targets (0,0)
         if x != 0 or y != 0:

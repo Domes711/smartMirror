@@ -691,6 +691,14 @@ export const toggleRadar = (): Thunk => (dispatch, getState) => {
   dispatch(radarApi.endpoints.setRadarActive.initiate(next)).catch((e) => dispatch(toast(String(e))));
 };
 
+export const toggleDistance = (): Thunk => (dispatch, getState) => {
+  const next = !getState().dev.distanceActive;
+  dispatch(devActions.setDistanceActive(next));
+  // The distance daemon has no systemd-unit arbitration (unlike radar) — it
+  // just pauses/resumes sampling on this one control topic.
+  publish(TOPICS.distanceControl, { active: next });
+};
+
 export const newSceneFromCal =
   (start: number, end: number): Thunk =>
   (dispatch) => {

@@ -14,6 +14,10 @@ export const TOPICS = {
   radarTargets: "smartmirror/radar/targets", // JSON: { targets: [{x,y,speed}], ... }
   radarControl: "smartmirror/radar/control", // app → daemon (on/off, calibration cmds)
   radarConfig: "smartmirror/radar/config", // app → daemon (zone/offset/mirror …)
+  // distance (HC-SR04 daemon → bus)
+  distanceReading: "smartmirror/distance/reading", // JSON: { cm, available, near } ~5 Hz
+  distanceStatus: "smartmirror/distance/status", // JSON: { active, available } (retained)
+  distanceControl: "smartmirror/distance/control", // app → daemon ({"active": bool})
   // camera (face/gesture daemons → bus)
   cameraRecognition: "smartmirror/camera/recognition", // JSON: { user: string|null }
   cameraGesture: "smartmirror/camera/gesture",

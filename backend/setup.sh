@@ -29,13 +29,14 @@ pip_install paho-mqtt
 # Migration order follows the design doc: radar/display first (already
 # MQTT-only, lowest risk), then scenes/modules/ai_modules/mic, camera last
 # (HW arbitration).
-run "1/7  radar"      "$BACKEND_DIR/features/radar/setup.sh"
-run "2/7  display"    "$BACKEND_DIR/features/display/setup.sh"
-run "3/7  scenes"     "$BACKEND_DIR/features/scenes/setup.sh"
-run "4/7  modules"    "$BACKEND_DIR/features/modules/setup.sh"
-run "5/7  ai_modules" "$BACKEND_DIR/features/ai_modules/setup.sh"
-run "6/7  mic"        "$BACKEND_DIR/features/mic/setup.sh"
-run "7/7  camera"     "$BACKEND_DIR/features/camera/setup.sh"
+run "1/8  radar"      "$BACKEND_DIR/features/radar/setup.sh"
+run "2/8  distance"   "$BACKEND_DIR/features/distance/setup.sh"
+run "3/8  display"    "$BACKEND_DIR/features/display/setup.sh"
+run "4/8  scenes"     "$BACKEND_DIR/features/scenes/setup.sh"
+run "5/8  modules"    "$BACKEND_DIR/features/modules/setup.sh"
+run "6/8  ai_modules" "$BACKEND_DIR/features/ai_modules/setup.sh"
+run "7/8  mic"        "$BACKEND_DIR/features/mic/setup.sh"
+run "8/8  camera"     "$BACKEND_DIR/features/camera/setup.sh"
 
 echo
 echo "── gateway (edge on :8000) ──"
@@ -51,7 +52,7 @@ else
   echo "  ✓ Backend done."
 fi
 echo "════════════════════════════════════════════"
-echo "Units: radar display scenes modules ai-modules mic camera-supervisor"
+echo "Units: radar distance display scenes modules ai-modules mic camera-supervisor"
 echo "       mirror-gateway (all enabled)"
 echo "       camera-recognition (disabled — arbitrated by camera-supervisor)"
 echo "       wyoming-satellite (disabled — arbitrated by features.mic.service)"

@@ -9,6 +9,7 @@ import { cameraApi } from "@/app/api/cameraApi";
 import { scenesApi } from "@/app/api/scenesApi";
 import { modulesApi } from "@/app/api/modulesApi";
 import { radarApi } from "@/app/api/radarApi";
+import { distanceApi } from "@/app/api/distanceApi";
 import { displayApi } from "@/app/api/displayApi";
 import { aiModulesApi } from "@/app/api/aiModulesApi";
 import { micApi } from "@/app/api/micApi";
@@ -25,6 +26,7 @@ export const store = configureStore({
     [scenesApi.reducerPath]: scenesApi.reducer,
     [modulesApi.reducerPath]: modulesApi.reducer,
     [radarApi.reducerPath]: radarApi.reducer,
+    [distanceApi.reducerPath]: distanceApi.reducer,
     [displayApi.reducerPath]: displayApi.reducer,
     [aiModulesApi.reducerPath]: aiModulesApi.reducer,
     [micApi.reducerPath]: micApi.reducer,
@@ -35,6 +37,7 @@ export const store = configureStore({
       .concat(scenesApi.middleware)
       .concat(modulesApi.middleware)
       .concat(radarApi.middleware)
+      .concat(distanceApi.middleware)
       .concat(displayApi.middleware)
       .concat(aiModulesApi.middleware)
       .concat(micApi.middleware),

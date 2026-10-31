@@ -3,6 +3,7 @@ import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
 import { devActions } from "@/features/dev/devSlice";
 import * as fx from "@/app/thunks";
+import { useGetDistanceConfigQuery, useSetDistanceConfigMutation } from "@/app/api/distanceApi";
 
 const HX = 2.2; // half-width metres
 const MY = 3; // reach metres
@@ -14,6 +15,10 @@ export default function Radar() {
   const { L, en } = useT();
   const d = useAppSelector((s) => s.dev);
   const active = d.radarActive;
+  const distActive = d.distanceActive;
+
+  const { data: distCfg } = useGetDistanceConfigQuery();
+  const [setDistanceConfig] = useSetDistanceConfigMutation();
 
   const zl = xP(d.zoneCx - d.zoneW / 2);
   const zr = xP(d.zoneCx + d.zoneW / 2);
@@ -23,11 +28,11 @@ export default function Radar() {
     ? d.liveTargets.map((t) => ({ x: t.x / 1000, y: t.y / 1000 }))
     : [{ x: 1.16, y: 1.45 }];
 
-  const Slider = ({ label, value, min, max, step, on }: { label: string; value: number; min: number; max: number; step: number; on: (v: number) => void }) => (
+  const Slider = ({ label, value, min, max, step, on, fmt }: { label: string; value: number; min: number; max: number; step: number; on: (v: number) => void; fmt?: (v: number) => string }) => (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>
         <span>{label}</span>
-        <span style={{ color: C.ink }}>{value.toFixed(2)}</span>
+        <span style={{ color: C.ink }}>{fmt ? fmt(value) : value.toFixed(2)}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => on(parseFloat(e.target.value))} style={{ width: "100%", accentColor: C.signal }} />
     </div>
@@ -58,7 +63,7 @@ export default function Radar() {
         <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", borderLeft: "1px dashed rgba(233,232,221,.12)" }} />
         {/* sweep beam */}
         {active && (
-          <div style={{ position: "absolute", top: 0, left: "50%", width: "70%", height: "100%", transformOrigin: "top center", background: "conic-gradient(from 90deg at 50% 0, transparent, rgba(59,209,122,.32), transparent 60deg)", animation: "mc-wiper 2.4s ease-in-out infinite alternate" }} />
+          <div style={{ position: "absolute", top: 0, left: "50%", width: "70%", height: "100%", marginLeft: "-35%", transformOrigin: "top center", background: "conic-gradient(from 90deg at 50% 0, transparent, rgba(59,209,122,.32), transparent 60deg)", animation: "mc-wiper 2.4s ease-in-out infinite alternate" }} />
         )}
         {/* target zone */}
         <div style={{ position: "absolute", top: 0, left: `${zl}%`, width: `${zr - zl}%`, height: `${yP(d.zoneFar)}%`, border: "1px solid rgba(59,209,122,.7)", background: "rgba(59,209,122,.08)" }}>
@@ -74,6 +79,75 @@ export default function Radar() {
       <Slider label={en ? "Position X" : "Poloha X"} value={d.zoneCx} min={-1} max={1} step={0.01} on={(v) => dispatch(devActions.setZoneCx(v))} />
       <Slider label={en ? "Width" : "Šířka"} value={d.zoneW} min={0.2} max={2} step={0.01} on={(v) => dispatch(devActions.setZoneW(v))} />
       <Slider label={en ? "Reach" : "Dosah"} value={d.zoneFar} min={0.5} max={3} step={0.01} on={(v) => dispatch(devActions.setZoneFar(v))} />
+
+      {/* --- distance sensor (HC-SR04) ----------------------------------- */}
+      <div style={{ marginTop: 26, paddingTop: 18, borderTop: `1px solid ${C.line}` }}>
+        <p style={{ ...eyebrow, margin: "0 0 6px" }}>ultrasonic · HC-SR04</p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h2 style={h2}>{en ? "Distance" : "Vzdálenost"}</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => dispatch(fx.toggleDistance())} style={{ width: 48, height: 28, borderRadius: 999, border: `1px solid ${distActive ? C.ink : C.line}`, background: distActive ? C.ink : C.p3, position: "relative", cursor: "pointer", padding: 0 }}>
+              <span style={{ position: "absolute", top: 2, left: distActive ? 22 : 2, width: 22, height: 22, borderRadius: "50%", background: distActive ? C.paper : C.ink, transition: ".18s" }} />
+            </button>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 12 }}>{distActive ? (en ? "Active" : "Aktivní") : en ? "Off" : "Vypnuto"}</span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            background: d.distanceNear ? "rgba(217,97,74,.12)" : "rgba(59,138,79,.12)",
+            border: `1px solid ${d.distanceNear ? "rgba(217,97,74,.4)" : "rgba(59,138,79,.4)"}`,
+            borderRadius: 999,
+            padding: "6px 12px",
+            marginBottom: 14,
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: d.distanceCm == null ? C.mute : d.distanceNear ? "#d9614a" : "#3bd17a" }} />
+          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
+            {d.distanceCm == null ? (en ? "no echo" : "bez odezvy") : `${d.distanceCm.toFixed(1)} cm`}
+          </span>
+        </div>
+
+        <Slider
+          label={en ? "Near threshold" : "Práh blízkosti"}
+          value={distCfg?.warn_cm ?? 30}
+          min={2}
+          max={400}
+          step={1}
+          fmt={(v) => `${Math.round(v)} cm`}
+          on={(v) => setDistanceConfig({ warn_cm: Math.round(v) })}
+        />
+        <Slider
+          label={en ? "Max range" : "Max. dosah"}
+          value={distCfg?.max_range_cm ?? 400}
+          min={50}
+          max={400}
+          step={10}
+          fmt={(v) => `${Math.round(v)} cm`}
+          on={(v) => setDistanceConfig({ max_range_cm: Math.round(v) })}
+        />
+        <Slider
+          label={en ? "Averaging window" : "Okno průměrování"}
+          value={distCfg?.avg_window_s ?? 1}
+          min={0.2}
+          max={10}
+          step={0.2}
+          fmt={(v) => `${v.toFixed(1)} s`}
+          on={(v) => setDistanceConfig({ avg_window_s: Math.round(v * 10) / 10 })}
+        />
+        <Slider
+          label={en ? "Readings before absent" : "Čtení před nepřítomností"}
+          value={distCfg?.absent_after_n ?? 3}
+          min={1}
+          max={10}
+          step={1}
+          fmt={(v) => `${Math.round(v)}×`}
+          on={(v) => setDistanceConfig({ absent_after_n: Math.round(v) })}
+        />
+      </div>
     </section>
   );
 }

@@ -44,6 +44,17 @@ export function startMirrorBridge(store: AppStore): void {
               )
             );
           }
+        } else if (topic === TOPICS.distanceReading) {
+          const data = JSON.parse(payload);
+          store.dispatch(
+            devActions.setDistanceReading({
+              cm: data.available ? data.cm : null,
+              near: !!data.near,
+            })
+          );
+        } else if (topic === TOPICS.distanceStatus) {
+          const data = JSON.parse(payload);
+          store.dispatch(devActions.setDistanceActive(!!data.active));
         }
       } catch {
         /* non-JSON payloads (presence strings etc.) are fine */

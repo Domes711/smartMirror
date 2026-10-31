@@ -11,7 +11,7 @@ import logging
 from features.display import service
 from features.display.constants import (
     BASE, STATE, CONTROL_WILDCARD, POWER, BRIGHTNESS, CONTRAST, RGB,
-    PRESET, MODE, E2, GET_STATE, PROFILE_CHANGED, SERVICE_NAME,
+    PRESET, MODE, E2, GET_STATE, PROFILE_CHANGED, GLOBAL_PRESENCE, SERVICE_NAME,
 )
 
 log = logging.getLogger(__name__)
@@ -27,7 +27,9 @@ class DisplayMqtt:
     def subscribe_all(self):
         self.client.subscribe(CONTROL_WILDCARD, self.on_message)
         self.client.subscribe(PROFILE_CHANGED, self.on_message)
-        log.info("Subscribed to %s and %s", CONTROL_WILDCARD, PROFILE_CHANGED)
+        self.client.subscribe(GLOBAL_PRESENCE, self.on_message)
+        log.info("Subscribed to %s, %s and %s",
+                 CONTROL_WILDCARD, PROFILE_CHANGED, GLOBAL_PRESENCE)
 
     def publish_state(self, force: bool = False):
         """Publish the monitor's actual current state, if it changed."""
@@ -44,6 +46,12 @@ class DisplayMqtt:
             if topic == PROFILE_CHANGED:
                 profile = (payload or "default").strip() or "default"
                 service.apply_profile(profile)
+                self.publish_state(force=True)
+                return
+
+            if topic == GLOBAL_PRESENCE:
+                mode = "on" if payload.strip() == "present" else "standby"
+                service.set_power(mode)
                 self.publish_state(force=True)
                 return
 

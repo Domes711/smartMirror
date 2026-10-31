@@ -4,20 +4,27 @@ from features.radar.daemon import (FRAME_FOOTER, FRAME_HEADER,
                                    calculate_distance, parse_frame)
 
 
+def _encode_signed(value: int) -> int:
+    """Wire-encode a signed LD2450 field: bit 15 set means positive, bit 15
+    clear means negative, low 15 bits are the magnitude. Inverse of
+    daemon._decode_signed."""
+    magnitude = abs(value) & 0x7FFF
+    return magnitude | 0x8000 if value >= 0 else magnitude
+
+
 def make_frame(targets):
     """Build a valid LD2450 **Engineering mode** frame (30 bytes).
 
-    Layout: header(4) + 3 targets x 8 bytes + footer(2). Per target:
-    X as unsigned 16-bit mm, Y as a SINGLE byte in centimetres, speed as
-    unsigned 16-bit, then 3 reserved bytes. `targets` is given in (x, y_mm,
-    speed) and padded out to three slots with zeros.
+    Layout: header(4) + 3 targets x 8 bytes + footer(2). Per target: X, Y and
+    speed are each a sign-flag + magnitude 16-bit field (see _encode_signed),
+    then 2 reserved bytes. `targets` is given in (x, y_mm, speed) and padded
+    out to three slots with zeros.
     """
     data = b""
     for x, y_mm, speed in targets:
-        data += struct.pack("<H", x)          # X, mm
-        data += bytes([y_mm // 10])           # Y, cm (one byte)
-        data += bytes(1)                      # reserved
-        data += struct.pack("<H", speed)
+        data += struct.pack("<H", _encode_signed(x))
+        data += struct.pack("<H", _encode_signed(y_mm))
+        data += struct.pack("<H", _encode_signed(speed))
         data += bytes(2)                      # reserved
     data += bytes(24 - len(data))             # pad to 3 targets
     return FRAME_HEADER + data + FRAME_FOOTER

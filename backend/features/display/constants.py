@@ -62,4 +62,11 @@ GET_STATE = f"{BASE}/control/get_state"       # in: publish STATE now
 # this; display re-applies that person's monitor_config overrides.
 PROFILE_CHANGED = "smartmirror/control/profile_changed"
 
+# in: cross-feature presence signal ("present"/"absent"), owned by no single
+# feature — published today by features/distance, by any future presence
+# source later. display is just one subscriber: it wakes the monitor on
+# "present" and puts it to standby on "absent", same string this constant
+# mirrors in features/distance/constants.py (GLOBAL_PRESENCE).
+GLOBAL_PRESENCE = "smartmirror/global/presence"
+
 SERVICE_NAME = "display"
