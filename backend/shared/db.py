@@ -134,6 +134,10 @@ DEVICE_DEFAULTS = {
         "dim_timeout_s": 30,
         "sleep_timeout_s": 120,
         "ddc_bus": "",
+        # How long the display stays on after a GLOBAL_PRESENCE "absent"
+        # before features/display/mqtt.py actually stands it by (30-300s,
+        # see service.py OFF_DELAY_MIN_S/MAX_S).
+        "off_delay_s": 30,
     },
     # radar defaults live in features/radar/config.py DEFAULTS and are written
     # on first load; mic defaults live in features/mic/config.py DEFAULTS,

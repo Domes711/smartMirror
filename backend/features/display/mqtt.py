@@ -7,11 +7,13 @@ work; nothing here knows about ddcutil.
 
 import json
 import logging
+import threading
 
 from features.display import service
 from features.display.constants import (
     BASE, STATE, CONTROL_WILDCARD, POWER, BRIGHTNESS, CONTRAST, RGB,
-    PRESET, MODE, E2, GET_STATE, PROFILE_CHANGED, GLOBAL_PRESENCE, SERVICE_NAME,
+    PRESET, MODE, E2, GET_STATE, OFF_DELAY, PROFILE_CHANGED, GLOBAL_PRESENCE,
+    SERVICE_NAME,
 )
 
 log = logging.getLogger(__name__)
@@ -23,6 +25,11 @@ class DisplayMqtt:
     def __init__(self, client):
         self.client = client
         self.last_state = {}
+        # Pending "stand by after off_delay_s" timer from the last ABSENT —
+        # cancelled by a PRESENT that arrives before it fires, so a person
+        # who steps away and back inside the delay never sees the display
+        # drop out.
+        self._off_timer: threading.Timer | None = None
 
     def subscribe_all(self):
         self.client.subscribe(CONTROL_WILDCARD, self.on_message)
@@ -39,6 +46,31 @@ class DisplayMqtt:
             self.last_state = state
             log.info("Published state: %s", state)
 
+    def _on_presence(self, payload: str):
+        """GLOBAL_PRESENCE wakes the monitor immediately on "present", but
+        only *schedules* standby on "absent" — off_delay_s later, so someone
+        stepping just out of sensor range and back doesn't see the display
+        drop out. A "present" before the timer fires cancels it."""
+        if self._off_timer is not None:
+            self._off_timer.cancel()
+            self._off_timer = None
+
+        if payload == "present":
+            service.set_power("on")
+            self.publish_state(force=True)
+            return
+
+        delay = service.get_off_delay_s()
+
+        def fire():
+            service.set_power("standby")
+            self.publish_state(force=True)
+
+        self._off_timer = threading.Timer(delay, fire)
+        self._off_timer.daemon = True
+        self._off_timer.start()
+        log.info("absent — standing by in %ds unless presence returns", delay)
+
     def on_message(self, topic: str, payload: str):
         log.info("Received: %s = %s", topic, payload)
 
@@ -50,9 +82,7 @@ class DisplayMqtt:
                 return
 
             if topic == GLOBAL_PRESENCE:
-                mode = "on" if payload.strip() == "present" else "standby"
-                service.set_power(mode)
-                self.publish_state(force=True)
+                self._on_presence(payload.strip())
                 return
 
             if topic.endswith("/power"):
@@ -75,6 +105,9 @@ class DisplayMqtt:
 
             elif topic.endswith("/e2"):
                 service.set_e2(int(payload))
+
+            elif topic.endswith("/off_delay"):
+                service.set_off_delay_s(int(payload))
 
             elif topic.endswith("/get_state"):
                 self.publish_state(force=True)

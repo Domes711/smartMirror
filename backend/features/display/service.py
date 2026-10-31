@@ -27,6 +27,10 @@ def _apply_brightness(cfg: Dict[str, Any]) -> None:
 _HW_APPLIERS = (_apply_brightness,)
 
 
+OFF_DELAY_MIN_S = 30
+OFF_DELAY_MAX_S = 300
+
+
 def get_monitor_state() -> Dict[str, Any]:
     """Read the monitor's actual current state via the driver."""
     return {
@@ -36,8 +40,24 @@ def get_monitor_state() -> Dict[str, Any]:
         "green": driver.ddcutil_getvcp(driver.VCP_GREEN_GAIN),
         "blue": driver.ddcutil_getvcp(driver.VCP_BLUE_GAIN),
         "power": driver.ddcutil_getvcp(driver.VCP_POWER),
+        "off_delay_s": get_off_delay_s(),
         "timestamp": time.time(),
     }
+
+
+def get_off_delay_s(profile: str = "default") -> int:
+    """How long to wait after a GLOBAL_PRESENCE "absent" before actually
+    standing the monitor by (see mqtt.py) — resolved the same
+    defaults-then-override way as every other monitor_config key."""
+    return device_config.resolve("monitor", profile).get(
+        "off_delay_s", OFF_DELAY_MIN_S)
+
+
+def set_off_delay_s(value: int, profile: str = "default") -> bool:
+    if not OFF_DELAY_MIN_S <= value <= OFF_DELAY_MAX_S:
+        return False
+    device_config.set_value("monitor", "off_delay_s", value, profile=profile)
+    return True
 
 
 def set_power(mode: str) -> bool:

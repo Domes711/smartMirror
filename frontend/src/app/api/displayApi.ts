@@ -21,6 +21,7 @@ const TOPIC = {
   preset: `${BASE}/control/preset`,
   mode: `${BASE}/control/mode`,
   e2: `${BASE}/control/e2`,
+  offDelay: `${BASE}/control/off_delay`, // "30".."300" (seconds)
   getState: `${BASE}/control/get_state`, // in: publish STATE now
 } as const;
 
@@ -31,11 +32,12 @@ export interface DisplayState {
   green: number | null;
   blue: number | null;
   power: number | null; // VCP D6: 1 = on, 4 = standby
+  off_delay_s: number;
   timestamp: number;
 }
 
 interface DisplayQueryArgs {
-  op: "getState" | "setPower" | "setBrightness" | "setContrast" | "setRgb" | "setPreset" | "setMode" | "setE2";
+  op: "getState" | "setPower" | "setBrightness" | "setContrast" | "setRgb" | "setPreset" | "setMode" | "setE2" | "setOffDelay";
   value?: string | number | { r?: number; g?: number; b?: number };
 }
 
@@ -64,6 +66,9 @@ const displayBaseQuery: BaseQueryFn<DisplayQueryArgs, unknown, { message: string
       break;
     case "setE2":
       publish(TOPIC.e2, String(value));
+      break;
+    case "setOffDelay":
+      publish(TOPIC.offDelay, String(value));
       break;
   }
   // Fire-and-forget by design (no _rid/_reply on this feature) — the
@@ -98,6 +103,7 @@ export const displayApi = createApi({
         green: null,
         blue: null,
         power: null,
+        off_delay_s: 30,
         timestamp: 0,
       }),
     }),
@@ -123,6 +129,9 @@ export const displayApi = createApi({
     setDisplayE2: build.mutation<{ ok: boolean }, number>({
       query: (value) => ({ op: "setE2", value }),
     }),
+    setDisplayOffDelay: build.mutation<{ ok: boolean }, number>({
+      query: (value) => ({ op: "setOffDelay", value }),
+    }),
   }),
 });
 
@@ -135,4 +144,5 @@ export const {
   useSetDisplayPresetMutation,
   useSetDisplayModeMutation,
   useSetDisplayE2Mutation,
+  useSetDisplayOffDelayMutation,
 } = displayApi;

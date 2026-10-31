@@ -56,6 +56,7 @@ PRESET = f"{BASE}/control/preset"
 MODE = f"{BASE}/control/mode"
 E2 = f"{BASE}/control/e2"
 GET_STATE = f"{BASE}/control/get_state"       # in: publish STATE now
+OFF_DELAY = f"{BASE}/control/off_delay"       # "30".."300" (seconds)
 
 # in: cross-feature topic, published whenever the recognized/active profile
 # changes. Every feature that needs to react to a new profile subscribes to

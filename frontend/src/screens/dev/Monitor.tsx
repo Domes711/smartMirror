@@ -11,6 +11,7 @@ import {
   useSetDisplayPresetMutation,
   useSetDisplayModeMutation,
   useSetDisplayE2Mutation,
+  useSetDisplayOffDelayMutation,
 } from "@/app/api/displayApi";
 
 const PRESETS = [
@@ -41,6 +42,7 @@ export default function Monitor() {
   const [setPreset] = useSetDisplayPresetMutation();
   const [setMode] = useSetDisplayModeMutation();
   const [setE2] = useSetDisplayE2Mutation();
+  const [setOffDelay] = useSetDisplayOffDelayMutation();
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [localBrightness, setLocalBrightness] = useState(100);
@@ -48,6 +50,7 @@ export default function Monitor() {
   const [localRed, setLocalRed] = useState(100);
   const [localGreen, setLocalGreen] = useState(100);
   const [localBlue, setLocalBlue] = useState(100);
+  const [localOffDelay, setLocalOffDelay] = useState(30);
 
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -60,6 +63,7 @@ export default function Monitor() {
       if (state.red != null) setLocalRed(state.red);
       if (state.green != null) setLocalGreen(state.green);
       if (state.blue != null) setLocalBlue(state.blue);
+      if (state.off_delay_s != null) setLocalOffDelay(state.off_delay_s);
       setIsUpdating(false);
     }
   }, [state]);
@@ -77,11 +81,11 @@ export default function Monitor() {
     fn();
   };
 
-  const Slider = ({ label, value, min, max, onChange, onCommit }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; onCommit: (v: number) => void }) => (
+  const Slider = ({ label, value, min, max, onChange, onCommit, fmt }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; onCommit: (v: number) => void; fmt?: (v: number) => string }) => (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>
         <span>{label}</span>
-        <span style={{ color: C.ink }}>{value}%</span>
+        <span style={{ color: C.ink }}>{fmt ? fmt(value) : `${value}%`}</span>
       </div>
       <input
         type="range"
@@ -196,6 +200,21 @@ export default function Monitor() {
 
       <Slider label={en ? "Brightness" : "Jas"} value={localBrightness} min={0} max={100} onChange={setLocalBrightness} onCommit={(v) => debounced("brightness", () => setBrightness(v))} />
       <Slider label={en ? "Contrast" : "Kontrast"} value={localContrast} min={0} max={100} onChange={setLocalContrast} onCommit={(v) => debounced("contrast", () => setContrast(v))} />
+
+      <div style={{ marginTop: 24 }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8 }}>
+          {en ? "Presence · turn-off delay" : "Přítomnost · zpoždění vypnutí"}
+        </div>
+        <Slider
+          label={en ? "Wait before standby" : "Čekat před standby"}
+          value={localOffDelay}
+          min={30}
+          max={300}
+          onChange={setLocalOffDelay}
+          onCommit={(v) => debounced("offDelay", () => setOffDelay(v))}
+          fmt={(v) => (v < 60 ? `${v}s` : `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`)}
+        />
+      </div>
 
       <div style={{ marginTop: 24, marginBottom: 8 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 6 }}>{en ? "E2 Enhancement" : "E2 Vylepšení"}</div>
