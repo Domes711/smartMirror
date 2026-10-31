@@ -131,12 +131,12 @@ export default function Radar() {
         />
         <Slider
           label={en ? "Averaging window" : "Okno průměrování"}
-          value={distCfg?.avg_window_s ?? 1}
-          min={0.2}
-          max={10}
-          step={0.2}
-          fmt={(v) => `${v.toFixed(1)} s`}
-          on={(v) => setDistanceConfig({ avg_window_s: Math.round(v * 10) / 10 })}
+          value={distCfg?.avg_window_ms ?? 1000}
+          min={200}
+          max={10000}
+          step={200}
+          fmt={(v) => `${Math.round(v)} ms`}
+          on={(v) => setDistanceConfig({ avg_window_ms: Math.round(v) })}
         />
         <Slider
           label={en ? "Readings before absent" : "Čtení před nepřítomností"}

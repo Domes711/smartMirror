@@ -10,7 +10,7 @@ const TOPIC = {
 export interface DistanceConfig {
   warn_cm: number;
   max_range_cm: number;
-  avg_window_s: number;
+  avg_window_ms: number;
   absent_after_n: number;
 }
 

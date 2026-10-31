@@ -22,7 +22,7 @@ GLOBAL_PRESENCE = "smartmirror/global/presence"
 
 # RPC: calibration config, same shape as radar/mic's config.get/config.set.
 RPC = f"{BASE}/rpc"
-RPC_CONFIG_GET = f"{RPC}/config/get"   # in: {} → {warn_cm, max_range_cm, avg_window_s, absent_after_n}
+RPC_CONFIG_GET = f"{RPC}/config/get"   # in: {} → {warn_cm, max_range_cm, avg_window_ms, absent_after_n}
 RPC_CONFIG_SET = f"{RPC}/config/set"   # in: {<key>: <value>, …} → same shape
 
 # GPIO (BCM numbering): board pin 16 = GPIO23, board pin 18 = GPIO24.

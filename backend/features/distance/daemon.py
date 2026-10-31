@@ -172,7 +172,7 @@ def main() -> int:
     try:
         while True:
             cfg = load_config()
-            window_s = max(cfg["avg_window_s"], constants.SAMPLE_INTERVAL_S)
+            window_s = max(cfg["avg_window_ms"] / 1000, constants.SAMPLE_INTERVAL_S)
             samples = []
             window_deadline = time.monotonic() + window_s
 

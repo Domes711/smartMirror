@@ -18,7 +18,7 @@ log = logging.getLogger("distance.config")
 DEFAULTS = {
     "warn_cm": 30,          # distances at or below this are "near"
     "max_range_cm": 400,    # HC-SR04 spec max; readings beyond this are dropped
-    "avg_window_s": 1.0,    # collect pings for this long, publish their mean
+    "avg_window_ms": 1000,  # collect pings for this long, publish their mean
     "absent_after_n": 3,    # consecutive above-threshold readings before ABSENT
 }
 
