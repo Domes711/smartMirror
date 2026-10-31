@@ -60,10 +60,6 @@ export default function Radar() {
         <div style={{ position: "absolute", left: 0, right: 0, top: "33.3%", borderTop: "1px dashed rgba(233,232,221,.12)" }} />
         <span style={{ position: "absolute", left: 8, top: "33.3%", transform: "translateY(-50%)", fontFamily: "var(--mono)", fontSize: 9, color: "rgba(233,232,221,.4)" }}>1 m</span>
         <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", borderLeft: "1px dashed rgba(233,232,221,.12)" }} />
-        {/* sweep beam */}
-        {active && (
-          <div style={{ position: "absolute", top: 0, left: "50%", width: "70%", height: "100%", marginLeft: "-35%", transformOrigin: "top center", background: "conic-gradient(from 90deg at 50% 0, transparent, rgba(59,209,122,.32), transparent 60deg)", animation: "mc-wiper 2.4s ease-in-out infinite alternate" }} />
-        )}
         {/* target zone */}
         <div style={{ position: "absolute", top: 0, left: `${zl}%`, width: `${zr - zl}%`, height: `${yP(d.zoneFar)}%`, border: "1px solid rgba(59,209,122,.7)", background: "rgba(59,209,122,.08)" }}>
           <span style={{ position: "absolute", bottom: 4, left: "50%", transform: "translateX(-50%)", fontFamily: "var(--mono)", fontSize: 9, color: "rgba(59,209,122,.9)", whiteSpace: "nowrap" }}>target zone</span>
