@@ -1,9 +1,16 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
-import { devActions } from "@/features/dev/devSlice";
 import * as fx from "@/app/thunks";
 import { useGetDistanceConfigQuery, useSetDistanceConfigMutation } from "@/app/api/distanceApi";
+import {
+  useGetRadarConfigQuery,
+  useSetRadarConfigMutation,
+  useCenterRadarOnNearestTargetMutation,
+  useFlipRadarAxisMutation,
+  useLearnRadarGhostsMutation,
+  useResetRadarConfigMutation,
+} from "@/app/api/radarApi";
 
 const HX = 2.2; // half-width metres
 const MY = 3; // reach metres
@@ -20,8 +27,21 @@ export default function Radar() {
   const { data: distCfg } = useGetDistanceConfigQuery();
   const [setDistanceConfig] = useSetDistanceConfigMutation();
 
-  const zl = xP(d.zoneCx - d.zoneW / 2);
-  const zr = xP(d.zoneCx + d.zoneW / 2);
+  const { data: radarCfg } = useGetRadarConfigQuery();
+  const [setRadarConfig] = useSetRadarConfigMutation();
+  const [centerOnTarget] = useCenterRadarOnNearestTargetMutation();
+  const [flipAxis] = useFlipRadarAxisMutation();
+  const [learnGhosts] = useLearnRadarGhostsMutation();
+  const [resetConfig] = useResetRadarConfigMutation();
+
+  // Targets arrive already offset/mirror-corrected (daemon.py's apply_axis
+  // runs before publish), so the detection zone on the map is always
+  // centered on 0 — zone.x/zone.y are the backend's real half-width/depth,
+  // no separate visual "position" slider needed.
+  const zoneXm = (radarCfg?.zone.x ?? 400) / 1000;
+  const zoneYm = (radarCfg?.zone.y ?? 1500) / 1000;
+  const zl = xP(-zoneXm);
+  const zr = xP(zoneXm);
 
   // Real MQTT targets only — an empty array means the radar confirmed
   // nobody is in range, so the map must show nothing, not a stale demo dot.
@@ -61,7 +81,7 @@ export default function Radar() {
         <span style={{ position: "absolute", left: 8, top: "33.3%", transform: "translateY(-50%)", fontFamily: "var(--mono)", fontSize: 9, color: "rgba(233,232,221,.4)" }}>1 m</span>
         <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", borderLeft: "1px dashed rgba(233,232,221,.12)" }} />
         {/* target zone */}
-        <div style={{ position: "absolute", top: 0, left: `${zl}%`, width: `${zr - zl}%`, height: `${yP(d.zoneFar)}%`, border: "1px solid rgba(59,209,122,.7)", background: "rgba(59,209,122,.08)" }}>
+        <div style={{ position: "absolute", top: 0, left: `${zl}%`, width: `${zr - zl}%`, height: `${yP(zoneYm)}%`, border: "1px solid rgba(59,209,122,.7)", background: "rgba(59,209,122,.08)" }}>
           <span style={{ position: "absolute", bottom: 4, left: "50%", transform: "translateX(-50%)", fontFamily: "var(--mono)", fontSize: 9, color: "rgba(59,209,122,.9)", whiteSpace: "nowrap" }}>target zone</span>
           <span style={{ position: "absolute", top: -7, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: "7px solid #fff" }} />
         </div>
@@ -71,9 +91,106 @@ export default function Radar() {
         ))}
       </div>
 
-      <Slider label={en ? "Position X" : "Poloha X"} value={d.zoneCx} min={-1} max={1} step={0.01} on={(v) => dispatch(devActions.setZoneCx(v))} />
-      <Slider label={en ? "Width" : "Šířka"} value={d.zoneW} min={0.2} max={2} step={0.01} on={(v) => dispatch(devActions.setZoneW(v))} />
-      <Slider label={en ? "Reach" : "Dosah"} value={d.zoneFar} min={0.5} max={3} step={0.01} on={(v) => dispatch(devActions.setZoneFar(v))} />
+      <Slider
+        label={en ? "Zone half-width" : "Poloviční šířka zóny"}
+        value={zoneXm}
+        min={0.1}
+        max={2}
+        step={0.01}
+        fmt={(v) => `${v.toFixed(2)} m`}
+        on={(v) => setRadarConfig({ zone: { x: Math.round(v * 1000), y: radarCfg?.zone.y ?? 1500 } })}
+      />
+      <Slider
+        label={en ? "Zone reach" : "Dosah zóny"}
+        value={zoneYm}
+        min={0.3}
+        max={6}
+        step={0.01}
+        fmt={(v) => `${v.toFixed(2)} m`}
+        on={(v) => setRadarConfig({ zone: { x: radarCfg?.zone.x ?? 400, y: Math.round(v * 1000) } })}
+      />
+      <Slider
+        label={en ? "X offset" : "Posun X"}
+        value={(radarCfg?.x_offset ?? 0) / 1000}
+        min={-2}
+        max={2}
+        step={0.01}
+        fmt={(v) => `${v.toFixed(2)} m`}
+        on={(v) => setRadarConfig({ x_offset: Math.round(v * 1000) })}
+      />
+      <Slider
+        label={en ? "Entry debounce" : "Debounce vstupu"}
+        value={radarCfg?.enter_frames ?? 3}
+        min={1}
+        max={10}
+        step={1}
+        fmt={(v) => `${Math.round(v)}×`}
+        on={(v) => setRadarConfig({ enter_frames: Math.round(v) })}
+      />
+      <Slider
+        label={en ? "Max range" : "Max. dosah"}
+        value={(radarCfg?.max_range_mm ?? 6000) / 1000}
+        min={1}
+        max={6}
+        step={0.1}
+        fmt={(v) => `${v.toFixed(1)} m`}
+        on={(v) => setRadarConfig({ max_range_mm: Math.round(v * 1000) })}
+      />
+      <Slider
+        label={en ? "Smoothing (alpha)" : "Vyhlazení (alpha)"}
+        value={radarCfg?.alpha ?? 0.3}
+        min={0.05}
+        max={1}
+        step={0.05}
+        fmt={(v) => v.toFixed(2)}
+        on={(v) => setRadarConfig({ alpha: Math.round(v * 100) / 100 })}
+      />
+      <Slider
+        label={en ? "Position deadband" : "Mrtvá zóna pozice"}
+        value={radarCfg?.deadband_mm ?? 60}
+        min={0}
+        max={300}
+        step={10}
+        fmt={(v) => `${Math.round(v)} mm`}
+        on={(v) => setRadarConfig({ deadband_mm: Math.round(v) })}
+      />
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
+        <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>{en ? "Mirror left/right" : "Zrcadlit vlevo/vpravo"}</span>
+        <button
+          onClick={() => setRadarConfig({ invert_x: !(radarCfg?.invert_x ?? false) })}
+          style={{ width: 48, height: 28, borderRadius: 999, border: `1px solid ${radarCfg?.invert_x ? C.ink : C.line}`, background: radarCfg?.invert_x ? C.ink : C.p3, position: "relative", cursor: "pointer", padding: 0 }}
+        >
+          <span style={{ position: "absolute", top: 2, left: radarCfg?.invert_x ? 22 : 2, width: 22, height: 22, borderRadius: "50%", background: radarCfg?.invert_x ? C.paper : C.ink, transition: ".18s" }} />
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+        <button
+          onClick={() => centerOnTarget()}
+          style={{ flex: "1 1 auto", padding: "10px 14px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}
+        >
+          {en ? "Center on me" : "Vycentrovat na mě"}
+        </button>
+        <button
+          onClick={() => flipAxis()}
+          style={{ flex: "1 1 auto", padding: "10px 14px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}
+        >
+          {en ? "Flip axis" : "Překlopit osu"}
+        </button>
+        <button
+          onClick={() => learnGhosts(10)}
+          style={{ flex: "1 1 auto", padding: "10px 14px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}
+        >
+          {en ? "Learn ghosts (10s)" : "Naučit duchy (10s)"}
+        </button>
+        <button
+          onClick={() => resetConfig()}
+          style={{ flex: "1 1 auto", padding: "10px 14px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: "pointer" }}
+        >
+          {en ? "Reset" : "Reset"}
+        </button>
+      </div>
 
       {/* --- distance sensor (HC-SR04) ----------------------------------- */}
       <div style={{ marginTop: 26, paddingTop: 18, borderTop: `1px solid ${C.line}` }}>

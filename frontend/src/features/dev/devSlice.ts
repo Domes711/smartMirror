@@ -8,9 +8,6 @@ export interface DevState {
   pwError: boolean;
   // radar
   radarActive: boolean;
-  zoneCx: number;
-  zoneW: number;
-  zoneFar: number;
   // live radar targets (from MQTT smartmirror/radar/targets)
   liveTargets: { x: number; y: number; speed?: number }[];
   livePresence: boolean | null;
@@ -33,9 +30,6 @@ const initialState: DevState = {
   pwInput: "",
   pwError: false,
   radarActive: true,
-  zoneCx: -0.1,
-  zoneW: 0.7,
-  zoneFar: 1.3,
   liveTargets: [],
   livePresence: null,
   distanceActive: true,
@@ -83,15 +77,6 @@ const devSlice = createSlice({
     },
     setRadarActive(s, a: PayloadAction<boolean>) {
       s.radarActive = a.payload;
-    },
-    setZoneCx(s, a: PayloadAction<number>) {
-      s.zoneCx = a.payload;
-    },
-    setZoneW(s, a: PayloadAction<number>) {
-      s.zoneW = a.payload;
-    },
-    setZoneFar(s, a: PayloadAction<number>) {
-      s.zoneFar = a.payload;
     },
     setLiveTargets(s, a: PayloadAction<{ x: number; y: number; speed?: number }[]>) {
       s.liveTargets = a.payload;
