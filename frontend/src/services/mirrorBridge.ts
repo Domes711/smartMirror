@@ -37,10 +37,13 @@ export function startMirrorBridge(store: AppStore): void {
         } else if (topic === TOPICS.radarTargets) {
           const data = JSON.parse(payload);
           const targets = Array.isArray(data) ? data : data.targets;
+          // Each target is a [x, y, speed] tuple (see daemon.py's
+          // `[[x, y, s] for (x, y, s) in targets]`), not an {x,y,speed}
+          // object — destructure positionally.
           if (Array.isArray(targets)) {
             store.dispatch(
               devActions.setLiveTargets(
-                targets.map((t: { x: number; y: number; speed?: number }) => ({ x: t.x, y: t.y, speed: t.speed }))
+                targets.map(([x, y, speed]: [number, number, number?]) => ({ x, y, speed }))
               )
             );
           }
