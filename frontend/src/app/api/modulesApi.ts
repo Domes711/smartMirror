@@ -39,7 +39,31 @@ export interface StoreModule {
 export interface StoreCatalog {
   community: StoreModule[];
   own: StoreModule[];
+  /** on-disk modules that are not our own (installed from the store, AI-built) */
+  installed: StoreModule[];
+  /** how many modules the browse list has in total (for the current q/tag) */
+  total: number;
+  offset: number;
   error: string | null;
+}
+
+/** Browse-list page size for the lazy store list. */
+export const STORE_PAGE = 30;
+
+export interface StoreBrowseArg {
+  q: string;
+  tag: string | null;
+}
+
+async function fetchCatalog(params: Record<string, string | number>) {
+  const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
+  try {
+    const r = await fetch(`/store/catalog?${qs}`);
+    if (!r.ok) return { error: { message: `HTTP ${r.status}`, status: r.status } };
+    return { data: (await r.json()) as StoreCatalog };
+  } catch (e) {
+    return { error: { message: String(e) } };
+  }
 }
 
 export interface InstallStatus {
@@ -56,19 +80,24 @@ export const modulesApi = createApi({
   baseQuery: mqttBaseQuery,
   tagTypes: ["StoreCatalog", "InstallStatus"],
   endpoints: (build) => ({
-    // HTTP, not MQTT: the whole store (~1400 modules, ~1.5 MB) is one big
-    // page-load read — exactly the payload shape that stays on HTTP
-    // (GET /store/catalog via the gateway, see backend/features/modules/http.py).
+    // HTTP, not MQTT: the store is a big page-load read — exactly the
+    // payload shape that stays on HTTP (GET /store/catalog via the gateway,
+    // see backend/features/modules/http.py). Loaded lazily: this one is just
+    // own + installed modules and the browse-list total (limit=0); the
+    // browse list itself pages in via browseStore while scrolling.
     getStoreCatalog: build.query<StoreCatalog, void>({
-      async queryFn() {
-        try {
-          const r = await fetch("/store/catalog");
-          if (!r.ok) return { error: { message: `HTTP ${r.status}`, status: r.status } };
-          return { data: (await r.json()) as StoreCatalog };
-        } catch (e) {
-          return { error: { message: String(e) } };
-        }
+      queryFn: () => fetchCatalog({ offset: 0, limit: 0 }),
+      providesTags: ["StoreCatalog"],
+    }),
+
+    browseStore: build.infiniteQuery<StoreCatalog, StoreBrowseArg, number>({
+      infiniteQueryOptions: {
+        initialPageParam: 0,
+        getNextPageParam: (last, _all, lastOffset) =>
+          lastOffset + STORE_PAGE < last.total ? lastOffset + STORE_PAGE : undefined,
       },
+      queryFn: ({ queryArg, pageParam }) =>
+        fetchCatalog({ offset: pageParam, limit: STORE_PAGE, q: queryArg.q, tag: queryArg.tag || "" }),
       providesTags: ["StoreCatalog"],
     }),
 
@@ -106,5 +135,5 @@ export const modulesApi = createApi({
   }),
 });
 
-export const { useGetStoreCatalogQuery, useGetReadmeQuery, useInstallModuleMutation, useUninstallModuleMutation, useGetInstallStatusQuery } =
+export const { useGetStoreCatalogQuery, useBrowseStoreInfiniteQuery, useGetReadmeQuery, useInstallModuleMutation, useUninstallModuleMutation, useGetInstallStatusQuery } =
   modulesApi;

@@ -4,30 +4,43 @@ import { MiniThumb } from "@/components/MiniThumb";
 import { PillButton, tokens as C, h1 } from "@/components/ui";
 import { modulesActions } from "@/features/modules/modulesSlice";
 import { STORE, CATEGORIES } from "@/data/catalog";
+import { useGetStoreCatalogQuery } from "@/app/api/modulesApi";
+import { useStoreBrowse } from "@/app/useStoreBrowse";
 import * as fx from "@/app/thunks";
+import { useEffect, useRef } from "react";
 
 export default function Modules() {
   const dispatch = useAppDispatch();
   const { L, en } = useT();
   const m = useAppSelector((s) => s.modules);
 
+  // own + installed are loaded up front (small); the browse list (~1400
+  // modules) pages in from the backend while scrolling — only its total is
+  // known right away.
   const all = STORE(en).filter((x) => !m.deletedMods.includes(x.n));
   const isInstalled = (x: { n: string; installed?: boolean }) => x.installed ?? m.installed.includes(x.n);
   const ownCount = all.filter((x) => x.own).length;
   const installedCount = all.filter(isInstalled).length;
-  const browseCount = all.filter((x) => !x.own).length;
+  const { data: storeHead } = useGetStoreCatalogQuery();
+  const browseCount = storeHead?.total ?? "…";
+  const searching = m.modFilter === "search";
+  const browse = useStoreBrowse(m.search, m.searchCat, en, !searching);
 
   let mods = all;
   if (m.modFilter === "mine") mods = all.filter((x) => x.own);
   else if (m.modFilter === "installed") mods = all.filter(isInstalled);
-  else if (m.modFilter === "search") {
-    mods = all.filter((x) => !x.own);
-    if (m.searchCat) mods = mods.filter((x) => x.t.includes(m.searchCat!));
-    if (m.search.trim()) {
-      const q = m.search.trim().toLowerCase();
-      mods = mods.filter((x) => (x.n + " " + x.c + " " + x.d + " " + x.t.join(" ")).toLowerCase().includes(q));
-    }
-  }
+  else if (searching) mods = browse.mods.filter((x) => !m.deletedMods.includes(x.n));
+
+  // lazy load: fetch the next page when the end of the list scrolls into view
+  const sentinel = useRef<HTMLDivElement>(null);
+  const loadMore = browse.loadMore;
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !searching) return;
+    const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && loadMore(), { rootMargin: "400px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [searching, loadMore, mods.length]);
 
   const catActive = m.searchCat ? CATEGORIES.find((c) => c.tag === m.searchCat) : null;
 
@@ -70,7 +83,7 @@ export default function Modules() {
                 <button onClick={(e) => { e.stopPropagation(); dispatch(modulesActions.setSearchCat(null)); }} style={{ width: 16, height: 16, border: "none", background: "rgba(233,232,221,.22)", borderRadius: "50%", cursor: "pointer", display: "grid", placeItems: "center", fontSize: 10, color: C.paper, lineHeight: 1 }}>×</button>
               </span>
             ) : (
-              <span style={{ flex: 1, fontFamily: "var(--mono)", fontSize: 13, color: m.search ? C.ink : C.mute, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.search || L.searchPh}</span>
+              <span style={{ flex: 1, fontFamily: "var(--mono)", fontSize: 13, color: m.search ? C.ink : C.mute, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.search || L.searchPh.replace("{n}", String(browseCount))}</span>
             )}
           </div>
         )}
@@ -93,7 +106,14 @@ export default function Modules() {
             </div>
           </div>
         ))}
-        {mods.length === 0 && <p style={{ fontFamily: "var(--mono)", fontSize: 12, color: C.mute, lineHeight: 1.6, padding: "20px 0" }}>{L.noResults}</p>}
+        {searching && <div ref={sentinel} style={{ height: 1 }} />}
+        {searching && browse.loading && (
+          <p style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, textAlign: "center", padding: "10px 0" }}>{L.loadingMore}</p>
+        )}
+        {searching && browse.error && !browse.loading && (
+          <button onClick={loadMore} style={{ width: "100%", fontFamily: "var(--mono)", fontSize: 11.5, border: `1px solid ${C.line}`, borderRadius: 999, padding: "10px", background: "transparent", color: C.ink, cursor: "pointer" }}>{L.retryLoad}</button>
+        )}
+        {mods.length === 0 && !(searching && browse.loading) && <p style={{ fontFamily: "var(--mono)", fontSize: 12, color: C.mute, lineHeight: 1.6, padding: "20px 0" }}>{L.noResults}</p>}
       </div>
     </section>
   );

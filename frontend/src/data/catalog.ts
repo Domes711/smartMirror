@@ -15,9 +15,6 @@ export const REGIONS: RegionDef[] = [
   { id: "bottom_bar", label: "Bottom bar", cs: "Dolní lišta", full: true },
 ];
 
-/** Reported community-store size (real registry has ~1400). */
-export const BROWSE_COUNT = 1412;
-
 /** Runtime catalog injected from the live mirror (/store/catalog). When set,
  * STORE()/fmod() transparently return real data so screens need no changes. */
 let RUNTIME: { cs: Module[]; en: Module[] } | null = null;

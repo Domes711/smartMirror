@@ -30,6 +30,10 @@ def catalog_full() -> dict:
     return catalog.full_catalog()
 
 
+def catalog_page(offset: int, limit: int, q: str = "", tag: str = "") -> dict:
+    return catalog.catalog_page(offset, limit, q, tag)
+
+
 def readme(mtype: str, url: str = "") -> dict:
     return install.readme(mtype, url)
 
@@ -42,6 +46,10 @@ def install_start(mtype: str) -> dict:
     result = install.install(mtype)
     if _publish:
         _publish(constants.INSTALL_STARTED, {"type": mtype})
+        # replace a retained "done"/"error" from an earlier attempt right
+        # away, not only on the watcher's first 2 s tick
+        _publish(_progress_topic(mtype), {"type": mtype, **install.status(mtype)},
+                 retain=True)
     _watch_install(mtype)
     return result
 

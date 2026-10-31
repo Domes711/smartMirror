@@ -168,7 +168,9 @@ def test_modules_rpc_and_http_agree_on_the_catalog(sandbox, monkeypatch):
     modules_http.mount(router)
 
     http_fn, _ = router.match("GET", "/store/catalog")
-    assert rec.served[topics.RPC_CATALOG]({}) == http_fn(None)
+    # no ?limit → the whole store, same as the MQTT twin
+    no_query = type("Req", (), {"query": {}})()
+    assert rec.served[topics.RPC_CATALOG]({}) == http_fn(no_query)
 
 
 def test_modules_install_rpc_and_mqtt_publish_through_the_same_service(

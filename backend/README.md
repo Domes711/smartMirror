@@ -301,9 +301,12 @@ Only payload shapes pub/sub cannot carry:
   files / a live module's own static tree (`modules`, `:8003`).
 - **`/module-draft/*`** — the AI builder's working-copy zip, unpacked
   client-side for the preview `<iframe>` (`ai_modules`, `:8004`).
-- **`/store/catalog`** — the whole module store (~1400 modules after the
-  MMM-store import, ~1.5 MB) as one page-load read; too big for one MQTT
-  reply. The app always loads it over HTTP (`modules`, `:8003`).
+- **`/store/catalog`** — the module store (~1400 modules after the
+  MMM-store import), too big for one MQTT reply (`modules`, `:8003`). The
+  app loads it lazily: `?limit=0` → own + installed + browse `total`;
+  `?offset=&limit=30&q=&tag=` → one page of the browse list (everything but
+  `custom`), filtered in SQL (`data/module_catalog.browse_page`). Without
+  `limit` it returns the whole store, same as the MQTT twin.
 
 `/api/modules/*` (chat, chat/stream SSE, draft/session CRUD) is **not** on
 this list any more — that was the AI builder's pre-MQTT HTTP surface, and it

@@ -200,6 +200,35 @@ def installed_dirs() -> set:
         return set()
 
 
+def _store_entry(r: dict, dirs: set) -> dict:
+    """One catalog row in the shape the app's store screen reads.
+
+    Kept lean: the whole store is ~1400 entries, so nothing is sent twice
+    (the description lives only under catalog.description, the preview only
+    as `image`).
+    """
+    module_id, name = r["id"], r["module_name"]
+    shots = _screenshots_for(module_id)
+    remote = module_images.urls_for(module_id)
+    return {
+        "id": name, "name": name,
+        "url": r["repo_url"],
+        "category": r["category"], "maintainer": r["maintainer"],
+        "stars": r["stars"],
+        # A locally generated screenshot always beats the upstream image —
+        # it shows the module as it actually renders on this mirror.
+        "image": shots[0] if shots else (remote[0] if remote else None),
+        "installed": r["source"] in catalog_data.ON_DISK or name in dirs,
+        "own": r["source"] == "custom",
+        "catalog": {
+            "name": {"cs": r["label_cs"], "en": r["label_en"]},
+            "description": {"cs": r["description_cs"],
+                            "en": r["description_en"]},
+            "tags": module_tags.for_module(module_id),
+        },
+    }
+
+
 def full_catalog() -> dict:
     """Everything, split the way the app's store screen expects.
 
@@ -210,31 +239,30 @@ def full_catalog() -> dict:
     dirs = installed_dirs()
     community, own = [], []
     for r in catalog_data.list_all():
-        module_id, name = r["id"], r["module_name"]
-        shots = _screenshots_for(module_id)
-        remote = module_images.urls_for(module_id)
-        # Kept lean: with the whole MMM-store imported this is ~1400 entries
-        # in ONE MQTT reply, so nothing is sent twice (the description lives
-        # only under catalog.description, the preview only as `image`).
-        entry = {
-            "id": name, "name": name,
-            "url": r["repo_url"],
-            "category": r["category"], "maintainer": r["maintainer"],
-            "stars": r["stars"],
-            # A locally generated screenshot always beats the upstream image —
-            # it shows the module as it actually renders on this mirror.
-            "image": shots[0] if shots else (remote[0] if remote else None),
-            "installed": r["source"] in catalog_data.ON_DISK or name in dirs,
-            "own": r["source"] == "custom",
-            "catalog": {
-                "name": {"cs": r["label_cs"], "en": r["label_en"]},
-                "description": {"cs": r["description_cs"],
-                                "en": r["description_en"]},
-                "tags": module_tags.for_module(module_id),
-            },
-        }
+        entry = _store_entry(r, dirs)
         (own if entry["own"] else community).append(entry)
     return {"community": community, "own": own, "error": None}
+
+
+def catalog_page(offset: int = 0, limit: int = 30, q: str = "",
+                 tag: str = "") -> dict:
+    """The store, lazily: our own + installed modules in full (a few dozen,
+    every screen needs them), plus ONE page of the browse list (everything
+    but `custom`, narrowed by `q`/`tag`) and its total, so the app can show
+    the count immediately and fetch the rest while scrolling. `limit=0`
+    returns just own/installed/total."""
+    db.init()
+    dirs = installed_dirs()
+    own, installed = [], []
+    for r in catalog_data.list_on_disk():
+        entry = _store_entry(r, dirs)
+        (own if entry["own"] else installed).append(entry)
+    q, tag = (q or "").strip(), (tag or "").strip()
+    page = [_store_entry(r, dirs) for r in catalog_data.browse_page(
+        q, tag, max(0, offset), max(0, limit))] if limit > 0 else []
+    return {"own": own, "installed": installed, "community": page,
+            "total": catalog_data.browse_count(q, tag),
+            "offset": max(0, offset), "error": None}
 
 
 def lookup(name: str):
