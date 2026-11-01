@@ -39,6 +39,15 @@ DEFAULT_ENCODINGS = paths.ENCODINGS_PATH
 DEFAULT_MAX_DURATION = 3.0  # seconds to scan for faces (aggressive optimization)
 DEFAULT_TOLERANCE = 0.6
 FRAME_INTERVAL = 0.3  # seconds between face detection attempts
+# The camera is exclusive hardware shared with camera-supervisor, which
+# holds it for a moment on every mode switch (closing + handing off takes
+# a beat — see supervisor.py's own CAMERA_OPEN_RETRIES). Boot ordering, a
+# restart racing a mode switch, or supervisor still mid-release can all
+# make the very first open attempt land on "Pipeline handler in use by
+# another process" — retrying here instead of giving up permanently is
+# what supervisor.py already does for itself.
+CAMERA_INIT_RETRIES = 10
+CAMERA_INIT_RETRY_DELAY_S = 1.0
 
 logging.basicConfig(
     level=logging.INFO,
@@ -143,25 +152,45 @@ class FaceRecoDaemon:
         self.picam = None
         self._init_camera()
 
-    def _init_camera(self):
-        """Initialize camera once and keep it running."""
-        try:
-            from picamera2 import Picamera2
-            self.picam = Picamera2()
-            # Medium resolution for balance between speed and accuracy
-            config = self.picam.create_preview_configuration(
-                main={"size": (320, 240), "format": "RGB888"}
-            )
-            self.picam.configure(config)
-            self.picam.start()
-            # Short warmup and discard first few frames (they can be blurry)
-            time.sleep(0.3)
-            for _ in range(3):
-                self.picam.capture_array()
-            log.info("Camera initialized and ready (320x240, balanced)")
-        except Exception as exc:
-            log.error("Failed to initialize camera: %s", exc)
-            self.picam = None
+    def _init_camera(self, retries: int = CAMERA_INIT_RETRIES):
+        """Initialize camera, retrying while the exclusive device is still
+        held by camera-supervisor (expected right after a mode switch handed
+        it over) instead of giving up on the very first attempt and staying
+        dead until something restarts this whole process."""
+        from picamera2 import Picamera2
+
+        last_exc = None
+        for attempt in range(retries):
+            picam = None
+            try:
+                picam = Picamera2()
+                # Medium resolution for balance between speed and accuracy
+                config = picam.create_preview_configuration(
+                    main={"size": (320, 240), "format": "RGB888"}
+                )
+                picam.configure(config)
+                picam.start()
+                # Short warmup and discard first few frames (they can be blurry)
+                time.sleep(0.3)
+                for _ in range(3):
+                    picam.capture_array()
+                self.picam = picam
+                log.info("Camera initialized and ready (320x240, balanced)")
+                return
+            except Exception as exc:
+                last_exc = exc
+                if picam is not None:
+                    try:
+                        picam.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                log.info("camera busy, retry %d/%d: %s",
+                        attempt + 1, retries, exc)
+                time.sleep(CAMERA_INIT_RETRY_DELAY_S)
+
+        log.error("Failed to initialize camera after %d attempts: %s",
+                  retries, last_exc)
+        self.picam = None
 
     def cleanup(self):
         """Stop camera on daemon shutdown."""
@@ -200,9 +229,18 @@ class FaceRecoDaemon:
 
         try:
             if not self.picam:
-                log.error("Camera not initialized, cannot scan")
-                self.mqtt_client.publish(topics.RECOGNITION, {"user": None})
-                return
+                # The startup retries in _init_camera() cover the common
+                # case (a mode switch handing the camera back right as this
+                # process starts); a presence event arriving well after
+                # that window still deserves one more attempt rather than
+                # silently publishing "nobody" forever until something
+                # restarts this process.
+                log.warning("Camera not initialized, retrying before giving up on this scan")
+                self._init_camera(retries=1)
+                if not self.picam:
+                    log.error("Camera still not initialized, cannot scan")
+                    self.mqtt_client.publish(topics.RECOGNITION, {"user": None})
+                    return
 
             name, kind = recognize_stream(
                 self.picam,
