@@ -261,14 +261,28 @@ def main() -> int:
                         help="face_recognition tolerance")
     args = parser.parse_args()
 
-    # Load encodings
-    if not os.path.exists(args.encodings):
-        log.error("encodings file not found: %s", args.encodings)
-        return 1
+    # This is a supervisor-managed long-running daemon (Restart=always), not
+    # a one-shot script — exiting non-zero here just means "systemd restarts
+    # me again in 10s", forever, which is what used to happen on every Pi
+    # that had never run enrollment yet (no encoded_faces.pickle until
+    # someone's been through Profiles → Add profile at least once). Wait for
+    # the file to show up instead of crash-looping; recognition genuinely
+    # cannot do anything useful without it, but that isn't a reason to spam
+    # the journal with identical failures every 10 seconds.
+    wait_logged = False
+    while not os.path.exists(args.encodings):
+        if not wait_logged:
+            log.warning("encodings file not found yet (%s) — waiting for "
+                       "enrollment; will pick it up once it appears",
+                       args.encodings)
+            wait_logged = True
+        time.sleep(5)
+    if wait_logged:
+        log.info("encodings file appeared, continuing startup")
 
     known_encodings, known_names = load_known(args.encodings)
     if not known_encodings:
-        log.error("encodings file is empty")
+        log.error("encodings file is empty — enroll at least one profile")
         return 1
 
     log.info("Loaded %d face encodings: %s", len(known_encodings),
