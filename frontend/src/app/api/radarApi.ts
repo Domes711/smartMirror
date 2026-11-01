@@ -126,6 +126,15 @@ export const radarConfigApi = createApi({
     resetRadarConfig: build.mutation<{ ok: boolean }, void>({
       query: () => ({ cmd: "reset" }),
     }),
+
+    // Opt-in live target broadcast (daemon.py's RadarState.is_streaming) —
+    // the dev console's Radar screen sends `active: true` on mount and
+    // renews it periodically while open, `active: false` on unmount; a
+    // 15s-silence auto-stop on the daemon side covers a closed tab that
+    // never got to send the false.
+    setRadarStreaming: build.mutation<{ ok: boolean }, boolean>({
+      query: (active) => ({ cmd: "stream", active }),
+    }),
   }),
 });
 
@@ -137,4 +146,5 @@ export const {
   useFlipRadarAxisMutation,
   useLearnRadarGhostsMutation,
   useResetRadarConfigMutation,
+  useSetRadarStreamingMutation,
 } = radarConfigApi;

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
@@ -10,12 +11,17 @@ import {
   useFlipRadarAxisMutation,
   useLearnRadarGhostsMutation,
   useResetRadarConfigMutation,
+  useSetRadarStreamingMutation,
 } from "@/app/api/radarApi";
 
 const HX = 2.2; // half-width metres
 const MY = 3; // reach metres
 const xP = (m: number) => 50 + (m / HX) * 50;
 const yP = (m: number) => (m / MY) * 100;
+
+// Must be well under the daemon's STREAM_TIMEOUT_S (15s) so a renewal
+// always lands before the broadcast auto-stops on its own.
+const STREAM_RENEW_MS = 8000;
 
 export default function Radar() {
   const dispatch = useAppDispatch();
@@ -33,6 +39,19 @@ export default function Radar() {
   const [flipAxis] = useFlipRadarAxisMutation();
   const [learnGhosts] = useLearnRadarGhostsMutation();
   const [resetConfig] = useResetRadarConfigMutation();
+  const [setStreaming] = useSetRadarStreamingMutation();
+
+  // Live targets cost the daemon a broadcast ~10x/second — only worth it
+  // while this screen is actually open. Start on mount, renew periodically
+  // (the daemon auto-stops after 15s of silence), stop on unmount.
+  useEffect(() => {
+    setStreaming(true);
+    const renew = setInterval(() => setStreaming(true), STREAM_RENEW_MS);
+    return () => {
+      clearInterval(renew);
+      setStreaming(false);
+    };
+  }, [setStreaming]);
 
   // Targets arrive already offset/mirror-corrected (daemon.py's apply_axis
   // runs before publish), so the detection zone on the map is always

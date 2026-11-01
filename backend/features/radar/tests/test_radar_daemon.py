@@ -1,7 +1,8 @@
 import struct
 import pytest
 from features.radar.daemon import (FRAME_FOOTER, FRAME_HEADER,
-                                   calculate_distance, parse_frame)
+                                   calculate_distance, parse_frame,
+                                   RadarState, STREAM_TIMEOUT_S)
 
 
 def _encode_signed(value: int) -> int:
@@ -188,6 +189,54 @@ def test_smoother_drops_stale_track():
     s.update([]); s.update([])                 # 2 misses -> still alive
     out = s.update([])                          # 3rd miss -> dropped
     assert out == []
+
+
+# --- target-stream opt-in (RadarState.handle "stream") -------------------
+
+def test_not_streaming_by_default():
+    state = RadarState({})
+    assert state.is_streaming(now=0.0) is False
+
+
+def test_stream_active_enables_broadcasting():
+    state = RadarState({})
+    state.handle({"cmd": "stream", "active": True}, now=100.0)
+    assert state.is_streaming(now=100.0) is True
+
+
+def test_stream_defaults_to_active_true_when_omitted():
+    state = RadarState({})
+    state.handle({"cmd": "stream"}, now=100.0)
+    assert state.is_streaming(now=100.0) is True
+
+
+def test_stream_active_false_stops_broadcasting():
+    state = RadarState({})
+    state.handle({"cmd": "stream", "active": True}, now=100.0)
+    state.handle({"cmd": "stream", "active": False}, now=101.0)
+    assert state.is_streaming(now=101.0) is False
+
+
+def test_stream_auto_expires_without_renewal():
+    state = RadarState({})
+    state.handle({"cmd": "stream", "active": True}, now=100.0)
+    assert state.is_streaming(now=100.0 + STREAM_TIMEOUT_S - 1) is True
+    assert state.is_streaming(now=100.0 + STREAM_TIMEOUT_S + 1) is False
+
+
+def test_stream_renewal_pushes_the_deadline_out():
+    state = RadarState({})
+    state.handle({"cmd": "stream", "active": True}, now=100.0)
+    state.handle({"cmd": "stream", "active": True}, now=100.0 + STREAM_TIMEOUT_S - 1)
+    # Had it not renewed, this point would already be past the original deadline.
+    assert state.is_streaming(now=100.0 + STREAM_TIMEOUT_S + 5) is True
+
+
+def test_stream_command_does_not_mark_config_dirty():
+    state = RadarState({"zone": {"x": 400, "y": 1500}})
+    state.consume_dirty()  # clear the initial "publish once at startup" flag
+    state.handle({"cmd": "stream", "active": True}, now=100.0)
+    assert state.consume_dirty() is False
 
 
 if __name__ == '__main__':

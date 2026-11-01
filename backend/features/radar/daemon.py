@@ -58,6 +58,7 @@ SERIAL_DEVICE = "/dev/ttyAMA0"
 SERIAL_BAUD = 256000
 
 TARGET_PUB_INTERVAL = 0.1   # s — throttle live target broadcasts (~10 Hz)
+STREAM_TIMEOUT_S = 15        # auto-stop broadcasting if no renewal arrives
 
 EXCL_RADIUS_MM = 250     # drop targets within this of a learned ghost spot
 BASELINE_GRID_MM = 150   # quantize baseline ghost points to this grid
@@ -326,10 +327,22 @@ class RadarState:
         self._baseline_deadline = None
         self._baseline_points = []
         self._dirty = True   # publish config once at startup
+        # Live target broadcast is opt-in, not always-on: only the dev
+        # console cares about the raw per-frame positions, so TARGETS stays
+        # silent — saving ~600 pointless MQTT messages/minute — until a
+        # client explicitly asks for it. _stream_deadline auto-expires the
+        # subscription (STREAM_TIMEOUT_S below) so a tab closed without
+        # sending stream:false, or a dropped connection, can't leave
+        # broadcasting on forever.
+        self._stream_deadline = None
 
     def snapshot(self) -> dict:
         with self.lock:
             return self.config
+
+    def is_streaming(self, now: float) -> bool:
+        with self.lock:
+            return self._stream_deadline is not None and now < self._stream_deadline
 
     def set_last(self, targets: list) -> None:
         with self.lock:
@@ -366,6 +379,15 @@ class RadarState:
 
     def handle(self, payload: dict, now: float) -> None:
         cmd = (payload or {}).get("cmd")
+        if cmd == "stream":
+            # Not a config mutation — renews or clears the broadcast
+            # deadline only, so it never triggers a persist/CONFIG republish.
+            with self.lock:
+                if payload.get("active", True):
+                    self._stream_deadline = now + STREAM_TIMEOUT_S
+                else:
+                    self._stream_deadline = None
+            return
         with self.lock:
             cfg = dict(self.config)
             if cmd == "get_config":
@@ -505,9 +527,13 @@ def main() -> int:
                 state.set_last(targets)
                 event = tracker.update(targets)
 
-                # Broadcast live target positions for the radar console map
-                # (throttled, fire-and-forget, no logging spam).
-                if now - last_pub >= TARGET_PUB_INTERVAL:
+                # Broadcast live target positions for the radar dev console
+                # map only while a client is actively subscribed (stream
+                # command) — otherwise this was ~600 pointless messages/
+                # minute with nobody watching. PRESENCE below is unrelated
+                # and always published; display's standby timer depends on
+                # it running in the background regardless of the console.
+                if state.is_streaming(now) and now - last_pub >= TARGET_PUB_INTERVAL:
                     last_pub = now
                     client.publish(topics.TARGETS, {
                         "targets": [[x, y, s] for (x, y, s) in targets],
