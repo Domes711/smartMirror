@@ -465,19 +465,13 @@ function PhotoSheet() {
   const id = useAppSelector((s) => s.profiles.photoSheet);
   const photo = useAppSelector((s) => s.profiles.facePhotos.find((p) => p.id === id));
   if (!photo) return null;
-  const date = (() => {
-    const d = new Date(2026, 5, 13);
-    d.setDate(d.getDate() - photo.n * 2);
-    return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`;
-  })();
   return (
     <BottomSheet open onClose={() => dispatch(profilesActions.closePhotoSheet())}>
       <div style={{ width: "100%", aspectRatio: "1 / 1", maxHeight: 240, borderRadius: 16, overflow: "hidden", background: `linear-gradient(150deg, hsl(${photo.hue},34%,64%), hsl(${(photo.hue + 38) % 360},40%,40%))`, marginBottom: 14 }}>
         {photo.src && <img src={photo.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, fontFamily: "var(--mono)", fontSize: 12 }}>
-        <span><b>{L.photoWord} {photo.n}</b><span style={{ color: C.mute }}> · {date}</span></span>
-        <span style={{ color: C.mute }}>1080×1080</span>
+        <span><b>{L.photoWord} {photo.n}</b></span>
       </div>
       <button onClick={() => dispatch(profilesActions.openPhotoDel(photo.id))} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "12px 18px", cursor: "pointer", border: `1px solid ${C.signal}`, background: "transparent", color: C.signal }}>
         <svg viewBox="0 0 24 24" style={{ width: 15, height: 15, fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6" /></svg>

@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ConnState, MqttMsg } from "@/types";
+import type { MqttMsg } from "@/types";
 
 export interface DevState {
   devMode: boolean;
@@ -15,9 +15,6 @@ export interface DevState {
   distanceActive: boolean;
   distanceCm: number | null;
   distanceNear: boolean;
-  // connection scan (settings)
-  connState: ConnState;
-  scanIp: string;
   // comms
   commsPanel: boolean;
   commsName: string;
@@ -35,10 +32,8 @@ const initialState: DevState = {
   distanceActive: true,
   distanceCm: null,
   distanceNear: false,
-  connState: "idle",
-  scanIp: "",
   commsPanel: false,
-  commsName: "Eliška",
+  commsName: "",
   sentMsgs: [],
 };
 
@@ -90,13 +85,6 @@ const devSlice = createSlice({
     setDistanceReading(s, a: PayloadAction<{ cm: number | null; near: boolean }>) {
       s.distanceCm = a.payload.cm;
       s.distanceNear = a.payload.near;
-    },
-    // connection scan
-    setConnState(s, a: PayloadAction<ConnState>) {
-      s.connState = a.payload;
-    },
-    setScanIp(s, a: PayloadAction<string>) {
-      s.scanIp = a.payload;
     },
     // comms
     openComms(s) {

@@ -29,7 +29,7 @@ store.dispatch(scenesApi.endpoints.getLayout.initiate());
 store.dispatch(scenesApi.endpoints.getScenesModules.initiate());
 // The store catalog is the one big reply (whole MMM-store) — if it fails
 // (timeout, broker not up yet) keep retrying, otherwise the Modules screen
-// is stuck on the built-in seed list until a reload.
+// is stuck on an empty catalog until a reload.
 const loadStoreCatalog = (): void => {
   store
     .dispatch(modulesApi.endpoints.getStoreCatalog.initiate(undefined, { forceRefetch: true }))

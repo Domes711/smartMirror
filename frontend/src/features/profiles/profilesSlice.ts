@@ -25,12 +25,12 @@ export interface ProfilesState {
 }
 
 const initialState: ProfilesState = {
-  profiles: [{ id: "eliska", name: "Eliška", photos: 12, scenes: 3 }],
+  profiles: [],
   profileName: "default",
   profileTab: "scenes",
   tempActiveProfile: null,
   profileDelOpen: false,
-  facePhotos: Array.from({ length: 12 }, (_, i) => ({ id: "fp" + (i + 1), hue: (i * 47 + 18) % 360, n: i + 1 })),
+  facePhotos: [],
   photoSheet: null,
   photoDelModal: null,
   photoSource: "mirror",

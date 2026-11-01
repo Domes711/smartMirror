@@ -52,16 +52,10 @@ export interface ScenesState {
   cfgAiReady: boolean;
 }
 
-const seedScenes: Record<string, Scene> = {
-  day: { name: "Denní", name_en: "Daytime", use: "default · 10:00–18:00", use_en: "default · 10:00–18:00", startH: 10, endH: 18, startLabel: "10:00", endLabel: "18:00", scheduled: true, regions: { top_left: ["clock"], top_right: ["MMM-Brno-Transit"], bottom_center: ["MMM-Flights"], middle: ["MMM-Mail", "MMM-Calendar", "MMM-Weather", "MMM-HA-Reminders"] } },
-  morning: { name: "Ranní", name_en: "Morning", use: "Eliška · po–pá 06:00–10:00", use_en: "Eliška · Mon–Fri 06:00–10:00", startH: 6, endH: 10, startLabel: "06:00", endLabel: "10:00", scheduled: true, regions: { top_left: ["clock"], top_right: ["MMM-Brno-Transit"], middle: ["MMM-Mail"] } },
-  evening: { name: "Večerní", name_en: "Evening", use: "nepoužito", use_en: "unused", startH: 18, endH: 23, startLabel: "18:00", endLabel: "23:00", scheduled: false, regions: { top_center: ["clock"], lower_third: ["MMM-Package-Tracker"] } },
-};
-
 const initialState: ScenesState = {
-  scenes: seedScenes,
+  scenes: {},
   userKey: "default",
-  activeScene: "day",
+  activeScene: "",
   live: null,
   dirty: 0,
   editing: null,
@@ -82,8 +76,8 @@ const initialState: ScenesState = {
   teEnd: 18,
   delModal: false,
   editBackModal: false,
-  windows: [{ time: "10:00–18:00", scene: "day" }],
-  winSeq: 1,
+  windows: [],
+  winSeq: 0,
   cfgOpen: false,
   cfgType: null,
   cfgRid: null,
@@ -126,7 +120,7 @@ const scenesSlice = createSlice({
       s.userKey = a.payload;
     },
     syncLiveFromActive(s) {
-      s.live = clone(s.scenes[s.activeScene].regions);
+      s.live = clone(s.scenes[s.activeScene]?.regions ?? {});
     },
     applyLive(s) {
       // snapshot what the mirror should show right now (time-resolved)

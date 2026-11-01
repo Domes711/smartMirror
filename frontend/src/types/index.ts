@@ -135,7 +135,6 @@ export interface TimeWindow {
   scene: string; // scene id
 }
 
-export type ConnState = "idle" | "scanning" | "found";
 export type TaskKind = "retrain" | "install" | null;
 export type CtrlType = "toggle" | "select" | "slider";
 

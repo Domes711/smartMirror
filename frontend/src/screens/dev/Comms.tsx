@@ -49,8 +49,6 @@ export default function Comms() {
   const links = [
     { name: "MQTT broker", sub: resolveMqttUrl().replace(/^wss?:\/\//, ""), dot: connected ? C.green : C.signal, stat: connected ? (en ? "connected" : "připojeno") : en ? "offline" : "odpojeno", statColor: connected ? C.green : C.signal },
     { name: "WebSocket", sub: resolveMqttUrl(), dot: connected ? C.green : C.mute, stat: connected ? (en ? "open" : "otevřeno") : en ? "closed" : "zavřeno", statColor: connected ? C.green : C.mute },
-    { name: "Home Assistant", sub: "supervisor · 2024.12", dot: C.green, stat: en ? "linked" : "propojeno", statColor: C.green },
-    { name: "OTA", sub: en ? "channel · stable" : "kanál · stable", dot: C.mute, stat: en ? "idle" : "nečinné", statColor: C.mute },
   ];
 
   return (

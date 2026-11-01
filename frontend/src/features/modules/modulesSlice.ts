@@ -40,17 +40,14 @@ export interface ModulesState {
 }
 
 const initialState: ModulesState = {
-  installed: ["clock", "MMM-Flights", "MMM-Brno-Transit", "MMM-Mail", "MMM-Package-Tracker", "MMM-Weather", "MMM-Calendar", "MMM-Reminders"],
+  installed: [],
   modFilter: "mine",
   search: "",
   searchOpen: false,
   searchCat: null,
   detailMod: null,
   deletedMods: [],
-  drafts: [
-    { n: "MMM-Counter", c: "Odpočet", ce: "Countdown", d: "Odpočet dní do výplaty — velké číslo a popisek.", de: "Countdown of days to payday — big number and a label.", t: ["counter", "rozpracováno"], te: ["counter", "draft"], mini: ["128", "dní / days"] },
-    { n: "MMM-NameDays", c: "Svátky", ce: "Name days", d: "Dnešní a zítřejší jmeniny pod hodinami.", de: "Today’s and tomorrow’s name days under the clock.", t: ["svátky", "rozpracováno"], te: ["names", "draft"], mini: ["SVÁTEK", "● Antonín", "○ Ivana"] },
-  ],
+  drafts: [],
   createTab: "new",
   createName: "",
   createDesc: "",

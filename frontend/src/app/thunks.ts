@@ -26,8 +26,6 @@ let toastT: ReturnType<typeof setTimeout> | undefined;
 let liveT: ReturnType<typeof setTimeout> | undefined;
 let taskInt: ReturnType<typeof setInterval> | undefined;
 let taskDoneT: ReturnType<typeof setTimeout> | undefined;
-let scanInt: ReturnType<typeof setInterval> | undefined;
-let scanTo: ReturnType<typeof setTimeout> | undefined;
 let titleClicks = 0;
 let titleResetT: ReturnType<typeof setTimeout> | undefined;
 
@@ -680,26 +678,6 @@ export const sendMqtt =
     dispatch(devActions.sentMsg({ t, dir: "→", dirColor: "#3bd17a", topic, payload }));
     dispatch(toast(en(getState()) ? "Message sent" : "Zpráva odeslána"));
   };
-
-export const searchMirror = (): Thunk => (dispatch, getState) => {
-  if (getState().dev.connState === "scanning") return;
-  const ips = ["192.168.1.2", "192.168.1.7", "192.168.1.18", "192.168.1.23", "192.168.1.31", "192.168.1.36", "192.168.1.42"];
-  let i = 0;
-  clearInterval(scanInt);
-  clearTimeout(scanTo);
-  dispatch(devActions.setConnState("scanning"));
-  dispatch(devActions.setScanIp(ips[0]));
-  scanInt = setInterval(() => {
-    i = (i + 1) % ips.length;
-    dispatch(devActions.setScanIp(ips[i]));
-  }, 360);
-  scanTo = setTimeout(() => {
-    clearInterval(scanInt);
-    dispatch(devActions.setConnState("found"));
-    dispatch(devActions.setScanIp("192.168.1.42"));
-    dispatch(toast(Lof(getState()).tMirrorFound));
-  }, 2700);
-};
 
 export const toggleRadar = (): Thunk => (dispatch, getState) => {
   const next = !getState().dev.radarActive;
