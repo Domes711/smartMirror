@@ -79,6 +79,24 @@ export const radarConfigApi = createApi({
     getRadarConfig: build.query<RadarConfig, void>({
       query: () => ({ cmd: "get_config" }),
       providesTags: ["RadarConfig"],
+      // get_config's "response" is just an ack ({ok:true} from
+      // radarControlBaseQuery, not a RadarConfig) — the real data arrives
+      // via the retained CONFIG push below. A full-shape placeholder here
+      // (mirroring DEFAULT_CONFIG in daemon.py) matters: without it, every
+      // caller reading radarCfg.zone.x would need to re-guard against a
+      // half-formed `{ok:true}` object landing in the cache before the
+      // subscription's first update replaces it.
+      transformResponse: (): RadarConfig => ({
+        zone: { x: 400, y: 1500 },
+        x_offset: 0,
+        invert_x: false,
+        enter_frames: 3,
+        max_range_mm: 6000,
+        min_speed: 0,
+        alpha: 0.3,
+        deadband_mm: 60,
+        exclusions: [],
+      }),
       async onCacheEntryAdded(_arg, { cacheDataLoaded, cacheEntryRemoved, updateCachedData }) {
         await cacheDataLoaded;
         const unsub = onTopicJson<RadarConfig>(TOPIC.config, (data) => {

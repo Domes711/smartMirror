@@ -38,8 +38,8 @@ export default function Radar() {
   // runs before publish), so the detection zone on the map is always
   // centered on 0 — zone.x/zone.y are the backend's real half-width/depth,
   // no separate visual "position" slider needed.
-  const zoneXm = (radarCfg?.zone.x ?? 400) / 1000;
-  const zoneYm = (radarCfg?.zone.y ?? 1500) / 1000;
+  const zoneXm = (radarCfg?.zone?.x ?? 400) / 1000;
+  const zoneYm = (radarCfg?.zone?.y ?? 1500) / 1000;
   const zl = xP(-zoneXm);
   const zr = xP(zoneXm);
 
@@ -98,7 +98,7 @@ export default function Radar() {
         max={2}
         step={0.01}
         fmt={(v) => `${v.toFixed(2)} m`}
-        on={(v) => setRadarConfig({ zone: { x: Math.round(v * 1000), y: radarCfg?.zone.y ?? 1500 } })}
+        on={(v) => setRadarConfig({ zone: { x: Math.round(v * 1000), y: radarCfg?.zone?.y ?? 1500 } })}
       />
       <Slider
         label={en ? "Zone reach" : "Dosah zóny"}
@@ -107,7 +107,7 @@ export default function Radar() {
         max={6}
         step={0.01}
         fmt={(v) => `${v.toFixed(2)} m`}
-        on={(v) => setRadarConfig({ zone: { x: radarCfg?.zone.x ?? 400, y: Math.round(v * 1000) } })}
+        on={(v) => setRadarConfig({ zone: { x: radarCfg?.zone?.x ?? 400, y: Math.round(v * 1000) } })}
       />
       <Slider
         label={en ? "X offset" : "Posun X"}
