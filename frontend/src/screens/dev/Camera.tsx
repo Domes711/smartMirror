@@ -4,13 +4,18 @@ import { tokens as C, h2, eyebrow } from "@/components/ui";
 import {
   useGetCameraHealthQuery,
   useSetCameraModeMutation,
+  useRenewCameraModeMutation,
+  useReleaseCameraModeMutation,
   useSetCameraSettingsMutation,
-  useRestartRecognitionMutation,
 } from "@/app/api/cameraApi";
 
-type DetectionMode = "learn" | "test_face" | "test_gesture";
+type DetectionMode = "learn" | "face" | "gesture";
 
 const streamUrl = () => "/stream.mjpg";
+
+// Must be well under the backend's MANUAL_OVERRIDE_S (20s) so a renewal
+// always lands before the dev-console override auto-expires.
+const MODE_RENEW_MS = 10000;
 
 const RESOLUTIONS: [number, number][] = [
   [640, 480],
@@ -30,22 +35,21 @@ export default function Camera() {
   const [retryCount, setRetryCount] = useState(0);
 
   const [setCameraMode] = useSetCameraModeMutation();
+  const [renewCameraMode] = useRenewCameraModeMutation();
+  const [releaseCameraMode] = useReleaseCameraModeMutation();
   const [setCameraSettings] = useSetCameraSettingsMutation();
-  const [restartRecognition, { isLoading: restarting }] = useRestartRecognitionMutation();
   // Health is pushed retained (smartmirror/camera/state) — this query's
   // cache stays live via its onCacheEntryAdded subscription, no polling.
   const { data: health } = useGetCameraHealthQuery();
 
-  // recognition_timeout_s isn't part of CameraHealth — it belongs to the
-  // separate camera-recognition process, which only reads it at its own
-  // startup, so there's no live value to reflect back here. Kept as local
-  // UI state, written through on change; "Apply" restarts that daemon so
-  // it actually picks the new value up.
-  const [recognitionTimeout, setRecognitionTimeout] = useState(3);
-  const [restartNeeded, setRestartNeeded] = useState(false);
-
   useEffect(() => {
-    // When the screen mounts, switch to learn mode to enable streaming.
+    // Mounting the screen takes manual control of the mode (a clean stream,
+    // no overlay) — this is the dev-console override described in
+    // backend/features/camera/mode_controller.py, renewed periodically so
+    // it doesn't expire while the screen stays open. Unmounting releases
+    // control back to the idle/face/gesture presence state machine —
+    // immediately re-entering detection if someone was already standing
+    // there while this screen was open for testing.
     let mounted = true;
     (async () => {
       try {
@@ -57,10 +61,12 @@ export default function Camera() {
       }
     })();
 
-    // When the screen unmounts, return to face_detect (camera off, daemon on).
+    const renew = setInterval(() => renewCameraMode(), MODE_RENEW_MS);
+
     return () => {
       mounted = false;
-      setCameraMode("face_detect").catch((err) => console.error("Failed to restore face_detect mode:", err));
+      clearInterval(renew);
+      releaseCameraMode().catch((err) => console.error("Failed to release camera mode override:", err));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -85,10 +91,10 @@ export default function Camera() {
   };
 
   const getDetectionInfo = () => {
-    if (detectionMode === "test_face" || detectionMode === "learn") {
+    if (detectionMode === "face" || detectionMode === "learn") {
       return [{ k: en ? "Person" : "Osoba", v: health?.detected_face || "—" }];
     }
-    if (detectionMode === "test_gesture") {
+    if (detectionMode === "gesture") {
       return [{ k: en ? "Fingers" : "Prsty", v: health?.finger_count != null ? String(health.finger_count) : "—" }];
     }
     return [];
@@ -207,7 +213,7 @@ export default function Camera() {
       <div style={{ marginTop: 16, marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, marginBottom: 8, textTransform: "uppercase", letterSpacing: ".08em" }}>{en ? "Detection" : "Detekce"}</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-          {(["learn", "test_face", "test_gesture"] as const).map((mode) => (
+          {(["learn", "face", "gesture"] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => handleModeChange(mode)}
@@ -224,7 +230,7 @@ export default function Camera() {
                 opacity: switchingMode ? 0.5 : 1,
               }}
             >
-              {mode === "learn" ? (en ? "Clean" : "Čistý") : mode === "test_face" ? (en ? "Face" : "Obličej") : en ? "Gesture" : "Gesta"}
+              {mode === "learn" ? (en ? "Clean" : "Čistý") : mode === "face" ? (en ? "Face" : "Obličej") : en ? "Gesture" : "Gesta"}
             </button>
           ))}
         </div>
@@ -272,41 +278,8 @@ export default function Camera() {
           max={0.9}
           step={0.01}
           fmt={(v) => v.toFixed(2)}
-          on={(v) => {
-            setCameraSettings({ recognition_tolerance: Math.round(v * 100) / 100 });
-            setRestartNeeded(true);
-          }}
+          on={(v) => setCameraSettings({ recognition_tolerance: Math.round(v * 100) / 100 })}
         />
-        <Slider
-          label={en ? "Scan timeout" : "Časový limit skenu"}
-          value={recognitionTimeout}
-          min={1}
-          max={10}
-          step={0.5}
-          fmt={(v) => `${v.toFixed(1)} s`}
-          on={(v) => {
-            setRecognitionTimeout(v);
-            setCameraSettings({ recognition_timeout_s: v });
-            setRestartNeeded(true);
-          }}
-        />
-        <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <button
-            onClick={() => {
-              restartRecognition();
-              setRestartNeeded(false);
-            }}
-            disabled={restarting}
-            style={{ padding: "10px 14px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.p3, fontFamily: "var(--mono)", fontSize: 11, color: C.ink, cursor: restarting ? "wait" : "pointer", opacity: restarting ? 0.6 : 1 }}
-          >
-            {restarting ? (en ? "Restarting..." : "Restartuji...") : en ? "Restart recognition" : "Restartovat rozpoznávání"}
-          </button>
-          {restartNeeded && (
-            <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "#d9614a" }}>
-              {en ? "restart needed to apply" : "pro uplatnění je potřeba restart"}
-            </span>
-          )}
-        </div>
       </div>
 
       {/* --- image controls -------------------------------------------- */}

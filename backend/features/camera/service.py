@@ -12,7 +12,6 @@ Supervisor, the publisher callback) — called once by daemon.py at startup.
 import logging
 
 from . import enrollment, profiles
-from .constants import RECOGNITION_SERVICE
 
 log = logging.getLogger(__name__)
 
@@ -54,21 +53,34 @@ def mode_get() -> dict:
 
 
 def mode_set(mode: str) -> dict:
+    """A manual dev-tab choice — see Supervisor.apply_mode for how this
+    overrides the presence state machine for a while."""
     _sup.apply_mode(mode)
     return _sup.health()
 
 
-def settings(payload: dict) -> dict:
-    """One endpoint for every camera setting: resolution, frame rate, this
-    process's recognition tolerance, plus Picamera2 image controls
-    (brightness/contrast/exposure/white balance/gain/noise reduction).
-    Callers send only the keys they want to change; unset keys keep their
-    current value. Persisted to `camera_config` so it survives a
-    `camera-supervisor` restart.
+def mode_renew() -> dict:
+    """Call periodically while the dev console stays open, so its manual
+    mode override doesn't expire mid-session (same idea as radar's live-
+    target stream renewal)."""
+    _sup.renew_manual_override()
+    return _sup.health()
 
-    `recognition_timeout_s` is accepted and persisted here too, but only
-    takes effect once `camera-recognition` (a separate process) restarts —
-    that daemon reads it once at its own startup, not live.
+
+def mode_release() -> dict:
+    """The dev console closed — hand control back to the presence machine."""
+    _sup.release_manual_override()
+    return _sup.health()
+
+
+def settings(payload: dict) -> dict:
+    """One endpoint for every camera setting: resolution, frame rate,
+    recognition tolerance, plus Picamera2 image controls (brightness/
+    contrast/exposure/white balance/gain/noise reduction). Callers send
+    only the keys they want to change; unset keys keep their current value.
+    Persisted to `camera_config` so it survives a `camera-supervisor`
+    restart. Every key here takes effect live — there is no second process
+    with its own copy to restart any more.
     """
     from . import supervisor as sup_mod
     from data import device_config
@@ -93,8 +105,6 @@ def settings(payload: dict) -> dict:
         to_save["framerate"] = _sup.target_fps
     if "recognition_tolerance" in payload:
         to_save["recognition_tolerance"] = _sup.tolerance
-    if "recognition_timeout_s" in payload:
-        to_save["recognition_timeout_s"] = float(payload["recognition_timeout_s"])
     if to_save:
         try:
             device_config.set_many("camera", to_save)
@@ -138,21 +148,18 @@ def profiles_delete(name: str) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# presence — drives the idle/face/gesture state machine directly now (no
+# separate recognition process to forward this to any more).
+# --------------------------------------------------------------------------- #
+def on_presence(payload: str) -> None:
+    _sup.on_presence(payload)
+
+
+# --------------------------------------------------------------------------- #
 # radar unit control — lives here because the supervisor process is the one
 # holding the systemctl sudoers rights, and a stopped radar daemon cannot
 # start itself. The topics belong to the radar feature.
 # --------------------------------------------------------------------------- #
-def restart_recognition() -> dict:
-    """Restart camera-recognition so a recognition_timeout_s/tolerance
-    change written by settings() takes effect — that daemon reads both
-    only once, at its own startup. The supervisor already holds the
-    systemctl sudoers rights needed to manage this unit (same reason
-    radar_set() below lives here instead of in the radar feature)."""
-    from shared import systemctl
-    systemctl.run("restart", RECOGNITION_SERVICE)
-    return {"ok": True}
-
-
 def radar_status() -> dict:
     from shared import systemctl
     from features.radar import mqtt as radar_topics

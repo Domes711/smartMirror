@@ -60,16 +60,26 @@ React **`frontend/`**, and the vendored **`MagicMirror/`** fork.
     `daemon.py` (entrypoint: wiring + the blocking `serve()`/`client.start()`
     call, no business logic of its own).
   - `backend/features/camera/` — **refactored onto the shape above.**
-    `supervisor.py` (the HW-arbitration layer: mode machine, capture loop,
-    JPEG encode — this is business logic, not a transport file, same role as
-    `display/driver.py`) + `profiles.py` + `enrollment.py` + `gestures.py` +
-    `encode_faces.py` are the workers; `service.py` is a thin orchestrator
-    holding the live `Supervisor`; `mqtt.py`/`http.py` are transport;
-    `daemon.py` is the supervisor's entrypoint (unit `camera-supervisor`,
-    `:8001`). Camera is the one feature with a **second entrypoint**,
-    `recognition_daemon.py` (unit `camera-recognition`, **disabled** — the
-    supervisor starts/stops it) — the camera is exclusive hardware, so one
-    process owning it must arbitrate the other.
+    `supervisor.py` (the single authority over the exclusive camera: capture
+    loop, JPEG encode, and the idle/face/gesture presence state machine —
+    this is business logic, not a transport file, same role as
+    `display/driver.py`) + `mode_controller.py` (the state machine's pure
+    decision logic, hardware-free and unit-tested like `radar/daemon.py`'s
+    `RadarState`/`PresenceTracker`) + `profiles.py` + `enrollment.py` +
+    `gestures.py` + `encode_faces.py` are the workers; `service.py` is a
+    thin orchestrator holding the live `Supervisor`; `mqtt.py`/`http.py` are
+    transport; `daemon.py` is the entrypoint (unit `camera-supervisor`,
+    `:8001`). **One process, no arbitration**: the supervisor holds the
+    camera open for its entire life and runs face/gesture detection itself,
+    driven by `smartmirror/global/presence` (present → face detection for a
+    5s window → gesture if nobody's recognized, no internal timeout once
+    there → a match or absent returns to idle). A manual dev-console mode
+    choice overrides that machine for a while (renewed while the dev screen
+    stays open), so a developer testing the overlay doesn't have it pulled
+    out from under them. (Previously this was two processes — a
+    `camera-recognition` daemon the supervisor stopped/started on every mode
+    switch — which meant the exclusive camera open could race between them;
+    folded into one process to remove that failure mode entirely.)
   - `backend/features/radar/` — LD2450 daemon (unit `radar`). **Not yet on
     the constants/service split** — `mqtt.py` still holds the topic
     constants directly (the role `constants.py` has elsewhere), and
@@ -307,10 +317,14 @@ display power.
 
 > **Note (current arch):** events flow over **MQTT**, not HTTP, and the profile
 > system lives in the **MagicMirror core** (`js/profile.js`), not a module. The
-> camera is arbitrated by the camera feature's supervisor (which starts/stops
-> the `camera-recognition` unit). Topics: `smartmirror/radar/presence` (`present`/`absent`),
-> `smartmirror/radar/targets` (live positions), `smartmirror/camera/recognition`
-> (`{user}`), `smartmirror/camera/gesture`, `smartmirror/control/reset`,
+> camera supervisor is the sole owner of the camera — it runs face/gesture
+> detection itself (no separate recognition process to arbitrate with any
+> more), driven by the cross-feature `smartmirror/global/presence` topic.
+> Topics: `smartmirror/global/presence` (`present`/`absent` — published by
+> `features/distance` today, any future presence source later),
+> `smartmirror/radar/targets` (live positions, radar's own, dev-console-only),
+> `smartmirror/camera/recognition` (`{user}`), `smartmirror/camera/gesture`
+> (`{fingers}`), `smartmirror/control/reset`,
 > `smartmirror/control/wake` (app → core: leave sleep),
 > `smartmirror/control/message` (app → core: `{message,timer}` → alert on the
 > mirror), plus `smartmirror/radar/{control,config}` for calibration and
@@ -319,16 +333,18 @@ display power.
 
 Data flow:
 
-1. **`backend/features/radar/daemon.py`** (unit `radar`) reads radar frames
-   from UART, filters targets to the rectangular zone (`abs(x) ≤ 400mm AND
-   0 < y ≤ 1500mm`), pulses GPIO17 to wake the display, and publishes
-   `present`/`absent` on `smartmirror/radar/presence` plus live positions on
-   `smartmirror/radar/targets`. Calibration is read from SQLite.
-2. **`backend/features/camera/recognition_daemon.py`** (unit `camera-recognition`) is
-   subscribed to that presence topic. On `present` it scans for up to 3 s
-   against `var/encoded_faces.pickle` and publishes `{"user": "<name>"}` or
-   `{"user": null}` on `smartmirror/camera/recognition`. Any failure also
-   publishes `null`, so the mirror never gets stuck in `scanning`.
+1. **`backend/features/distance/daemon.py`** (unit `distance`) reads the
+   HC-SR04 ultrasonic sensor, tracks presence (debounced entry, N
+   consecutive out-of-range readings to exit), and publishes `present`/
+   `absent` on `smartmirror/global/presence`.
+2. **`backend/features/camera/supervisor.py`** (unit `camera-supervisor`) is
+   subscribed to that presence topic (`mode_controller.CameraModeController`
+   holds the decision logic). On `present` it switches to `face` mode for up
+   to 5s, matching frames against `var/encoded_faces.pickle` and publishing
+   `{"user": "<name>"}` on a match (then returning to idle — detection off
+   until the next presence event); no match within the window moves to
+   `gesture` (finger-count detection, `smartmirror/camera/gesture`, no
+   internal timeout) until `absent` returns everything to idle.
 3. **`MagicMirror/js/profile.js`** (`ProfileManager`, core) subscribes to the
    MQTT topics above, runs the state machine
    (`asleep` / `scanning` / `user` / `dimming`), resolves the active layout from
@@ -449,10 +465,9 @@ Remaining one-time steps it prints: enable UART (`raspi-config`) and
 `cleanup-pi.sh`/etc. echo/comment was in Czech until this was deliberately
 changed; write new output in English too.
 
-Services: `radar`, `display`, `scenes`, `modules`, `mic`,
+Services: `radar`, `distance`, `display`, `scenes`, `modules`, `mic`,
 `camera-supervisor`, `mirror-gateway`, `mirror-control` (all enabled);
-`camera-recognition` (installed but **disabled** — the camera supervisor
-starts/stops it); `wyoming-satellite` (installed but **disabled** —
+`wyoming-satellite` (installed but **disabled** —
 `features.mic.service` starts/stops it to free the USB mic for a test
 recording); `wyoming-openwakeword` (enabled — holds no mic handle, stays up);
 MagicMirror under **pm2** (process name `MagicMirror`).
@@ -537,10 +552,10 @@ mosquitto_pub -h 127.0.0.1 -t smartmirror/display/control/brightness -m '50'
 ```bash
 sudo systemctl status camera-supervisor
 journalctl -u camera-supervisor -f
-# camera-recognition is started/stopped BY the supervisor — don't enable it.
-curl -s http://127.0.0.1:8000/mode; echo
-curl -s -X POST -H 'Content-Type: application/json' \
-  -d '{"mode":"test_face"}' http://127.0.0.1:8000/mode
+# camera-supervisor is the only process — it owns the camera and switches
+# idle/face/gesture/learn itself, driven by GLOBAL_PRESENCE. No second unit.
+mosquitto_pub -h 127.0.0.1 -t smartmirror/camera/rpc/health -m '{}'
+mosquitto_pub -h 127.0.0.1 -t smartmirror/camera/rpc/mode/set -m '{"mode":"face"}'
 ```
 
 ### Mic

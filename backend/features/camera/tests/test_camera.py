@@ -141,13 +141,15 @@ def test_supervisor_health_shape(sandbox):
     assert h["mode"] == DEFAULT_MODE
     assert set(h["modes"]) == set(MODES)
     assert h["camera_open"] is False and h["fps"] == 0.0
+    assert "daemon_active" not in h  # no second process to report on any more
+    assert h["presence_driven"] is True
 
 
 def test_mode_persists_across_restarts(sandbox):
     from features.camera.supervisor import Supervisor
     sup = Supervisor()
-    sup.save_mode("test_gesture")
-    assert Supervisor().load_mode() == "test_gesture"
+    sup.save_mode("gesture")
+    assert Supervisor().load_mode() == "gesture"
 
 
 def test_an_unknown_persisted_mode_falls_back_to_the_default(sandbox):
@@ -329,15 +331,6 @@ def test_settings_persists_recognition_tolerance_to_camera_config(svc):
     assert Supervisor().tolerance == 0.5
 
 
-def test_settings_persists_recognition_timeout_to_camera_config(svc):
-    """recognition_timeout_s has no live effect on this process (it's read
-    once by the separate camera-recognition daemon at its own startup) —
-    this only checks the DB write service.settings() is responsible for."""
-    from data import device_config
-    svc.settings({"recognition_timeout_s": 5.0})
-    assert device_config.resolve("camera")["recognition_timeout_s"] == 5.0
-
-
 def test_set_target_fps_has_a_floor_of_one(sandbox):
     from features.camera.supervisor import Supervisor
     sup = Supervisor()
@@ -347,10 +340,113 @@ def test_set_target_fps_has_a_floor_of_one(sandbox):
     assert sup.target_fps == 1
 
 
-def test_restart_recognition_runs_systemctl_restart(svc, monkeypatch):
+# --------------------------------------------------------------------------- #
+# mode switching is single-process now — no systemctl arbitration left at all
+# --------------------------------------------------------------------------- #
+def test_apply_mode_never_touches_systemctl(sandbox, monkeypatch):
+    """Guards against the arbitration code path coming back by accident —
+    there is no second process to stop/start any more. `_ensure_camera` is
+    stubbed out (real picamera2 isn't installed off the Pi) — this test is
+    only about systemctl never being called, not about the camera itself."""
     from shared import systemctl
-    calls = []
-    monkeypatch.setattr(systemctl, "run", lambda action, unit: calls.append((action, unit)))
-    result = svc.restart_recognition()
-    assert result == {"ok": True}
-    assert calls == [("restart", "camera-recognition")]
+    from features.camera.supervisor import Supervisor
+
+    def _boom(*_a, **_k):
+        raise AssertionError("systemctl must not be called by apply_mode()")
+    monkeypatch.setattr(systemctl, "run", _boom)
+    monkeypatch.setattr(systemctl, "exists", _boom)
+
+    sup = Supervisor()
+    monkeypatch.setattr(sup, "_ensure_capture", lambda: None)
+    sup.apply_mode("face")
+    sup.apply_mode("gesture")
+    sup.apply_mode("idle")
+    assert sup.mode == "idle"
+
+
+# --------------------------------------------------------------------------- #
+# presence integration — Supervisor wiring CameraModeController through to
+# mode/health/MQTT publish. The pure decision logic itself is covered by
+# test_mode_controller.py; these check Supervisor actually applies what the
+# controller decides.
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def sup_no_camera(sandbox, monkeypatch):
+    """A Supervisor with camera I/O stubbed out, so presence/timer wiring
+    can be exercised without picamera2/a real capture thread."""
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    monkeypatch.setattr(sup, "_ensure_capture", lambda: None)
+    return sup
+
+
+def test_on_presence_present_enters_face_mode(sup_no_camera):
+    sup = sup_no_camera
+    sup.on_presence("present")
+    assert sup.mode == "face"
+    assert sup.overlay == "face"
+    assert sup._face_timer is not None
+
+
+def test_on_presence_absent_cancels_the_face_timer(sup_no_camera):
+    sup = sup_no_camera
+    sup.on_presence("present")
+    sup.on_presence("absent")
+    assert sup.mode == "idle"
+    assert sup.overlay is None
+    assert sup._face_timer is None
+
+
+def test_face_timeout_moves_to_gesture(sup_no_camera):
+    sup = sup_no_camera
+    sup.on_presence("present")
+    sup._on_face_timeout()
+    assert sup.mode == "gesture"
+    assert sup.overlay == "gesture"
+
+
+def test_face_result_match_publishes_and_returns_to_idle(sup_no_camera):
+    sup = sup_no_camera
+    published = []
+    sup._publish = lambda topic, payload: published.append((topic, payload))
+    sup.on_presence("present")
+    sup._on_face_result("Domes")
+    assert sup.mode == "idle"
+    assert sup.overlay is None
+    assert published == [("smartmirror/camera/recognition", {"user": "Domes"})]
+
+
+def test_face_result_no_match_keeps_waiting(sup_no_camera):
+    sup = sup_no_camera
+    published = []
+    sup._publish = lambda topic, payload: published.append((topic, payload))
+    sup.on_presence("present")
+    sup._on_face_result(None)
+    assert sup.mode == "face"
+    assert published == []
+
+
+def test_manual_apply_mode_disables_presence_driving(sup_no_camera):
+    sup = sup_no_camera
+    sup.apply_mode("gesture")
+    assert sup.health()["presence_driven"] is False
+
+
+def test_manual_mode_face_match_does_not_end_detection(sup_no_camera):
+    """The dev-tab override: a match must not silently stop the overlay the
+    developer is watching, unlike the production presence-driven path."""
+    sup = sup_no_camera
+    published = []
+    sup._publish = lambda topic, payload: published.append((topic, payload))
+    sup.apply_mode("face")
+    sup._on_face_result("Domes")
+    assert sup.mode == "face"            # unchanged
+    assert published == [("smartmirror/camera/recognition", {"user": "Domes"})]
+
+
+def test_release_manual_override_resumes_presence_driving(sup_no_camera):
+    sup = sup_no_camera
+    sup.apply_mode("gesture")
+    sup.release_manual_override()
+    assert sup.health()["presence_driven"] is True
+    assert sup.mode == "idle"  # nobody was present while overridden

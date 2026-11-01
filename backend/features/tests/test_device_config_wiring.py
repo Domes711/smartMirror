@@ -55,24 +55,6 @@ def test_supervisor_still_starts_when_the_config_is_unreadable(sandbox,
                                        supervisor.DEFAULT_HEIGHT)
 
 
-def test_recognition_daemon_reads_timeout_and_tolerance(sandbox):
-    from features.camera import recognition_daemon as daemon
-    device_config.set_many("camera", {"recognition_timeout_s": 5.0,
-                                      "recognition_tolerance": 0.33})
-    cfg = daemon._config_defaults()
-    assert cfg["max_duration"] == 5.0
-    assert cfg["tolerance"] == 0.33
-
-
-def test_recognition_daemon_falls_back_to_constants(sandbox, monkeypatch):
-    from features.camera import recognition_daemon as daemon
-    monkeypatch.setattr(device_config, "resolve",
-                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError))
-    cfg = daemon._config_defaults()
-    assert cfg["max_duration"] == daemon.DEFAULT_MAX_DURATION
-    assert cfg["tolerance"] == daemon.DEFAULT_TOLERANCE
-
-
 # --------------------------------------------------------------------------- #
 # radar: config.py goes through device_config now
 # --------------------------------------------------------------------------- #

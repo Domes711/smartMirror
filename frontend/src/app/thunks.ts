@@ -582,7 +582,7 @@ export const shootPhoto = (): Thunk => (dispatch) => {
 export const usePhotos = (): Thunk => (dispatch, getState) => {
   const L = Lof(getState());
   const name = getState().profiles.profileName;
-  dispatch(cameraApi.endpoints.setCameraMode.initiate("face_detect")).catch(() => {});
+  dispatch(cameraApi.endpoints.setCameraMode.initiate("idle")).catch(() => {});
   dispatch(cameraApi.endpoints.encodeFaces.initiate(name))
     .unwrap()
     .then(() => dispatch(toast(Lof(getState()).tTaskDone)))

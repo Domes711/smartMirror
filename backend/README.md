@@ -63,7 +63,6 @@ subprocesses, so a crash in either must not take the scene editor down.
 |---|---|---|
 | `mirror-gateway` | `gateway` | yes |
 | `camera-supervisor` | `features.camera.daemon` | yes |
-| `camera-recognition` | `features.camera.recognition_daemon` | **no** — the supervisor starts/stops it |
 | `radar` | `features.radar.daemon` | yes |
 | `display` | `features.display.daemon` | yes |
 | `scenes` | `features.scenes.service` | yes (MQTT-only, no port) |
@@ -179,9 +178,8 @@ recognize it.
 |---|---|---|
 | `camera` | `rotation` (180 — mounted upside down) | ✅ `supervisor.py` capture loop |
 | | `resolution_width` / `resolution_height` | ✅ `Supervisor.__init__` |
-| | `recognition_tolerance` | ✅ supervisor + `daemon.py` |
-| | `recognition_timeout_s` | ✅ `daemon.py` |
-| | `framerate` | ❌ **seeded but unused** |
+| | `recognition_tolerance` | ✅ `supervisor.py` |
+| | `framerate` | ✅ `supervisor.py` (`target_fps`) |
 | `monitor` | `dim_timeout_s` | ✅ the core, via `display/config` |
 | | `brightness_day` / `brightness_night` | ❌ **seeded but unused** |
 | | `sleep_timeout_s` | ❌ **seeded but unused** |
@@ -331,62 +329,80 @@ mosquitto_pub -h 127.0.0.1 -t smartmirror/scenes/rpc/layout/get \
 
 # features/camera/
 
-Face recognition plus camera arbitration. **Two entrypoints, not one**,
-because the camera is an exclusive device:
+Face recognition, gesture detection, and camera arbitration. **One
+entrypoint, one process** — `camera-supervisor` owns the camera for the
+mirror's entire lifetime; nothing else ever opens it, so there is no
+arbitration between units to get wrong.
 
-| Unit | Entrypoint | Role |
-|---|---|---|
-| `camera-supervisor` (`:8001`) | `daemon.py` → `supervisor.py` | owns the camera, serves MJPEG + enrollment, **starts/stops the recognition unit** |
-| `camera-recognition` (disabled) | `recognition_daemon.py` | production face recognition; the supervisor controls it |
-
-Never `systemctl enable camera-recognition` — the supervisor would fight it
-for the device.
-
-Now follows the same `constants.py` / `service.py` / `mqtt.py` / `http.py` /
-`daemon.py` split as `display/`, `ai_modules/`, `modules/` and `mic/`:
+This used to be two units (`camera-supervisor` plus a `camera-recognition`
+daemon the supervisor started/stopped on every mode switch), arbitrating for
+the camera device via systemd. That handoff had a real race: restarting
+`camera-recognition` while the supervisor still held the camera left the
+pipeline handler "in use by another process" — and because the daemon
+exited rather than waiting, it stayed dead even once the camera was freed.
+Collapsing both into a single in-process mode machine removes the handoff
+(and the race) entirely.
 
 | File | Role |
 |---|---|
-| `constants.py` | MQTT topics only (was `mqtt.py`) |
-| `supervisor.py` | the camera + arbitration layer: mode machine, capture loop, JPEG encode. This is the feature's HW-specific business logic, not a transport file — it predates and sits alongside `service.py`, same way `driver.py` does for `display/` |
+| `constants.py` | MQTT topics only |
+| `mode_controller.py` | pure state machine (no I/O, no camera): `idle` / `face` / `gesture` / `learn`, driven by `GLOBAL_PRESENCE` or a manual dev-console override — see "Modes" below |
+| `supervisor.py` | the camera + mode layer: owns a `CameraModeController`, runs the capture loop, draws overlays, JPEG-encodes, publishes recognition/gesture results |
 | `profiles.py` | people + training photos |
 | `enrollment.py` | capture a training photo from the live stream (needs the supervisor's camera lock + last clean frame) |
 | `gestures.py` | pure finger-counting function |
 | `encode_faces.py` | CLI trainer, invoked as a subprocess by `profiles.py` |
 | `service.py` | the one orchestrator — thin delegation to the live `Supervisor`/`profiles.py`/`enrollment.py`, plus the radar-unit-control glue (lives here because the supervisor process holds the systemctl sudoers rights) and the boot-time retained-topic primer |
-| `mqtt.py` | RPC dispatch (`serve_all()`), calls `service.py` 1:1 |
+| `mqtt.py` | RPC dispatch (`serve_all()`) plus the `GLOBAL_PRESENCE` subscription, calls `service.py` 1:1 |
 | `http.py` | the two binary routes (`/stream.mjpg`, `/photo`) **plus** the JSON migration shim, both calling `service.py` 1:1 |
 | `daemon.py` | entrypoint for `camera-supervisor`: `main()` wires `service.mount(sup)` → `mqtt.serve_all()` → `http.mount()` → `serve()` |
-| `recognition_daemon.py` | entrypoint for `camera-recognition` (was `daemon.py`): `FaceRecoDaemon` + `main()` — no transport split, it only subscribes, it does not serve RPC/HTTP |
 | `tools/` | hand-run probes, **not collected by pytest** |
 
 ## Modes
 
 | Mode | What happens |
 |---|---|
-| `face_detect` (default) | supervisor releases the camera, starts the recognition daemon |
-| `test_face` | stops the daemon, opens the camera here, streams with a face overlay |
-| `test_gesture` | same, with a gesture overlay |
-| `learn` | like `test_face` but keeps a clean frame for enrollment |
+| `idle` (default) | camera open, no detection running |
+| `face` | face-recognition overlay running |
+| `gesture` | finger-counting overlay running |
+| `learn` | like `face` but keeps a clean frame for enrollment |
 
-Mode is persisted, so a reboot restores it. Default is `face_detect` so the
-mirror behaves normally after a restart.
+Mode is persisted, so a reboot restores it. In production, mode is normally
+driven by presence rather than chosen directly — see "Recognition flow".
 
 ## Recognition flow
 
-`recognition_daemon.py` subscribes to `smartmirror/radar/presence`. On
-`present` it scans for up to `recognition_timeout_s` against
-`var/encoded_faces.pickle` and publishes `{"user": "<name>"}` or
-`{"user": null}` on `smartmirror/camera/recognition`. **Any failure also
-publishes `null`**, so the mirror never gets stuck in `scanning`.
+`supervisor.py` subscribes to `GLOBAL_PRESENCE` (`smartmirror/global/presence`
+— the `distance` feature's topic, not radar's) through its
+`CameraModeController`:
+
+- `present` → `face` mode for a 5s window.
+- Recognized within that window → publish `{"user": "<name>"}` on
+  `smartmirror/camera/recognition` and return to `idle` — detection stops
+  entirely, even if the person is still standing there.
+- Not recognized within 5s → `gesture` mode, with no internal timeout;
+  publishes `{"fingers": n}` on `smartmirror/camera/gesture` as it detects.
+- `absent` → `idle` from any mode.
+
+The dev console's manual mode buttons (`RPC_MODE_SET`) drive the same
+`CameraModeController` as a temporary override (`RPC_MODE_RENEW` while the
+dev screen stays open, `RPC_MODE_RELEASE` on unmount — the same renew/expire
+pattern as the radar dev screen's live-targets stream). The one behavioural
+difference: a face match in manual mode does **not** auto-return to idle, so
+a developer can watch detection keep running on the live stream. Releasing
+the override resumes presence-driven behavior from whatever `GLOBAL_PRESENCE`
+currently says.
+
+**Any detection failure still resolves to a result**, so the mirror never
+gets stuck mid-scan.
 
 ## Config from the DB
 
 `rotation` (180 — the camera is mounted upside down), resolution, framerate,
-scan timeout and tolerance all come from `camera_config`. CLI flags still
-override, so a one-off run with a different tolerance needs no DB write. If
-the DB is unreachable the code falls back to its constants — the camera must
-still serve a stream.
+and tolerance all come from `camera_config`. CLI flags still override, so a
+one-off run with a different tolerance needs no DB write. If the DB is
+unreachable the code falls back to its constants — the camera must still
+serve a stream.
 
 ## HTTP (`:8001`, via the gateway)
 
@@ -665,8 +681,10 @@ runs each project's own `script/setup` (creates its `.venv`, `pip install -e
 .`), then installs both as systemd units from the template `.service` files
 in this folder — `ExecStart=<repo>/script/run ...` directly, no manual venv
 activation (`script/run` finds `.venv` itself). `wyoming-satellite` is
-installed **disabled**: `features.mic.service` starts/stops it, the same
-shape as `camera-recognition` being arbitrated by the camera supervisor.
+installed **disabled**: `features.mic.service` starts/stops it around a test
+recording, the same arbitration shape `camera/` used to need between its two
+units before it collapsed to a single process (see `features/camera/`
+above).
 This is also where `install_sudoers` runs, so `apply-satellite-unit.sh` has
 its grant before anything ever calls it.
 

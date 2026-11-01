@@ -10,6 +10,8 @@ const TOPIC = {
   rpcHealth: `${RPC}/health`,
   rpcModeGet: `${RPC}/mode/get`,
   rpcModeSet: `${RPC}/mode/set`,
+  rpcModeRenew: `${RPC}/mode/renew`,
+  rpcModeRelease: `${RPC}/mode/release`,
   rpcSettings: `${RPC}/settings`,
   rpcDatasetList: `${RPC}/dataset/list`,
   rpcDatasetDelete: `${RPC}/dataset/delete`,
@@ -17,25 +19,30 @@ const TOPIC = {
   rpcEncode: `${RPC}/encode`,
   rpcProfilesList: `${RPC}/profiles/list`,
   rpcProfilesDelete: `${RPC}/profiles/delete`,
-  rpcRestartRecognition: `${RPC}/restart_recognition`,
   state: "smartmirror/camera/state", // retained
   profiles: "smartmirror/camera/profiles", // retained
 } as const;
 
+// "idle" (no detection) / "face" / "gesture" are also the production
+// presence-driven modes now — GLOBAL_PRESENCE drives them automatically
+// (present -> face for a 5s window -> gesture if nobody's recognized, a
+// match stops detection and returns to idle, absent always returns to
+// idle). "learn" is enrollment-only, not offered as a manual choice here.
+export type CameraMode = "idle" | "face" | "gesture" | "learn";
+
 export interface CameraHealth {
-  mode: string;
-  modes: string[];
+  mode: CameraMode;
+  modes: CameraMode[];
   camera_open: boolean;
-  daemon_active: boolean;
   fps: number;
   target_fps: number;
   width: number;
   height: number;
-  // This process's own test_face preview tolerance. The production
-  // camera-recognition daemon has a separate copy, read once at its own
-  // startup from the same recognition_tolerance DB key — a change here
-  // needs that daemon restarted to take effect there too.
   tolerance: number;
+  // false while a manual dev-console mode choice (setCameraMode) is
+  // overriding the presence state machine — see useSetCameraModeMutation's
+  // renew/release dance below.
+  presence_driven: boolean;
   detected_face: string | null;
   finger_count: number | null;
   controls: CameraControls;
@@ -60,9 +67,6 @@ export interface CameraSettingsInput extends Partial<CameraControls> {
   height?: number;
   framerate?: number;
   recognition_tolerance?: number;
-  // Not live — the camera-recognition daemon only reads this at its own
-  // startup; persists to camera_config but needs that daemon restarted.
-  recognition_timeout_s?: number;
 }
 
 export interface CameraProfile {
@@ -94,9 +98,22 @@ export const cameraApi = createApi({
       },
     }),
 
-    setCameraMode: build.mutation<CameraHealth, string>({
+    // A manual dev-console choice — overrides the presence state machine
+    // for a while (backend/features/camera/mode_controller.py's
+    // MANUAL_OVERRIDE_S). Call renewCameraMode periodically while the dev
+    // screen stays open, and releaseCameraMode on unmount — see Radar.tsx's
+    // identical stream opt-in/renew/release pattern for the live targets.
+    setCameraMode: build.mutation<CameraHealth, CameraMode>({
       query: (mode) => ({ topic: TOPIC.rpcModeSet, payload: { mode } }),
       invalidatesTags: ["CameraHealth"],
+    }),
+
+    renewCameraMode: build.mutation<CameraHealth, void>({
+      query: () => ({ topic: TOPIC.rpcModeRenew }),
+    }),
+
+    releaseCameraMode: build.mutation<CameraHealth, void>({
+      query: () => ({ topic: TOPIC.rpcModeRelease }),
     }),
 
     setCameraSettings: build.mutation<CameraHealth, CameraSettingsInput>({
@@ -146,19 +163,14 @@ export const cameraApi = createApi({
       query: (name) => ({ topic: TOPIC.rpcEncode, payload: { name } }),
       invalidatesTags: ["CameraProfiles"],
     }),
-
-    // recognition_timeout_s/recognition_tolerance only take effect on the
-    // production camera-recognition daemon once it restarts — it reads
-    // them once at its own startup, not live.
-    restartRecognition: build.mutation<{ ok: boolean }, void>({
-      query: () => ({ topic: TOPIC.rpcRestartRecognition }),
-    }),
   }),
 });
 
 export const {
   useGetCameraHealthQuery,
   useSetCameraModeMutation,
+  useRenewCameraModeMutation,
+  useReleaseCameraModeMutation,
   useSetCameraSettingsMutation,
   useGetCameraProfilesQuery,
   useDeleteCameraProfileMutation,
@@ -166,5 +178,4 @@ export const {
   useDeleteDatasetPhotoMutation,
   useCapturePhotoMutation,
   useEncodeFacesMutation,
-  useRestartRecognitionMutation,
 } = cameraApi;

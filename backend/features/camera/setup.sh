@@ -1,11 +1,8 @@
 #!/bin/bash
-# setup.sh — camera feature (face recognition + supervisor/enrollment).
-#
-# Installs two units:
-#   camera-recognition   the production face-reco daemon. Installed but left
-#                        DISABLED: the camera is exclusive and the supervisor
-#                        starts/stops it (mode "Face detect").
-#   camera-supervisor    the arbiter + MJPEG stream + enrollment API (:8001).
+# setup.sh — camera feature (face/gesture recognition + enrollment, one
+# process — camera-supervisor — holds the camera for its entire life and
+# runs the idle/face/gesture presence state machine itself; there is no
+# second recognition process to arbitrate with any more).
 set -e
 . "$(cd "$(dirname "$0")/../../shared" && pwd)/setup-lib.sh"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -69,11 +66,7 @@ fi
 PYTHONPATH="$BACKEND_DIR" "$PY" -c \
   'from features.camera import profiles; print("  profiles:", [p["name"] for p in profiles.list_all()])' || true
 
-install_unit camera-recognition "Face Recognition Daemon" "features.camera.recognition_daemon"
-sudo systemctl disable camera-recognition 2>/dev/null || true
-echo "✓ camera-recognition installed (DISABLED at boot — arbitrated by the supervisor)"
-
-install_unit camera-supervisor "Camera Supervisor (arbiter + stream + enrollment)" \
+install_unit camera-supervisor "Camera Supervisor (recognition + stream + enrollment)" \
   "features.camera.daemon"
 enable_unit camera-supervisor
 systemctl status --no-pager --lines=0 camera-supervisor || true

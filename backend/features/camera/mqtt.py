@@ -30,6 +30,12 @@ def serve_all() -> None:
     def op_mode_set(req):
         return service.mode_set(req.get("mode"))
 
+    def on_presence(_topic: str, payload: str) -> None:
+        try:
+            service.on_presence(payload)
+        except Exception:  # noqa: BLE001
+            log.exception("presence handling failed")
+
     def op_settings(req):
         return service.settings({k: v for k, v in req.items()
                                  if not k.startswith("_")})
@@ -56,6 +62,8 @@ def serve_all() -> None:
     c.serve(topics.RPC_HEALTH, lambda _req: service.health())
     c.serve(topics.RPC_MODE_GET, lambda _req: service.mode_get())
     c.serve(topics.RPC_MODE_SET, op_mode_set)
+    c.serve(topics.RPC_MODE_RENEW, lambda _req: service.mode_renew())
+    c.serve(topics.RPC_MODE_RELEASE, lambda _req: service.mode_release())
     c.serve(topics.RPC_SETTINGS, op_settings)
     c.serve(topics.RPC_DATASET_LIST, op_dataset_list)
     c.serve(topics.RPC_DATASET_DELETE, op_dataset_delete)
@@ -63,7 +71,7 @@ def serve_all() -> None:
     c.serve(topics.RPC_ENCODE, op_encode)
     c.serve(topics.RPC_PROFILES_LIST, lambda _req: service.profiles_list())
     c.serve(topics.RPC_PROFILES_DELETE, op_profiles_delete)
-    c.serve(topics.RPC_RESTART_RECOGNITION, lambda _req: service.restart_recognition())
+    c.subscribe(topics.PRESENCE, on_presence)
 
     from features.radar import mqtt as radar_topics
     c.serve(radar_topics.RPC_SERVICE_GET, lambda _req: service.radar_get())

@@ -282,10 +282,10 @@ def test_camera_exposes_every_json_operation_on_mqtt(sandbox, monkeypatch):
 
     assert set(rec.served) == {
         topics.RPC_HEALTH, topics.RPC_MODE_GET, topics.RPC_MODE_SET,
+        topics.RPC_MODE_RENEW, topics.RPC_MODE_RELEASE,
         topics.RPC_SETTINGS, topics.RPC_DATASET_LIST,
         topics.RPC_DATASET_DELETE, topics.RPC_CAPTURE, topics.RPC_ENCODE,
         topics.RPC_PROFILES_LIST, topics.RPC_PROFILES_DELETE,
-        topics.RPC_RESTART_RECOGNITION,
         radar_topics.RPC_SERVICE_GET, radar_topics.RPC_SERVICE_SET,
     }
 
@@ -311,9 +311,9 @@ def test_camera_mode_set_over_mqtt_matches_http(sandbox, monkeypatch):
     service.mount(sup)
     camera_mqtt.serve_all()
 
-    result = rec.served[topics.RPC_MODE_SET]({"mode": "test_face"})
-    assert sup.mode == "test_face"
-    assert result["mode"] == "test_face"
+    result = rec.served[topics.RPC_MODE_SET]({"mode": "face"})
+    assert sup.mode == "face"
+    assert result["mode"] == "face"
     # State is pushed retained, so the app never polls /healthz.
     assert any(t == topics.STATE for t, _p in rec.published)
     assert any(t == topics.MODE for t, _p in rec.published)

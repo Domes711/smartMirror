@@ -1,20 +1,46 @@
-"""Camera arbiter: the single authority over the exclusive RPi camera.
+"""Camera arbiter: the single authority over the exclusive RPi camera, and
+the only process that ever opens it — there is no second recognition
+process to hand the device off to any more (see REFACTOR notes below).
 
-Only one process may open the camera, so this one holds a *mode* and
-guarantees exactly one consumer owns the device:
+Modes:
 
-    face_detect   release the camera, start the production recognition daemon
-    test_face     stop the daemon, open the camera here, stream + face overlay
-    test_gesture  stop the daemon, open the camera here, stream + hand overlay
-    learn         like test_face but keeps a clean frame for enrollment
+    idle      camera open, capture loop running, no detection — the resting
+              state and the default after boot/crash
+    face      face-recognition overlay; the production idle/face/gesture
+              state machine (mode_controller.CameraModeController) also
+              drives this automatically from GLOBAL_PRESENCE — see below
+    gesture   hand-landmark/finger-count overlay
+    learn     like face but keeps a clean (undrawn) frame for enrollment
 
-This process keeps only what genuinely must share one process with the
-hardware lock (mode machine, capture loop, MJPEG, enrollment capture). Scenes
-and the module store live in their own features.
+Two things can select a mode:
 
-The mode is persisted to `var/camera-mode.state`, so the supervisor restores
-it on boot. Default is `face_detect` so the mirror behaves normally after a
-power-on.
+  1. GLOBAL_PRESENCE ("present"/"absent" on smartmirror/global/presence):
+     present -> face for up to FACE_WINDOW_S; a recognized face publishes
+     the result and returns to idle (detection off) immediately; no match
+     within the window moves to gesture, which then runs with no internal
+     timeout until absent returns everything to idle. This is the normal,
+     unattended behavior.
+  2. A manual mode/set RPC (the dev console's Obličej/Gesta/Čistý buttons).
+     This overrides the presence machine for MANUAL_OVERRIDE_S, renewed by
+     the caller while the dev screen stays open, so a developer actively
+     testing the overlay doesn't have it yanked away — and, deliberately,
+     a face match while in manual mode does NOT stop detection the way it
+     does in production, so the overlay keeps running to watch.
+
+Previously the camera was handed between two OS processes (this supervisor
+and a separate `camera-recognition` daemon, systemctl-stopped/started on
+every mode switch) — a second process meant a second chance for the
+hardware's exclusive-open to race, and in practice it did: a restart of
+either process while the other held the camera left the loser permanently
+unable to recognize anyone until manually restarted (it had no retry on
+its own single failed open). Folding recognition into this single
+long-running process removes that failure mode entirely — there is no
+other process to race, hand off to, or restart independently of.
+
+The mode is persisted to `var/camera-mode.state` so a *manual* choice
+survives a supervisor restart; presence-driven transitions are not
+persisted (a restart mid-conversation should come up idle and wait for the
+next presence event, not silently resume detecting).
 """
 
 import logging
@@ -22,10 +48,10 @@ import os
 import threading
 import time
 
-from shared import systemctl
 from shared import paths
 
 from . import constants as topics
+from .mode_controller import CameraModeController, FACE_WINDOW_S
 
 log = logging.getLogger("camera.supervisor")
 
@@ -39,7 +65,7 @@ FACE_EVERY = 10           # run face detection every Nth frame (hog is slow)
 GESTURE_EVERY = 3         # mediapipe is slow on the Pi
 HAND_CONFIDENCE = 0.6
 JPEG_QUALITY = 75
-CAMERA_OPEN_RETRIES = 10  # wait for the daemon to release /dev after a stop
+CAMERA_OPEN_RETRIES = 10  # survive a transient busy-device open
 
 VALID_RESOLUTIONS = [(640, 480), (1280, 720), (1920, 1080), (2592, 1944)]
 
@@ -113,12 +139,11 @@ def _camera_config() -> dict:
     return out
 
 # "learn" is a streaming mode used by face enrollment; it is not offered in
-# the app's mode switcher, only entered by the enrollment flow.
-MODES = ("face_detect", "test_face", "test_gesture", "learn")
-DEFAULT_MODE = "face_detect"
+# the dev console's three-button row, only entered by the enrollment flow.
+MODES = ("idle", "face", "gesture", "learn")
+DEFAULT_MODE = "idle"
 
-_OVERLAY_FOR = {"test_face": "face", "test_gesture": "gesture",
-                "learn": "learn"}
+_OVERLAY_FOR = {"face": "face", "gesture": "gesture", "learn": "learn"}
 
 
 class StreamingOutput:
@@ -155,11 +180,13 @@ class Supervisor:
         self.output = StreamingOutput()
         self.lock = threading.RLock()          # serialize mode transitions
         self.mode = DEFAULT_MODE
+        self._controller = CameraModeController()
+        self._face_timer = None  # threading.Timer for the 5s face window
 
-        # One persistent camera instance and one capture thread. We never
-        # close/reopen the camera just to switch between test modes
-        # (libcamera struggles to re-acquire within the same process);
-        # instead we keep the instance and only flip self.overlay.
+        # One persistent camera instance and one capture thread, open for
+        # the supervisor's entire life — idle just means no overlay, not no
+        # camera. That keeps present->face instant (no camera reopen on the
+        # hot path) and keeps the MJPEG stream always live for the dev tab.
         self.picam = None
         self.overlay = None       # "face" | "gesture" | "learn" | None
         self.last_raw = None      # latest clean frame, for enrollment capture
@@ -182,6 +209,7 @@ class Supervisor:
 
         # Set by the service so mode/state changes reach MQTT.
         self.on_state_change = None
+        self._publish = None   # set by service.py — publish(topic, payload)
 
     # ---- persistence -------------------------------------------------- #
     def load_mode(self) -> str:
@@ -205,34 +233,111 @@ class Supervisor:
             log.warning("could not write state file: %s", exc)
 
     # ---- mode transitions --------------------------------------------- #
+    def _set_overlay_mode(self, mode: str) -> None:
+        """Flip to `mode`'s overlay and make sure the capture loop is
+        running. No persistence, no controller interaction — just the
+        mechanical part shared by every caller (manual RPC, presence
+        machine, the 5s timer)."""
+        self.overlay = _OVERLAY_FOR.get(mode)
+        self._ensure_capture()
+        self.mode = mode
+        log.info("mode active: %s", mode)
+
     def apply_mode(self, mode: str) -> None:
+        """A manual dev-tab choice — overrides the presence machine for a
+        while (mode_controller.MANUAL_OVERRIDE_S) and persists across a
+        restart."""
         if mode not in MODES:
             raise ValueError(f"unknown mode: {mode}")
         with self.lock:
-            log.info("switching mode: %s -> %s", self.mode, mode)
-            service = topics.RECOGNITION_SERVICE
-
-            if mode in _OVERLAY_FOR:
-                # A streaming mode owns the camera. Stop the daemon if it is
-                # installed so it is not holding the device, then reuse our
-                # single camera instance and just flip the overlay.
-                if systemctl.exists(service):
-                    systemctl.run("stop", service)
-                self.overlay = _OVERLAY_FOR[mode]
-                self._ensure_capture()
-            else:  # face_detect — hand the camera to the production daemon
-                self.overlay = None
-                self._pause_capture()
-                if systemctl.exists(service):
-                    self._release_camera()   # fully close so it can acquire
-                    systemctl.run("start", service)
-                # No daemon installed → keep the (paused) instance so
-                # switching back to a test mode stays instant and reliable.
-
-            self.mode = mode
+            log.info("switching mode (manual): %s -> %s", self.mode, mode)
+            self._cancel_face_timer()
+            self._controller.apply_manual(mode, time.monotonic())
+            self._set_overlay_mode(mode)
             self.save_mode(mode)
-            log.info("mode active: %s", mode)
         self._notify()
+
+    def renew_manual_override(self) -> None:
+        """Call periodically while the dev console stays open (same idea as
+        radar's live-target stream renewal) so the override doesn't expire
+        mid-session."""
+        with self.lock:
+            self._controller.renew_manual(time.monotonic())
+
+    def release_manual_override(self) -> None:
+        """The dev console closed. Hands control back to the presence
+        machine — if someone was already present while the developer was
+        testing, re-enter face detection immediately rather than waiting
+        for a fresh presence event that may never come."""
+        with self.lock:
+            next_mode = self._controller.release_manual(time.monotonic())
+            if next_mode is None:
+                return
+            log.info("manual override released -> %s", next_mode)
+            self._cancel_face_timer()
+            self._set_overlay_mode(next_mode)
+            if next_mode == "face":
+                self._start_face_timer()
+        self._notify()
+
+    # ---- presence-driven state machine --------------------------------- #
+    def on_presence(self, payload: str) -> None:
+        """Wired to GLOBAL_PRESENCE by mqtt.py. payload is "present" or
+        "absent"."""
+        payload = (payload or "").strip()
+        with self.lock:
+            next_mode = self._controller.on_presence(payload, time.monotonic())
+            if next_mode is None:
+                return
+            log.info("presence=%s -> mode %s", payload, next_mode)
+            self._cancel_face_timer()
+            self._set_overlay_mode(next_mode)
+            if next_mode == "face":
+                self._start_face_timer()
+        self._notify()
+
+    def _start_face_timer(self) -> None:
+        self._face_timer = threading.Timer(FACE_WINDOW_S, self._on_face_timeout)
+        self._face_timer.daemon = True
+        self._face_timer.start()
+
+    def _cancel_face_timer(self) -> None:
+        if self._face_timer is not None:
+            self._face_timer.cancel()
+            self._face_timer = None
+
+    def _on_face_timeout(self) -> None:
+        with self.lock:
+            self._face_timer = None
+            next_mode = self._controller.on_face_timeout(time.monotonic())
+            if next_mode is None:
+                return
+            log.info("face window elapsed -> %s", next_mode)
+            self._set_overlay_mode(next_mode)
+        self._notify()
+
+    def _on_face_result(self, name) -> None:
+        """Called from the capture loop after each face-detection pass
+        (every FACE_EVERY frames). `name` is the matched profile name, or
+        None if no known face was in frame this pass."""
+        matched = name is not None
+        publish_needed = False
+        with self.lock:
+            next_mode = self._controller.on_face_result(matched, time.monotonic())
+            # In manual/dev-tab mode a match doesn't change mode (see
+            # mode_controller's docstring) but we still want to publish —
+            # the production path publishes exactly when the controller
+            # decides to stop (next_mode == "idle"); manual mode publishes
+            # on every match so the dev tab's "detected" readout updates.
+            if matched and (next_mode == "idle" or not self._controller.presence_driven):
+                publish_needed = True
+            if next_mode is not None:
+                self._cancel_face_timer()
+                self._set_overlay_mode(next_mode)
+        if publish_needed and self._publish:
+            self._publish(topics.RECOGNITION, {"user": name})
+        if next_mode is not None:
+            self._notify()
 
     def set_resolution(self, width: int, height: int) -> None:
         if (width, height) not in VALID_RESOLUTIONS:
@@ -321,10 +426,10 @@ class Supervisor:
             log.warning("set_controls failed: %s", exc)
 
     def set_tolerance(self, tolerance: float) -> None:
-        """Only affects this process's own test_face preview match — the
-        production recognition-daemon process has its own copy, read once
-        at its startup from the same `recognition_tolerance` DB key, so a
-        change here needs that daemon restarted to take effect there too."""
+        """Live — this is the only copy of the match tolerance now that
+        there is one process, unlike before when a separate
+        camera-recognition daemon held its own copy read once at its own
+        startup."""
         with self.lock:
             self.tolerance = float(tolerance)
         self._notify()
@@ -414,7 +519,9 @@ class Supervisor:
         self.fps = 0.0
 
     def _release_camera(self) -> None:
-        """Fully close the camera so another process can acquire it."""
+        """Fully close the camera. Only used by set_resolution() (which
+        genuinely needs to reconfigure the sensor) and shutdown() — there is
+        no other process to hand the device to any more."""
         if self.picam is not None:
             try:
                 self.picam.close()
@@ -424,6 +531,7 @@ class Supervisor:
         self.camera_open = False
 
     def shutdown(self) -> None:
+        self._cancel_face_timer()
         self._pause_capture()
         self._release_camera()
 
@@ -467,7 +575,9 @@ class Supervisor:
                 if overlay == "gesture":
                     self._draw_gesture(frame, frame_idx)
                 elif overlay == "face":
-                    self._draw_face(cv2, frame, frame_idx)
+                    matched = self._draw_face(cv2, frame, frame_idx)
+                    if matched is not None:
+                        self._on_face_result(matched)
                 elif overlay == "learn":
                     # snapshot the clean frame BEFORE drawing, for enrollment
                     self.last_raw = frame.copy()
@@ -504,7 +614,8 @@ class Supervisor:
                 min_detection_confidence=HAND_CONFIDENCE,
                 min_tracking_confidence=HAND_CONFIDENCE)
         mp = self._mp
-        if frame_idx % GESTURE_EVERY == 0:
+        new_result = frame_idx % GESTURE_EVERY == 0
+        if new_result:
             results = self._hands.process(frame)
             self._last_hands = []
             if results.multi_hand_landmarks:
@@ -519,13 +630,25 @@ class Supervisor:
                 frame, lm, mp.solutions.hands.HAND_CONNECTIONS,
                 mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
                 mp.solutions.drawing_styles.get_default_hand_connections_style())
+        # Publish once per detection cycle (not every frame) while a real
+        # person is in range — production only; manual/dev-tab gesture mode
+        # just draws, same as it always has, so testing doesn't spam MQTT.
+        if new_result and self._last_hands and self._controller.presence_driven:
+            if self._publish:
+                self._publish(topics.GESTURE, {"fingers": self._last_hands[0][2]})
 
-    def _draw_face(self, cv2, frame, frame_idx) -> None:
+    def _draw_face(self, cv2, frame, frame_idx):
+        """Detects + draws every FACE_EVERY frames, draws the cached result
+        on every frame in between. Returns the matched profile name on a
+        frame where detection just ran and found a known face, else None
+        (covers both "no detection ran this frame" and "ran but no match")
+        — the caller only acts on a non-None return."""
         if self._fr is None:
             import face_recognition as fr
             self._fr = fr
             self._known_encodings, self._known_names = self._load_encodings()
         fr = self._fr
+        matched = None
         if frame_idx % FACE_EVERY == 0:
             locs = fr.face_locations(frame, model="hog",
                                      number_of_times_to_upsample=0)
@@ -541,9 +664,12 @@ class Supervisor:
                             name = known
                             break
                 faces.append((top, right, bottom, left, name))
+                if name != "unknown" and matched is None:
+                    matched = name
             self._last_faces = faces
         for (top, right, bottom, left, _name) in self._last_faces:
             cv2.rectangle(frame, (left, top), (right, bottom), (255, 0, 0), 1)
+        return matched
 
     def _load_encodings(self):
         import pickle
@@ -567,15 +693,15 @@ class Supervisor:
     def health(self) -> dict:
         detected_face = None
         finger_count = None
-        if self.mode in ("test_face", "learn") and self._last_faces:
+        if self.mode in ("face", "learn") and self._last_faces:
             detected_face = self._last_faces[0][4] or "unknown"
-        if self.mode == "test_gesture" and self._last_hands:
+        if self.mode == "gesture" and self._last_hands:
             finger_count = self._last_hands[0][2]
         return {
             "mode": self.mode,
             "modes": list(MODES),
             "camera_open": self.camera_open,
-            "daemon_active": systemctl.is_active(topics.RECOGNITION_SERVICE),
+            "presence_driven": self._controller.presence_driven,
             "fps": round(self.fps, 1),
             "target_fps": self.target_fps,
             "width": self.width,
