@@ -17,6 +17,7 @@ const TOPIC = {
   rpcEncode: `${RPC}/encode`,
   rpcProfilesList: `${RPC}/profiles/list`,
   rpcProfilesDelete: `${RPC}/profiles/delete`,
+  rpcRestartRecognition: `${RPC}/restart_recognition`,
   state: "smartmirror/camera/state", // retained
   profiles: "smartmirror/camera/profiles", // retained
 } as const;
@@ -27,8 +28,14 @@ export interface CameraHealth {
   camera_open: boolean;
   daemon_active: boolean;
   fps: number;
+  target_fps: number;
   width: number;
   height: number;
+  // This process's own test_face preview tolerance. The production
+  // camera-recognition daemon has a separate copy, read once at its own
+  // startup from the same recognition_tolerance DB key — a change here
+  // needs that daemon restarted to take effect there too.
+  tolerance: number;
   detected_face: string | null;
   finger_count: number | null;
   controls: CameraControls;
@@ -51,6 +58,11 @@ export interface CameraControls {
 export interface CameraSettingsInput extends Partial<CameraControls> {
   width?: number;
   height?: number;
+  framerate?: number;
+  recognition_tolerance?: number;
+  // Not live — the camera-recognition daemon only reads this at its own
+  // startup; persists to camera_config but needs that daemon restarted.
+  recognition_timeout_s?: number;
 }
 
 export interface CameraProfile {
@@ -134,6 +146,13 @@ export const cameraApi = createApi({
       query: (name) => ({ topic: TOPIC.rpcEncode, payload: { name } }),
       invalidatesTags: ["CameraProfiles"],
     }),
+
+    // recognition_timeout_s/recognition_tolerance only take effect on the
+    // production camera-recognition daemon once it restarts — it reads
+    // them once at its own startup, not live.
+    restartRecognition: build.mutation<{ ok: boolean }, void>({
+      query: () => ({ topic: TOPIC.rpcRestartRecognition }),
+    }),
   }),
 });
 
@@ -147,4 +166,5 @@ export const {
   useDeleteDatasetPhotoMutation,
   useCapturePhotoMutation,
   useEncodeFacesMutation,
+  useRestartRecognitionMutation,
 } = cameraApi;

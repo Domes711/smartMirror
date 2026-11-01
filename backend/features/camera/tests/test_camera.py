@@ -305,3 +305,52 @@ def test_settings_with_only_controls_leaves_resolution_untouched(svc):
 def test_settings_rejects_an_unsupported_resolution(svc):
     with pytest.raises(ValueError):
         svc.settings({"width": 1234, "height": 567})
+
+
+def test_settings_changes_framerate(svc):
+    result = svc.settings({"framerate": 24})
+    assert result["target_fps"] == 24
+
+
+def test_settings_persists_framerate_to_camera_config(svc):
+    from features.camera.supervisor import Supervisor
+    svc.settings({"framerate": 10})
+    assert Supervisor().target_fps == 10
+
+
+def test_settings_changes_recognition_tolerance(svc):
+    result = svc.settings({"recognition_tolerance": 0.45})
+    assert result["tolerance"] == 0.45
+
+
+def test_settings_persists_recognition_tolerance_to_camera_config(svc):
+    from features.camera.supervisor import Supervisor
+    svc.settings({"recognition_tolerance": 0.5})
+    assert Supervisor().tolerance == 0.5
+
+
+def test_settings_persists_recognition_timeout_to_camera_config(svc):
+    """recognition_timeout_s has no live effect on this process (it's read
+    once by the separate camera-recognition daemon at its own startup) —
+    this only checks the DB write service.settings() is responsible for."""
+    from data import device_config
+    svc.settings({"recognition_timeout_s": 5.0})
+    assert device_config.resolve("camera")["recognition_timeout_s"] == 5.0
+
+
+def test_set_target_fps_has_a_floor_of_one(sandbox):
+    from features.camera.supervisor import Supervisor
+    sup = Supervisor()
+    sup.set_target_fps(0)
+    assert sup.target_fps == 1
+    sup.set_target_fps(-5)
+    assert sup.target_fps == 1
+
+
+def test_restart_recognition_runs_systemctl_restart(svc, monkeypatch):
+    from shared import systemctl
+    calls = []
+    monkeypatch.setattr(systemctl, "run", lambda action, unit: calls.append((action, unit)))
+    result = svc.restart_recognition()
+    assert result == {"ok": True}
+    assert calls == [("restart", "camera-recognition")]

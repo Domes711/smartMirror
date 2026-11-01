@@ -12,6 +12,7 @@ Supervisor, the publisher callback) — called once by daemon.py at startup.
 import logging
 
 from . import enrollment, profiles
+from .constants import RECOGNITION_SERVICE
 
 log = logging.getLogger(__name__)
 
@@ -58,17 +59,26 @@ def mode_set(mode: str) -> dict:
 
 
 def settings(payload: dict) -> dict:
-    """One endpoint for every camera setting: resolution plus Picamera2
-    image controls (brightness/contrast/exposure/white balance/gain/noise
-    reduction). Callers send only the keys they want to change; unset keys
-    keep their current value. Persisted to `camera_config` so it survives a
+    """One endpoint for every camera setting: resolution, frame rate, this
+    process's recognition tolerance, plus Picamera2 image controls
+    (brightness/contrast/exposure/white balance/gain/noise reduction).
+    Callers send only the keys they want to change; unset keys keep their
+    current value. Persisted to `camera_config` so it survives a
     `camera-supervisor` restart.
+
+    `recognition_timeout_s` is accepted and persisted here too, but only
+    takes effect once `camera-recognition` (a separate process) restarts —
+    that daemon reads it once at its own startup, not live.
     """
     from . import supervisor as sup_mod
     from data import device_config
 
     if "width" in payload and "height" in payload:
         _sup.set_resolution(int(payload["width"]), int(payload["height"]))
+    if "framerate" in payload:
+        _sup.set_target_fps(int(payload["framerate"]))
+    if "recognition_tolerance" in payload:
+        _sup.set_tolerance(float(payload["recognition_tolerance"]))
 
     controls = {k: payload[k] for k in sup_mod.CAMERA_CONTROL_KEYS
                if k in payload}
@@ -79,6 +89,12 @@ def settings(payload: dict) -> dict:
     if "width" in payload and "height" in payload:
         to_save["resolution_width"] = _sup.width
         to_save["resolution_height"] = _sup.height
+    if "framerate" in payload:
+        to_save["framerate"] = _sup.target_fps
+    if "recognition_tolerance" in payload:
+        to_save["recognition_tolerance"] = _sup.tolerance
+    if "recognition_timeout_s" in payload:
+        to_save["recognition_timeout_s"] = float(payload["recognition_timeout_s"])
     if to_save:
         try:
             device_config.set_many("camera", to_save)
@@ -126,6 +142,17 @@ def profiles_delete(name: str) -> dict:
 # holding the systemctl sudoers rights, and a stopped radar daemon cannot
 # start itself. The topics belong to the radar feature.
 # --------------------------------------------------------------------------- #
+def restart_recognition() -> dict:
+    """Restart camera-recognition so a recognition_timeout_s/tolerance
+    change written by settings() takes effect — that daemon reads both
+    only once, at its own startup. The supervisor already holds the
+    systemctl sudoers rights needed to manage this unit (same reason
+    radar_set() below lives here instead of in the radar feature)."""
+    from shared import systemctl
+    systemctl.run("restart", RECOGNITION_SERVICE)
+    return {"ok": True}
+
+
 def radar_status() -> dict:
     from shared import systemctl
     from features.radar import mqtt as radar_topics

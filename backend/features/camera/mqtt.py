@@ -63,6 +63,7 @@ def serve_all() -> None:
     c.serve(topics.RPC_ENCODE, op_encode)
     c.serve(topics.RPC_PROFILES_LIST, lambda _req: service.profiles_list())
     c.serve(topics.RPC_PROFILES_DELETE, op_profiles_delete)
+    c.serve(topics.RPC_RESTART_RECOGNITION, lambda _req: service.restart_recognition())
 
     from features.radar import mqtt as radar_topics
     c.serve(radar_topics.RPC_SERVICE_GET, lambda _req: service.radar_get())

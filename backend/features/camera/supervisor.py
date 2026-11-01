@@ -34,11 +34,11 @@ STATE_FILE = os.path.join(paths.VAR_DIR, "camera-mode.state")
 DEFAULT_WIDTH = 640
 DEFAULT_HEIGHT = 480
 DEFAULT_TOLERANCE = 0.6
+DEFAULT_TARGET_FPS = 15   # cap the stream so the capture loop leaves CPU free
 FACE_EVERY = 10           # run face detection every Nth frame (hog is slow)
 GESTURE_EVERY = 3         # mediapipe is slow on the Pi
 HAND_CONFIDENCE = 0.6
 JPEG_QUALITY = 75
-TARGET_FPS = 15           # cap the stream so the capture loop leaves CPU free
 CAMERA_OPEN_RETRIES = 10  # wait for the daemon to release /dev after a stop
 
 VALID_RESOLUTIONS = [(640, 480), (1280, 720), (1920, 1080), (2592, 1944)]
@@ -88,6 +88,7 @@ def _camera_config() -> dict:
     serve a stream on a broken DB."""
     out = {"width": DEFAULT_WIDTH, "height": DEFAULT_HEIGHT,
            "tolerance": DEFAULT_TOLERANCE, "rotation": 180,
+           "target_fps": DEFAULT_TARGET_FPS,
            "controls": dict(CAMERA_CONTROL_DEFAULTS)}
     try:
         from data import device_config
@@ -102,6 +103,8 @@ def _camera_config() -> dict:
             out["tolerance"] = float(cfg["recognition_tolerance"])
         if cfg.get("rotation") is not None:
             out["rotation"] = int(cfg["rotation"])
+        if cfg.get("framerate"):
+            out["target_fps"] = int(cfg["framerate"])
         for key in CAMERA_CONTROL_KEYS:
             if key in cfg:
                 out["controls"][key] = cfg[key]
@@ -145,6 +148,7 @@ class Supervisor:
         self.tolerance = (tolerance if tolerance is not None
                           else cfg["tolerance"])
         self.rotation = cfg["rotation"]
+        self.target_fps = cfg["target_fps"]
         self.controls = cfg["controls"]
         self.encodings = encodings
 
@@ -316,6 +320,23 @@ class Supervisor:
         except Exception as exc:  # noqa: BLE001
             log.warning("set_controls failed: %s", exc)
 
+    def set_tolerance(self, tolerance: float) -> None:
+        """Only affects this process's own test_face preview match — the
+        production recognition-daemon process has its own copy, read once
+        at its startup from the same `recognition_tolerance` DB key, so a
+        change here needs that daemon restarted to take effect there too."""
+        with self.lock:
+            self.tolerance = float(tolerance)
+        self._notify()
+
+    def set_target_fps(self, fps: int) -> None:
+        """Cap the capture loop's rate — read fresh on every frame (see
+        _capture_loop), so this takes effect on the very next frame with no
+        camera reopen needed, unlike resolution."""
+        with self.lock:
+            self.target_fps = max(1, int(fps))
+        self._notify()
+
     def set_controls(self, settings: dict) -> None:
         """Update camera image controls (brightness/contrast/exposure/white
         balance/gain/noise reduction). Unknown keys are ignored; `None`
@@ -462,7 +483,7 @@ class Supervisor:
                     self.output.write(jpg)
 
                 frame_time = time.monotonic() - now
-                target = 1.0 / TARGET_FPS
+                target = 1.0 / self.target_fps
                 if frame_time < target:
                     time.sleep(target - frame_time)
         except Exception as exc:  # noqa: BLE001
@@ -556,8 +577,10 @@ class Supervisor:
             "camera_open": self.camera_open,
             "daemon_active": systemctl.is_active(topics.RECOGNITION_SERVICE),
             "fps": round(self.fps, 1),
+            "target_fps": self.target_fps,
             "width": self.width,
             "height": self.height,
+            "tolerance": self.tolerance,
             "detected_face": detected_face,
             "finger_count": finger_count,
             "controls": dict(self.controls),
