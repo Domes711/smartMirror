@@ -1,6 +1,7 @@
 import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import fs from "node:fs";
 
 // Dev server proxies the mirror's REST surface (camera stream, photo upload,
 // layout, store, AI builder) to the backend gateway on :8000 so the app can
@@ -41,8 +42,25 @@ const noCacheHtml: PluginOption = {
   },
 };
 
+// public/sw.js's CACHE constant holds a `__BUILD_ID__` placeholder; every
+// `vite build` stamps a fresh unique id in, so the new worker's `activate`
+// handler always sees a cache name it has never seen before and drops the
+// previous build's assets — otherwise a stale cached bundle would keep
+// serving its own vite-hashed filenames, which 404 the moment a new deploy
+// has run (a blank white screen, not a visible error).
+const swCacheBust: PluginOption = {
+  name: "sw-cache-bust",
+  closeBundle() {
+    const swPath = path.resolve(__dirname, "dist/sw.js");
+    if (!fs.existsSync(swPath)) return;
+    const buildId = `${Date.now()}`;
+    const contents = fs.readFileSync(swPath, "utf8").replace("__BUILD_ID__", buildId);
+    fs.writeFileSync(swPath, contents);
+  },
+};
+
 export default defineConfig({
-  plugins: [react(), noCacheHtml],
+  plugins: [react(), noCacheHtml, swCacheBust],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },

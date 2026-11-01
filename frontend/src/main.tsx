@@ -55,8 +55,32 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 
 // PWA: register the service worker (production only, so dev stays uncached).
+//
+// Vite hashes every built asset and deletes the previous build's files, so a
+// stale cached bundle isn't just outdated — it 404s on import() the moment a
+// new deploy has run, which is a blank white screen with no visible error.
+// `skipWaiting()`/`clients.claim()` in sw.js make the new worker take over
+// immediately, but a page already open keeps running the OLD worker's
+// already-fetched JS until it reloads; reloading on `controllerchange` is
+// what actually gets a stale tab onto the new bundle without the user
+// having to notice and manually refresh.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      // The browser only checks for a new worker on navigation / periodic
+      // background ticks by default, which can be minutes away on a tab
+      // left open — an explicit check whenever this tab becomes visible
+      // again (e.g. switching back to it on a phone) catches a deploy that
+      // happened while it was in the background.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update().catch(() => {});
+      });
+    }).catch(() => {});
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
   });
 }

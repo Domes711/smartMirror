@@ -1,8 +1,12 @@
 /* Mirror Control service worker — app-shell offline cache.
  * Static build assets are cached (cache-first with background refresh);
  * live mirror data (REST fallback endpoints + MQTT) is always network-only.
- * Bump CACHE to invalidate old caches on deploy. */
-const CACHE = "mirror-control-v2";
+ * CACHE is rewritten by vite.config.ts's swCacheBust plugin on every build —
+ * a new name forces `activate` below to drop the previous build's cached
+ * assets instead of serving stale ones whose vite-hashed filenames no
+ * longer exist on the server (a blank white screen with no console error,
+ * since the failure is an import() 404, not an app bug). */
+const CACHE = "mirror-control-__BUILD_ID__";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 // never cache the REST fallback surface (proxied to the supervisor :8000)
