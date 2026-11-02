@@ -7,10 +7,13 @@ import fs from "node:fs";
 // AddPhotos) only works in a secure context — HTTPS, or localhost. The app
 // is normally reached at http://<pi-ip>:8090, a plain-HTTP LAN address, so
 // without this the browser never exposes navigator.mediaDevices at all.
-// frontend/setup.sh generates a self-signed cert into var/tls/ on first
-// run; fall back to plain HTTP if it's missing (dev machines, CI) rather
-// than failing the whole config.
-const TLS_DIR = path.resolve(__dirname, "var/tls");
+// The root setup.sh generates one shared self-signed cert into
+// backend/var/tls/ (shared with mosquitto's WebSocket listener — a
+// https:// page cannot open a plain ws:// socket, so :9001 needs wss:// with
+// this same cert once the frontend is HTTPS; see setup.sh and
+// backend/features/camera/setup.sh). Fall back to plain HTTP if it's
+// missing (dev machines, CI) rather than failing the whole config.
+const TLS_DIR = path.resolve(__dirname, "../backend/var/tls");
 const TLS_KEY = path.join(TLS_DIR, "key.pem");
 const TLS_CERT = path.join(TLS_DIR, "cert.pem");
 const https = fs.existsSync(TLS_KEY) && fs.existsSync(TLS_CERT)

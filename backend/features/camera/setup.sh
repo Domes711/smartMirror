@@ -15,6 +15,12 @@ sudo systemctl enable --now mosquitto
 
 # WebSocket listener so the frontend app (browser) can speak MQTT directly.
 # TCP 1883 stays for the Pi-side daemons; 9001 is websockets for the app.
+#
+# If the shared TLS cert (backend/var/tls/, see the root setup.sh) exists,
+# 9001 speaks TLS (wss://) instead of plain ws:// — a https:// frontend page
+# cannot open a plain ws:// socket (mixed content), so once the frontend is
+# HTTPS, the broker's WebSocket listener must be too, with the SAME cert so
+# the browser only ever has one self-signed warning to accept.
 echo "▸ mosquitto: TCP 1883 + WebSocket 9001…"
 # Neutralize any OTHER conf.d file declaring a listener — a leftover (e.g.
 # local.conf with `listener 1883`) collides with ours and mosquitto refuses
@@ -27,12 +33,29 @@ for f in /etc/mosquitto/conf.d/*.conf; do
     echo "  • disabled conflicting $(basename "$f") (had a listener)"
   fi
 done
-sudo tee /etc/mosquitto/conf.d/smartmirror.conf >/dev/null <<'MOSQ'
+
+TLS_DIR="$(cd "$HERE/../.." && pwd)/var/tls"
+WS_TLS_CONF=""
+if [ -f "$TLS_DIR/key.pem" ] && [ -f "$TLS_DIR/cert.pem" ]; then
+  # mosquitto runs as its own system user — it can't read files owned by
+  # whoever ran setup.sh unless group/world-readable. A self-signed cert for
+  # a LAN-only mirror is low-stakes enough that world-readable is fine here.
+  sudo chmod 644 "$TLS_DIR/key.pem" "$TLS_DIR/cert.pem" 2>/dev/null || true
+  WS_TLS_CONF="
+cafile $TLS_DIR/cert.pem
+certfile $TLS_DIR/cert.pem
+keyfile $TLS_DIR/key.pem"
+  echo "  • wss:// (TLS cert found at $TLS_DIR)"
+else
+  echo "  • ws:// (no shared TLS cert yet — plain WebSocket)"
+fi
+
+sudo tee /etc/mosquitto/conf.d/smartmirror.conf >/dev/null <<MOSQ
 listener 1883
 protocol mqtt
 
 listener 9001
-protocol websockets
+protocol websockets$WS_TLS_CONF
 
 allow_anonymous true
 MOSQ

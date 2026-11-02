@@ -56,7 +56,7 @@ fi
 sleep 2
 # https if setup.sh generated a cert (device camera needs a secure context).
 SCHEME="http"
-[ -f "frontend/var/tls/key.pem" ] && [ -f "frontend/var/tls/cert.pem" ] && SCHEME="https"
+[ -f "backend/var/tls/key.pem" ] && [ -f "backend/var/tls/cert.pem" ] && SCHEME="https"
 code="$(curl -sk -o /dev/null -w '%{http_code}' "$SCHEME://127.0.0.1:$PORT/" || true)"
 [ "$code" = "200" ] && ok "Mirror Control running (HTTP 200, :$PORT)" \
   || warn "Mirror Control not responding (HTTP $code) — see: journalctl -u mirror-control -n 30"

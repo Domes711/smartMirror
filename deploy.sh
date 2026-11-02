@@ -54,7 +54,26 @@ else
   exit 1
 fi
 
-# --- 2. backend --------------------------------------------------------------
+# --- 2. shared TLS cert (device camera + MQTT wss://) ------------------------
+# See setup.sh for the full rationale — one self-signed cert, shared by the
+# frontend's HTTPS listener and mosquitto's WebSocket listener, generated
+# once here if a fresh clone/first deploy never ran the full setup.sh.
+TLS_DIR="$REPO/backend/var/tls"
+if [ ! -f "$TLS_DIR/key.pem" ] || [ ! -f "$TLS_DIR/cert.pem" ]; then
+  if command -v openssl >/dev/null 2>&1; then
+    c "Generating shared self-signed TLS cert…"
+    mkdir -p "$TLS_DIR"
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+      -keyout "$TLS_DIR/key.pem" -out "$TLS_DIR/cert.pem" \
+      -subj "/CN=smartmirror" >/dev/null 2>&1 \
+      && ok "cert written to $TLS_DIR" \
+      || warn "cert generation failed — frontend + MQTT WebSocket stay plain http/ws"
+  else
+    warn "openssl not found — frontend + MQTT WebSocket stay plain http/ws"
+  fi
+fi
+
+# --- 3. backend --------------------------------------------------------------
 if [ "$FULL" = "1" ]; then
   c "Reinstalling backend (--full: deps + units + migrations)…"
   ./backend/setup.sh
@@ -68,7 +87,7 @@ else
   ok "schema up to date"
 fi
 
-# --- 3. MagicMirror core deps ------------------------------------------------
+# --- 4. MagicMirror core deps ------------------------------------------------
 if [ "$FULL" = "1" ]; then
   c "Reinstalling MagicMirror core + modules (--full)…"
   ( cd MagicMirror && ./setup.sh )
@@ -78,7 +97,7 @@ else
 fi
 ok "MagicMirror deps ready"
 
-# --- 4. frontend (:8090) -----------------------------------------------------
+# --- 5. frontend (:8090) -----------------------------------------------------
 if unit_installed mirror-control; then
   c "Building frontend (:8090)…"
   ( cd frontend && "$NPM" install --no-audit --no-fund && "$NPM" run build )
@@ -89,7 +108,7 @@ else
   ok "mirror-control.service installed"
 fi
 
-# --- 5. restart everything ---------------------------------------------------
+# --- 6. restart everything ---------------------------------------------------
 restart_unit() {  # restart a systemd unit only if it is installed
   if unit_installed "$1"; then
     sudo systemctl restart "$1" && ok "restart $1"
@@ -117,7 +136,7 @@ else
   warn "pm2 not found — MagicMirror not restarted"
 fi
 
-# --- 6. health check ---------------------------------------------------------
+# --- 7. health check ---------------------------------------------------------
 c "Checking…"
 sleep 3
 check() {  # check <label> <url> <hint>
@@ -134,7 +153,7 @@ fi
 # https if frontend/setup.sh generated a cert (device camera needs a secure
 # context), plain http otherwise — -k ignores the self-signed warning.
 FRONTEND_SCHEME="http"
-[ -f "frontend/var/tls/key.pem" ] && [ -f "frontend/var/tls/cert.pem" ] && FRONTEND_SCHEME="https"
+[ -f "backend/var/tls/key.pem" ] && [ -f "backend/var/tls/cert.pem" ] && FRONTEND_SCHEME="https"
 check "frontend         (:8090)" "$FRONTEND_SCHEME://127.0.0.1:8090/" "journalctl -u mirror-control -n 50"
 check "MagicMirror      (:8080)" http://127.0.0.1:8080/        "pm2 logs MagicMirror --lines 50"
 

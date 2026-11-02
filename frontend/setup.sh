@@ -25,24 +25,11 @@ echo "▸ npm:  $NPM"
 echo "▸ user: $USER_NAME  port: $PORT"
 
 # The device camera (getUserMedia — new-profile wizard, AddPhotos) only
-# works in a secure context. A self-signed cert is enough: browsers accept
-# it after a one-time "unsafe" click, and vite.config.ts picks it up
-# automatically if present (plain HTTP otherwise, so this is safe to skip
-# or fail without breaking the rest of the app).
-TLS_DIR="$DIR/var/tls"
-if [ ! -f "$TLS_DIR/key.pem" ] || [ ! -f "$TLS_DIR/cert.pem" ]; then
-  if command -v openssl >/dev/null 2>&1; then
-    echo "▸ Generating self-signed TLS cert (for the device-camera HTTPS requirement)…"
-    mkdir -p "$TLS_DIR"
-    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-      -keyout "$TLS_DIR/key.pem" -out "$TLS_DIR/cert.pem" \
-      -subj "/CN=smartmirror" >/dev/null 2>&1 \
-      && echo "✓ cert written to $TLS_DIR" \
-      || echo "! cert generation failed — mirror-control will serve plain HTTP (no device camera)"
-  else
-    echo "! openssl not found — mirror-control will serve plain HTTP (no device camera)"
-  fi
-fi
+# works in a secure context. The shared self-signed cert (also used by
+# mosquitto's WebSocket listener, so the frontend's wss:// works too — see
+# the root setup.sh) lives in backend/var/tls/, generated once there rather
+# than here, so there is only one cert to accept in the browser.
+TLS_DIR="$DIR/../backend/var/tls"
 
 echo "▸ Installing deps + building…"
 ( cd "$DIR" && "$NPM" install --no-audit --no-fund && "$NPM" run build )
