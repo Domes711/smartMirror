@@ -159,8 +159,13 @@ export const cameraApi = createApi({
       invalidatesTags: (_r, _e, { name }) => [{ type: "Dataset", id: name }],
     }),
 
+    // Runs the HOG face encoder on the backend before replying — tens of
+    // seconds for more than a handful of photos on a Pi, well past the 8s
+    // RPC default (backend/features/camera/profiles.py's own subprocess
+    // timeout is 600s, so the backend keeps working long after a default
+    // timeout would have told the UI it failed).
     encodeFaces: build.mutation<{ ok: boolean; output: string; error: string | null }, string | null>({
-      query: (name) => ({ topic: TOPIC.rpcEncode, payload: { name } }),
+      query: (name) => ({ topic: TOPIC.rpcEncode, payload: { name }, timeoutMs: 120000 }),
       invalidatesTags: ["CameraProfiles"],
     }),
   }),

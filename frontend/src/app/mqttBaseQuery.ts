@@ -14,14 +14,20 @@ import { rpcCall, RpcError } from "@/services/mqttRpc";
 export interface MqttQueryArgs {
   topic: string;
   payload?: Record<string, unknown>;
+  /** Override mqttRpc.ts's 8s default — for calls that do real work on the
+   * backend before replying (e.g. encodeFaces running the HOG face
+   * encoder, which can take tens of seconds on a Pi for more than a
+   * handful of photos). */
+  timeoutMs?: number;
 }
 
 export const mqttBaseQuery: BaseQueryFn<MqttQueryArgs, unknown, { message: string; status?: number }> = async ({
   topic,
   payload,
+  timeoutMs,
 }) => {
   try {
-    const data = await rpcCall(topic, payload ?? {});
+    const data = await rpcCall(topic, payload ?? {}, timeoutMs);
     return { data };
   } catch (e) {
     const err = e instanceof RpcError ? e : new RpcError(String(e));
