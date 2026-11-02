@@ -15,6 +15,10 @@ export interface ProfilesState {
   photoDelModal: string | null;
   photoSource: PhotoSource;
   sessionPhotos: FacePhoto[];
+  /** AddPhotos "phone"/"choose" uploads — a client-device capture or an
+   * existing image file picked from the gallery, for an already-existing
+   * profile. */
+  devPhotoUploading: boolean;
   // new-profile wizard
   npStep: 1 | 2 | 3;
   npName: string;
@@ -38,6 +42,7 @@ const initialState: ProfilesState = {
   photoDelModal: null,
   photoSource: "mirror",
   sessionPhotos: [],
+  devPhotoUploading: false,
   npStep: 1,
   npName: "",
   npPhotos: [],
@@ -100,19 +105,22 @@ const profilesSlice = createSlice({
     resetSession(s, a: PayloadAction<PhotoSource>) {
       s.photoSource = a.payload;
       s.sessionPhotos = [];
+      s.devPhotoUploading = false;
     },
-    /** Append a real captured photo (from the live camera dataset). */
+    /** Append a real captured/uploaded photo (mirror camera or this
+     * device's own camera/gallery). */
     pushRealPhoto(s, a: PayloadAction<{ file: string; src: string }>) {
       const n = s.facePhotos.reduce((m, p) => Math.max(m, p.n), 0) + 1;
       const ph: FacePhoto = { id: a.payload.file, file: a.payload.file, n, hue: (n * 47 + 18) % 360, src: a.payload.src };
       s.facePhotos.push(ph);
       s.sessionPhotos.push(ph);
+      s.devPhotoUploading = false;
     },
-    capturePhoto(s, a: PayloadAction<{ toSession: boolean }>) {
-      const n = s.facePhotos.reduce((m, p) => Math.max(m, p.n), 0) + 1;
-      const np: FacePhoto = { id: "fp" + Date.now(), hue: (n * 47 + 18) % 360, n };
-      s.facePhotos.push(np);
-      if (a.payload.toSession) s.sessionPhotos.push(np);
+    devPhotoUploadStart(s) {
+      s.devPhotoUploading = true;
+    },
+    devPhotoUploadFailed(s) {
+      s.devPhotoUploading = false;
     },
     openPhotoSheet(s, a: PayloadAction<string>) {
       s.photoSheet = a.payload;

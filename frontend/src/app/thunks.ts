@@ -557,24 +557,62 @@ export const confirmDeleteProfile = (): Thunk => (dispatch, getState) => {
     .catch((e) => dispatch(toast(String(e))));
 };
 
-const captureLive = (phone: boolean): Thunk => (dispatch, getState) => {
+const captureLive = (): Thunk => (dispatch, getState) => {
   const name = getState().profiles.profileName;
   dispatch(cameraApi.endpoints.capturePhoto.initiate({ name }))
     .unwrap()
     .then((r) => {
       dispatch(profilesActions.pushRealPhoto({ file: r.file, src: photoUrl(name, r.file) }));
-      dispatch(toast(phone ? Lof(getState()).tPhotoAdded : Lof(getState()).tPhotoTaken));
+      dispatch(toast(Lof(getState()).tPhotoTaken));
     })
     .catch((e) => dispatch(toast(String(e))));
 };
 
-export const takePhoto = (): Thunk => (dispatch, getState) => {
-  const phone = getState().profiles.photoSource === "phone";
-  dispatch(captureLive(phone));
-};
+/** "Phone" source in AddPhotos: a photo from THIS device's own camera
+ * (DeviceCamera), uploaded as training data for the currently-open profile —
+ * distinct from captureLive, which grabs a frame from the mirror's camera. */
+export const uploadDevicePhoto =
+  (blob: Blob): Thunk =>
+  (dispatch, getState) => {
+    const name = getState().profiles.profileName;
+    if (getState().profiles.devPhotoUploading) return;
+    dispatch(profilesActions.devPhotoUploadStart());
+    uploadCapturedPhoto(name, blob)
+      .then((r) => {
+        dispatch(profilesActions.pushRealPhoto({ file: r.file, src: photoUrl(name, r.file) }));
+        dispatch(toast(Lof(getState()).tPhotoAdded));
+      })
+      .catch((e) => {
+        dispatch(profilesActions.devPhotoUploadFailed());
+        dispatch(toast(`${Lof(getState()).npUploadFailedLabel}: ${e instanceof Error ? e.message : String(e)}`));
+      });
+  };
 
-export const shootPhoto = (): Thunk => (dispatch) => {
-  dispatch(captureLive(false));
+/** "Choose photos" in AddPhotos: an existing image file picked from the
+ * device's own gallery, uploaded as-is (no re-encoding needed — it's
+ * already a JPEG/PNG the browser can send straight through). */
+export const uploadPickedPhotos =
+  (files: FileList): Thunk =>
+  (dispatch, getState) => {
+    const name = getState().profiles.profileName;
+    Array.from(files).forEach((file) => {
+      dispatch(profilesActions.devPhotoUploadStart());
+      uploadCapturedPhoto(name, file)
+        .then((r) => {
+          dispatch(profilesActions.pushRealPhoto({ file: r.file, src: photoUrl(name, r.file) }));
+          dispatch(toast(Lof(getState()).tPhotoAdded));
+        })
+        .catch((e) => {
+          dispatch(profilesActions.devPhotoUploadFailed());
+          dispatch(toast(`${Lof(getState()).npUploadFailedLabel}: ${e instanceof Error ? e.message : String(e)}`));
+        });
+    });
+  };
+
+/** "Mirror" source in AddPhotos: grab a frame from the mirror's own camera
+ * (requires camera mode "learn", set by openAddPhotos). */
+export const takePhoto = (): Thunk => (dispatch) => {
+  dispatch(captureLive());
 };
 
 export const usePhotos = (): Thunk => (dispatch, getState) => {

@@ -1,7 +1,9 @@
+import { useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { BackButton } from "@/components/shell";
 import { tokens as C } from "@/components/ui";
+import { DeviceCamera } from "@/components/DeviceCamera";
 import { profilesActions } from "@/features/profiles/profilesSlice";
 import * as fx from "@/app/thunks";
 
@@ -11,6 +13,7 @@ export default function AddPhotos() {
   const p = useAppSelector((s) => s.profiles);
   const isMirror = p.photoSource === "mirror";
   const session = p.sessionPhotos;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const SourceRow = ({ src, title, sub, icon }: { src: "mirror" | "phone"; title: string; sub: string; icon: React.ReactNode }) => {
     const sel = p.photoSource === src;
@@ -72,22 +75,31 @@ export default function AddPhotos() {
             <Session />
           </>
         ) : (
-          <Session />
+          <>
+            <DeviceCamera L={L} uploading={p.devPhotoUploading} onShot={(blob) => dispatch(fx.uploadDevicePhoto(blob))} />
+            <Session />
+          </>
         )}
       </div>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) dispatch(fx.uploadPickedPhotos(e.target.files));
+          e.target.value = "";
+        }}
+      />
       <div style={{ flex: "0 0 auto", padding: "14px 0 18px", borderTop: `1px solid ${C.line}`, background: C.paper }}>
         {isMirror ? (
           <button onClick={() => dispatch(fx.takePhoto())} className="mc-lift" style={btn()}>
             <svg viewBox="0 0 24 24" style={ico(16)}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.4" /></svg>{L.takePhoto}
           </button>
         ) : (
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => dispatch(fx.shootPhoto())} className="mc-lift" style={{ ...btn(), flex: "0 0 auto" }}>
-              <svg viewBox="0 0 24 24" style={ico(16)}><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><circle cx="12" cy="12.5" r="3.5" /></svg>{L.shootPhoto}
-            </button>
-            <button onClick={() => dispatch(fx.takePhoto())} className="mc-lift" style={{ ...btn(), flex: 1 }}>{L.choosePhotos}</button>
-          </div>
+          <button onClick={() => fileInputRef.current?.click()} className="mc-lift" style={btn()}>{L.choosePhotos}</button>
         )}
         {session.length > 0 && (
           <button onClick={() => dispatch(fx.usePhotos())} className="mc-lift" style={{ ...btn(), marginTop: 10, background: C.ink, color: C.paper }}>
