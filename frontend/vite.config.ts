@@ -31,8 +31,8 @@ const MIRROR_HTTP = process.env.VITE_MIRROR_HTTP || "http://10.0.0.249:8000";
 const restProxy = Object.fromEntries(
   [
     // camera
-    "/mode", "/healthz", "/resolution", "/stream.mjpg", "/capture", "/encode",
-    "/dataset", "/photo", "/profiles", "/radar",
+    "/mode", "/healthz", "/resolution", "/stream.mjpg", "/capture",
+    "/capture-upload", "/encode", "/dataset", "/photo", "/profiles", "/radar",
     // scenes
     "/layout", "/modules",
     // modules (store + AI builder)
