@@ -16,6 +16,7 @@ from shared.http import Router, serve
     ("/healthz", 8001), ("/stream.mjpg", 8001), ("/photo?name=a", 8001),
     ("/dataset", 8001), ("/profiles", 8001), ("/radar", 8001),
     ("/mode", 8001), ("/resolution", 8001), ("/capture", 8001),
+    ("/capture-upload?name=a", 8001),
     ("/encode", 8001),
     ("/store/catalog", 8003), ("/store/install/status", 8003),
     ("/module-assets/x/y.png", 8003),

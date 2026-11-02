@@ -23,8 +23,8 @@ Once the app is fully on MQTT, the JSON routes below go away too and this file
 keeps only the binary/stream prefixes.
 
 Routing (prefix → feature):
-    /healthz /mode /resolution /stream.mjpg /photo /capture /encode
-    /dataset /profiles /radar                       → camera      :8001
+    /healthz /mode /resolution /stream.mjpg /photo /capture
+    /capture-upload /encode /dataset /profiles /radar → camera     :8001
     /store /module-assets /module-installed         → modules     :8003
     /module-draft /module-preview                   → ai_modules  :8004
     /mic                                             → mic         :8005
@@ -69,6 +69,7 @@ MIC = ("127.0.0.1", int(os.environ.get("MIC_PORT", "8005")))
 ROUTES = [
     ("/healthz", CAMERA), ("/mode", CAMERA), ("/resolution", CAMERA),
     ("/stream.mjpg", CAMERA), ("/photo", CAMERA), ("/capture", CAMERA),
+    ("/capture-upload", CAMERA),
     ("/encode", CAMERA), ("/dataset", CAMERA), ("/profiles", CAMERA),
     ("/radar", CAMERA),
 
