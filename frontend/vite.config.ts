@@ -3,6 +3,20 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 import fs from "node:fs";
 
+// The device camera (getUserMedia, used by the new-profile wizard and
+// AddPhotos) only works in a secure context — HTTPS, or localhost. The app
+// is normally reached at http://<pi-ip>:8090, a plain-HTTP LAN address, so
+// without this the browser never exposes navigator.mediaDevices at all.
+// frontend/setup.sh generates a self-signed cert into var/tls/ on first
+// run; fall back to plain HTTP if it's missing (dev machines, CI) rather
+// than failing the whole config.
+const TLS_DIR = path.resolve(__dirname, "var/tls");
+const TLS_KEY = path.join(TLS_DIR, "key.pem");
+const TLS_CERT = path.join(TLS_DIR, "cert.pem");
+const https = fs.existsSync(TLS_KEY) && fs.existsSync(TLS_CERT)
+  ? { key: fs.readFileSync(TLS_KEY), cert: fs.readFileSync(TLS_CERT) }
+  : undefined;
+
 // Dev server proxies the mirror's REST surface (camera stream, photo upload,
 // layout, store, AI builder) to the backend gateway on :8000 so the app can
 // run with `npm run dev` against a real Pi. MQTT goes direct over WebSocket —
@@ -68,6 +82,7 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: restProxy,
+    https,
   },
   // `vite preview` serves the production build (dist/) — this is what the
   // mirror-control systemd unit runs on the Pi. See deploy.sh.
@@ -75,5 +90,6 @@ export default defineConfig({
     host: true,
     port: 8090,
     proxy: restProxy,
+    https,
   },
 });

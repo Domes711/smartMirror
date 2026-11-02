@@ -121,7 +121,7 @@ fi
 c "Checking…"
 sleep 3
 check() {  # check <label> <url> <hint>
-  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$2" || true)"
+  code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "$2" || true)"
   [ "$code" = "200" ] && ok "$1 running (HTTP 200)" || warn "$1 not responding (HTTP $code) — see: $3"
 }
 check "gateway /healthz (:8000)" http://127.0.0.1:8000/healthz "journalctl -u camera-supervisor -n 50"
@@ -131,8 +131,12 @@ if systemctl is-active --quiet scenes; then
 else
   warn "scenes not running — see: journalctl -u scenes -n 50"
 fi
-check "frontend         (:8090)" http://127.0.0.1:8090/        "journalctl -u mirror-control -n 50"
+# https if frontend/setup.sh generated a cert (device camera needs a secure
+# context), plain http otherwise — -k ignores the self-signed warning.
+FRONTEND_SCHEME="http"
+[ -f "frontend/var/tls/key.pem" ] && [ -f "frontend/var/tls/cert.pem" ] && FRONTEND_SCHEME="https"
+check "frontend         (:8090)" "$FRONTEND_SCHEME://127.0.0.1:8090/" "journalctl -u mirror-control -n 50"
 check "MagicMirror      (:8080)" http://127.0.0.1:8080/        "pm2 logs MagicMirror --lines 50"
 
 echo
-ok "Done. Frontend: http://<pi>:8090"
+ok "Done. Frontend: $FRONTEND_SCHEME://<pi>:8090"

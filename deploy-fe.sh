@@ -54,9 +54,12 @@ fi
 
 # --- 4. health check ----------------------------------------------------------
 sleep 2
-code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/" || true)"
+# https if setup.sh generated a cert (device camera needs a secure context).
+SCHEME="http"
+[ -f "frontend/var/tls/key.pem" ] && [ -f "frontend/var/tls/cert.pem" ] && SCHEME="https"
+code="$(curl -sk -o /dev/null -w '%{http_code}' "$SCHEME://127.0.0.1:$PORT/" || true)"
 [ "$code" = "200" ] && ok "Mirror Control running (HTTP 200, :$PORT)" \
   || warn "Mirror Control not responding (HTTP $code) — see: journalctl -u mirror-control -n 30"
 
 echo
-ok "Done. Mirror Control: http://<pi>:$PORT"
+ok "Done. Mirror Control: $SCHEME://<pi>:$PORT"

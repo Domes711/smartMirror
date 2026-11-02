@@ -24,6 +24,26 @@ echo "▸ repo: $DIR"
 echo "▸ npm:  $NPM"
 echo "▸ user: $USER_NAME  port: $PORT"
 
+# The device camera (getUserMedia — new-profile wizard, AddPhotos) only
+# works in a secure context. A self-signed cert is enough: browsers accept
+# it after a one-time "unsafe" click, and vite.config.ts picks it up
+# automatically if present (plain HTTP otherwise, so this is safe to skip
+# or fail without breaking the rest of the app).
+TLS_DIR="$DIR/var/tls"
+if [ ! -f "$TLS_DIR/key.pem" ] || [ ! -f "$TLS_DIR/cert.pem" ]; then
+  if command -v openssl >/dev/null 2>&1; then
+    echo "▸ Generating self-signed TLS cert (for the device-camera HTTPS requirement)…"
+    mkdir -p "$TLS_DIR"
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+      -keyout "$TLS_DIR/key.pem" -out "$TLS_DIR/cert.pem" \
+      -subj "/CN=smartmirror" >/dev/null 2>&1 \
+      && echo "✓ cert written to $TLS_DIR" \
+      || echo "! cert generation failed — mirror-control will serve plain HTTP (no device camera)"
+  else
+    echo "! openssl not found — mirror-control will serve plain HTTP (no device camera)"
+  fi
+fi
+
 echo "▸ Installing deps + building…"
 ( cd "$DIR" && "$NPM" install --no-audit --no-fund && "$NPM" run build )
 
@@ -51,4 +71,8 @@ EOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now mirror-control >/dev/null 2>&1 || sudo systemctl restart mirror-control
-echo "✓ mirror-control running on http://<pi>:$PORT"
+if [ -f "$TLS_DIR/key.pem" ] && [ -f "$TLS_DIR/cert.pem" ]; then
+  echo "✓ mirror-control running on https://<pi>:$PORT (self-signed — accept the browser warning once)"
+else
+  echo "✓ mirror-control running on http://<pi>:$PORT"
+fi

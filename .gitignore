@@ -33,6 +33,10 @@ MagicMirror/config/basepath.js
 node_modules/
 frontend/dist/
 
+# Self-signed TLS cert for the frontend's HTTPS listener (getUserMedia needs
+# a secure context) — generated per-Pi by frontend/setup.sh, never committed.
+frontend/var/
+
 # MagicMirror module artefacts
 MagicMirror/modules/MMM-Brno-Transit/cache/
 MagicMirror/modules/MMM-Brno-Transit/render-*.png

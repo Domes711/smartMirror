@@ -11,6 +11,13 @@ export function DeviceCamera({ onShot, uploading, L }: { onShot: (blob: Blob) =>
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // getUserMedia is only exposed in a secure context (HTTPS, or
+    // localhost) — navigator.mediaDevices itself is undefined on plain
+    // HTTP against a LAN IP, which is how this app is normally reached.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError(L.camDeviceInsecure);
+      return;
+    }
     let stream: MediaStream | null = null;
     let cancelled = false;
     navigator.mediaDevices
