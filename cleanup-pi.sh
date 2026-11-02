@@ -18,7 +18,7 @@ set -u
 
 # --- systemd units ------------------------------------------------------
 echo "▸ Removing systemd units…"
-for svc in mirror-gateway camera-supervisor camera-recognition modules ai-modules scenes display radar mic wyoming-satellite wyoming-openwakeword mirror-control; do
+for svc in mirror-gateway camera-supervisor modules ai-modules scenes display radar distance mic wyoming-satellite wyoming-openwakeword mirror-control; do
   sudo systemctl stop "$svc" 2>/dev/null || true
   sudo systemctl disable "$svc" 2>/dev/null || true
   sudo rm -f "/etc/systemd/system/$svc.service"
@@ -37,7 +37,7 @@ pm2 kill 2>/dev/null || true
 
 # --- manual processes ---------------------------------------------------
 echo "▸ Killing stray manual processes…"
-for p in "features.camera.daemon" "features.camera.recognition_daemon" "features.radar.daemon" "features.display.daemon" "features.scenes.service" "features.modules.daemon" "features.ai_modules.daemon" "features.mic.daemon" "gateway" "start-magicmirror.sh"; do
+for p in "features.camera.daemon" "features.radar.daemon" "features.distance.daemon" "features.display.daemon" "features.scenes.service" "features.modules.daemon" "features.ai_modules.daemon" "features.mic.daemon" "gateway" "start-magicmirror.sh"; do
   pkill -f "$p" 2>/dev/null || true
 done
 
