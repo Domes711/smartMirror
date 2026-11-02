@@ -56,6 +56,10 @@ export function TaskBar() {
     ((screen === "moddetail" && detailN === ui.taskTarget) || (screen === "workshop" && workshopMod === ui.taskTarget));
   if (!ui.taskActive || suppressed) return null;
   const clickable = ui.taskKind === "install";
+  // "retrain" has no real percent to show — the backend reports only
+  // running/done/error (see finishWizard/usePhotos in thunks.ts), so the
+  // bar shows an indeterminate sweep instead of a fabricated number.
+  const determinate = ui.taskKind === "install";
   return (
     <div
       onClick={() => clickable && ui.taskTarget && dispatch(fx.openModByName(ui.taskTarget))}
@@ -66,13 +70,21 @@ export function TaskBar() {
           <Spinner color="#E5482F" track="#f3c9c0" />
           <span style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ui.taskLabel}</span>
         </span>
-        <span style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 7 }}>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 11, fontWeight: 700, color: C.signal }}>{Math.round(ui.taskPct)}%</span>
-          {clickable && <Chevron color="#8C8C81" />}
-        </span>
+        {determinate && (
+          <span style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 7 }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11, fontWeight: 700, color: C.signal }}>{Math.round(ui.taskPct)}%</span>
+            {clickable && <Chevron color="#8C8C81" />}
+          </span>
+        )}
       </div>
       <div style={{ height: 5, borderRadius: 999, background: "#D8D7CB", overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${ui.taskPct}%`, background: C.signal, borderRadius: 999, transition: "width .4s ease" }} />
+        {determinate ? (
+          <div style={{ height: "100%", width: `${ui.taskPct}%`, background: C.signal, borderRadius: 999, transition: "width .4s ease" }} />
+        ) : (
+          <div style={{ position: "relative", height: "100%", width: "100%" }}>
+            <span style={{ position: "absolute", top: 0, bottom: 0, width: "32%", borderRadius: 999, background: C.signal, animation: "mc-hscan 1.1s ease-in-out infinite" }} />
+          </div>
+        )}
       </div>
     </div>
   );

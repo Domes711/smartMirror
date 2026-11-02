@@ -132,7 +132,26 @@ def capture_upload(name: str, data: bytes, file: str = None) -> dict:
 
 
 def encode(name: str = None) -> dict:
-    return enrollment.encode(_sup, name)
+    """Kick off encoding on a background thread and reply immediately — the
+    HOG encoder takes tens of seconds for more than a handful of photos, far
+    past a sane RPC timeout. The real result lands on ENCODE_STATUS
+    (retained), which the frontend subscribes to instead of waiting here."""
+    import threading
+    from . import constants as topics
+
+    if _publish:
+        _publish(topics.ENCODE_STATUS, {"status": "running"}, retain=True)
+
+    def run() -> None:
+        result = enrollment.encode(_sup, name)
+        if _publish:
+            _publish(topics.ENCODE_STATUS,
+                     {"status": "done" if result.get("ok") else "error",
+                      **result},
+                     retain=True)
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"started": True}
 
 
 def profiles_list() -> dict:

@@ -5,6 +5,8 @@ import { onTopicJson } from "@/services/mqttTopicBus";
 // Mirrors backend/features/camera/constants.py's RPC_* / MODE / STATE /
 // PROFILES exactly — kept in sync by hand, since the frontend cannot import
 // the Python module.
+export const CAMERA_ENCODE_STATUS_TOPIC = "smartmirror/camera/encode/status"; // retained
+
 const RPC = "smartmirror/camera/rpc";
 const TOPIC = {
   rpcHealth: `${RPC}/health`,
@@ -21,6 +23,7 @@ const TOPIC = {
   rpcProfilesDelete: `${RPC}/profiles/delete`,
   state: "smartmirror/camera/state", // retained
   profiles: "smartmirror/camera/profiles", // retained
+  encodeStatus: CAMERA_ENCODE_STATUS_TOPIC,
 } as const;
 
 // "idle" (no detection) / "face" / "gesture" are also the production
@@ -74,6 +77,13 @@ export interface CameraProfile {
   count: number;
   sample: string | null;
   is_default: boolean;
+}
+
+export interface EncodeStatus {
+  status: "running" | "done" | "error";
+  ok?: boolean;
+  output?: string;
+  error?: string | null;
 }
 
 export const cameraApi = createApi({
@@ -159,14 +169,33 @@ export const cameraApi = createApi({
       invalidatesTags: (_r, _e, { name }) => [{ type: "Dataset", id: name }],
     }),
 
-    // Runs the HOG face encoder on the backend before replying — tens of
-    // seconds for more than a handful of photos on a Pi, well past the 8s
-    // RPC default (backend/features/camera/profiles.py's own subprocess
-    // timeout is 600s, so the backend keeps working long after a default
-    // timeout would have told the UI it failed).
-    encodeFaces: build.mutation<{ ok: boolean; output: string; error: string | null }, string | null>({
-      query: (name) => ({ topic: TOPIC.rpcEncode, payload: { name }, timeoutMs: 120000 }),
-      invalidatesTags: ["CameraProfiles"],
+    // Fire-and-forget: the backend runs the HOG face encoder on a background
+    // thread (tens of seconds for more than a handful of photos on a Pi) and
+    // replies immediately with {started: true}. The real result comes on
+    // ENCODE_STATUS (retained) — see getEncodeStatus below — not on this
+    // mutation's own response, so no RPC timeout can misreport it as failed.
+    encodeFaces: build.mutation<{ started: boolean }, string | null>({
+      query: (name) => ({ topic: TOPIC.rpcEncode, payload: { name } }),
+    }),
+
+    // Subscribes to the retained ENCODE_STATUS topic encodeFaces's
+    // background thread publishes to ("running" immediately, then "done"/
+    // "error" once the encoder finishes). Call forceRefetch false — this
+    // never issues its own RPC, it just opens the subscription.
+    getEncodeStatus: build.query<EncodeStatus, void>({
+      queryFn: () => ({ data: { status: "running" } as EncodeStatus }),
+      async onCacheEntryAdded(_arg, { cacheDataLoaded, cacheEntryRemoved, updateCachedData, dispatch }) {
+        await cacheDataLoaded;
+        const unsub = onTopicJson<EncodeStatus>(TOPIC.encodeStatus, (data) => {
+          updateCachedData(() => data);
+          // A completed encode means the photo/profile dataset changed —
+          // refresh the profile list (counts, sample thumbnail) now rather
+          // than waiting for something unrelated to invalidate it.
+          if (data.status === "done") dispatch(cameraApi.util.invalidateTags(["CameraProfiles"]));
+        });
+        await cacheEntryRemoved;
+        unsub();
+      },
     }),
   }),
 });
@@ -183,4 +212,5 @@ export const {
   useDeleteDatasetPhotoMutation,
   useCapturePhotoMutation,
   useEncodeFacesMutation,
+  useGetEncodeStatusQuery,
 } = cameraApi;

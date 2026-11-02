@@ -5,7 +5,7 @@ import { modulesActions } from "@/features/modules/modulesSlice";
 import { profilesActions } from "@/features/profiles/profilesSlice";
 import { devActions } from "@/features/dev/devSlice";
 import { LABELS } from "@/i18n/labels";
-import type { Scene, ScreenId, TabGroup, TaskKind } from "@/types";
+import type { Scene, ScreenId, TabGroup } from "@/types";
 import { publish, TOPICS } from "@/services/mqtt";
 import { STORE } from "@/data/catalog";
 import { scenesToStore, regionsToEntries, buildUserScenes, userKeyOf } from "@/app/connect";
@@ -15,6 +15,8 @@ import { cameraApi } from "@/app/api/cameraApi";
 import { radarApi } from "@/app/api/radarApi";
 import { photoUrl, uploadCapturedPhoto } from "@/services/api";
 import { resolveActiveId } from "@/app/selectors";
+import { onTopicJson } from "@/services/mqttTopicBus";
+import { CAMERA_ENCODE_STATUS_TOPIC, type EncodeStatus } from "@/app/api/cameraApi";
 
 type Thunk = (dispatch: AppDispatch, getState: () => RootState) => void;
 
@@ -388,27 +390,6 @@ export const sendMirrorMessage =
     dispatch(toast(Lof(getState()).tMsgSent));
   };
 
-// --- global async task (progress bar), driven to completion by the caller ---
-export const startTask =
-  (label: string, opts: { kind: TaskKind; target: string | null; onDone?: () => void }): Thunk =>
-  (dispatch, getState) => {
-    clearInterval(taskInt);
-    clearTimeout(taskDoneT);
-    dispatch(uiActions.taskStart({ label, kind: opts.kind, target: opts.target }));
-    taskInt = setInterval(() => {
-      const p = getState().ui.taskPct;
-      const np = Math.min(100, p + (p < 80 ? 2.5 + Math.random() * 6 : 0.8 + Math.random() * 2));
-      dispatch(uiActions.taskProgress(np));
-      if (np >= 100) {
-        clearInterval(taskInt);
-        taskDoneT = setTimeout(() => {
-          dispatch(uiActions.taskClear());
-          opts.onDone?.();
-        }, 700);
-      }
-    }, 450);
-  };
-
 /** Kick the backend install + subscribe to its retained progress topic
  * (modulesApi.getInstallStatus pushes updates — no polling needed). */
 export const startInstall =
@@ -418,6 +399,7 @@ export const startInstall =
     dispatch(uiActions.taskStart({ label: L.taskInstall + " " + name, kind: "install", target: name }));
     const sub = dispatch(modulesApi.endpoints.getInstallStatus.initiate(name));
     clearInterval(taskInt);
+    clearTimeout(taskDoneT);
     // A refused install (unknown module, no repo URL, already running…) never
     // produces progress — surface the error instead of sitting at 0 %.
     // Until the backend accepted THIS install, a status from an earlier
@@ -619,11 +601,24 @@ export const usePhotos = (): Thunk => (dispatch, getState) => {
   const L = Lof(getState());
   const name = getState().profiles.profileName;
   dispatch(cameraApi.endpoints.setCameraMode.initiate("idle")).catch(() => {});
+
+  // Same fire-and-forget pattern as finishWizard — the real result arrives
+  // on CAMERA_ENCODE_STATUS_TOPIC (retained), not on encodeFaces's own
+  // reply, since the backend runs the encoder on a background thread.
+  dispatch(uiActions.taskStart({ label: L.taskRetrain, kind: "retrain", target: null }));
+  const unsub = onTopicJson<EncodeStatus>(CAMERA_ENCODE_STATUS_TOPIC, (status) => {
+    if (status.status === "running") return;
+    unsub();
+    dispatch(uiActions.taskClear());
+    dispatch(toast(status.status === "done" && status.ok ? Lof(getState()).tTaskDone : status.error || Lof(getState()).npTrainErrorMsg));
+  });
   dispatch(cameraApi.endpoints.encodeFaces.initiate(name))
     .unwrap()
-    .then(() => dispatch(toast(Lof(getState()).tTaskDone)))
-    .catch((e) => dispatch(toast(String(e))));
-  dispatch(startTask(L.taskRetrain, { kind: "retrain", target: null }));
+    .catch((e) => {
+      unsub();
+      dispatch(uiActions.taskClear());
+      dispatch(toast(String(e)));
+    });
   dispatch(nav("profile", "profiles"));
 };
 
@@ -668,16 +663,30 @@ export const finishWizard = (): Thunk => (dispatch, getState) => {
   const name = p.npName.trim() || "Profil";
   const L = Lof(getState());
   dispatch(profilesActions.npStartTraining());
-  dispatch(cameraApi.endpoints.encodeFaces.initiate(name))
-    .unwrap()
-    .then((r) => {
-      if (!r.ok) throw new Error(r.error || L.npTrainErrorMsg);
+
+  // encodeFaces is fire-and-forget now — the backend runs the HOG encoder
+  // on a background thread (tens of seconds for more than a handful of
+  // photos on a Pi) and the real result arrives on CAMERA_ENCODE_STATUS_TOPIC
+  // (retained), not on this RPC's own reply. Subscribe once; the backend
+  // always publishes "running" first, so skip that and act on "done"/"error".
+  const unsub = onTopicJson<EncodeStatus>(CAMERA_ENCODE_STATUS_TOPIC, (status) => {
+    if (status.status === "running") return;
+    unsub();
+    if (status.status === "done" && status.ok) {
       dispatch(profilesActions.npTrainingDone());
       dispatch(profilesActions.finishWizard({ id: name, name, photos: p.npPhotos.length, scenes: p.npScenes.length }));
       dispatch(toast(L.tProfileTrained));
       dispatch(nav("profiles", "profiles"));
-    })
-    .catch((e) => dispatch(profilesActions.npTrainingFailed(e instanceof Error ? e.message : String(e))));
+    } else {
+      dispatch(profilesActions.npTrainingFailed(status.error || L.npTrainErrorMsg));
+    }
+  });
+  dispatch(cameraApi.endpoints.encodeFaces.initiate(name))
+    .unwrap()
+    .catch((e) => {
+      unsub();
+      dispatch(profilesActions.npTrainingFailed(e instanceof Error ? e.message : String(e)));
+    });
 };
 
 export const startWizard = (): Thunk => (dispatch) => {

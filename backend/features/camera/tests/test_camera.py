@@ -121,6 +121,61 @@ def test_rebuild_writes_empty_encodings_for_an_empty_dataset(cam):
         assert pickle.load(f) == {"encodings": [], "names": []}
 
 
+# --------------------------------------------------------------------------- #
+# service.encode(): fire-and-forget RPC reply + background-thread result on
+# ENCODE_STATUS (retained) — the HOG encoder is too slow to hold an RPC open.
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def camera_service_fx(sandbox, monkeypatch):
+    from features.camera import service
+    published = []
+    service.mount(type("FakeSup", (), {"drop_encoding_cache": lambda self: None})())
+    service.set_publisher(lambda topic, payload, retain=False: published.append((topic, payload, retain)))
+    yield service, published
+    service.set_publisher(None)
+
+
+def test_encode_returns_immediately(camera_service_fx, monkeypatch):
+    from features.camera import enrollment
+    import threading
+    started = threading.Event()
+    monkeypatch.setattr(enrollment, "encode", lambda sup, name: (started.wait(2), {"ok": True, "output": ""})[1])
+    service, _published = camera_service_fx
+    result = service.encode("dominik")
+    assert result == {"started": True}
+    started.set()
+
+
+def test_encode_publishes_running_then_done(camera_service_fx, monkeypatch):
+    from features.camera import constants as topics, enrollment
+    monkeypatch.setattr(enrollment, "encode", lambda sup, name: {"ok": True, "output": "12 encodings"})
+    service, published = camera_service_fx
+    service.encode("dominik")
+    for _ in range(50):
+        if len(published) >= 2:
+            break
+        import time
+        time.sleep(0.02)
+    assert published[0] == (topics.ENCODE_STATUS, {"status": "running"}, True)
+    topic, payload, retain = published[1]
+    assert topic == topics.ENCODE_STATUS
+    assert retain is True
+    assert payload == {"status": "done", "ok": True, "output": "12 encodings"}
+
+
+def test_encode_publishes_error_status_on_failure(camera_service_fx, monkeypatch):
+    from features.camera import enrollment
+    monkeypatch.setattr(enrollment, "encode", lambda sup, name: {"ok": False, "output": "", "error": "trénink selhal"})
+    service, published = camera_service_fx
+    service.encode(None)
+    for _ in range(50):
+        if len(published) >= 2:
+            break
+        import time
+        time.sleep(0.02)
+    assert published[1][1] == {"status": "error", "ok": False, "output": "", "error": "trénink selhal"}
+
+
 def test_supervisor_rejects_an_unknown_mode(sandbox):
     from features.camera.supervisor import Supervisor
     sup = Supervisor()

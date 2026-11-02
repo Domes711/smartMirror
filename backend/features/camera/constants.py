@@ -16,6 +16,13 @@ PRESENCE = "smartmirror/global/presence"
 MODE = "smartmirror/camera/mode"                 # out: current mode (retained)
 STATE = "smartmirror/camera/state"               # out: health snapshot (retained)
 PROFILES = "smartmirror/camera/profiles"         # out: profile list (retained)
+# out: {"status": "running"|"done"|"error", "ok", "output", "error"}
+# (retained) — encode() runs the HOG encoder on a background thread rather
+# than blocking the RPC reply (tens of seconds for more than a handful of
+# photos, well past a sane RPC timeout); the frontend subscribes here
+# instead of waiting on the RPC reply. Same shape/rationale as
+# features/modules/constants.py's INSTALL_PROGRESS.
+ENCODE_STATUS = "smartmirror/camera/encode/status"
 
 # ---- RPC endpoints (request/reply — see MqttClient.serve) ---------------- #
 # Everything the camera used to answer over HTTP except the two binary
@@ -44,6 +51,9 @@ RPC_SETTINGS = f"{RPC}/settings"         # in: {width,height,framerate,
 RPC_DATASET_LIST = f"{RPC}/dataset/list"      # in: {"name"} → {"photos": […]}
 RPC_DATASET_DELETE = f"{RPC}/dataset/delete"  # in: {"name","file"} → {"photos"}
 RPC_CAPTURE = f"{RPC}/capture"           # in: {"name","file"} → {"file","total"}
-RPC_ENCODE = f"{RPC}/encode"             # in: {"name"|null} → {"ok","output"}
+RPC_ENCODE = f"{RPC}/encode"             # in: {"name"|null} → {"started": true}
+                                         # immediately; the real result comes
+                                         # on ENCODE_STATUS (retained) once the
+                                         # background encode finishes
 RPC_PROFILES_LIST = f"{RPC}/profiles/list"      # in: {} → {"profiles": […]}
 RPC_PROFILES_DELETE = f"{RPC}/profiles/delete"  # in: {"name"} → {"removed",…}
