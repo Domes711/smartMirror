@@ -30,7 +30,6 @@ export function Overlays() {
       <PhotoSheet />
       <PhotoDelModal />
       <ProfileDelModal />
-      <NpSheet />
       <SearchOverlay />
     </>
   );
@@ -512,22 +511,6 @@ function ProfileDelModal() {
         {dangerBtn(() => dispatch(fx.confirmDeleteProfile()), L.deleteProfileBtn)}
       </Actions>
     </Modal>
-  );
-}
-
-/* ---------- new-profile capture sheet ---------- */
-function NpSheet() {
-  const dispatch = useAppDispatch();
-  const { L } = useT();
-  const open = useAppSelector((s) => s.profiles.npSheet && s.ui.screen === "newprofile");
-  const source = useAppSelector((s) => s.profiles.npSource);
-  if (!open) return null;
-  return (
-    <BottomSheet open onClose={() => dispatch(profilesActions.npCloseSheet())}>
-      <Title>{source === "phone" ? L.srcPhoneTitle : L.srcMirrorTitle}</Title>
-      <button onClick={() => { dispatch(profilesActions.npShoot()); }} style={{ width: "100%", fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "13px 18px", cursor: "pointer", border: `1px solid ${C.ink}`, background: C.ink, color: C.paper, marginBottom: 10 }}>{L.npTakePhoto}</button>
-      <button onClick={() => dispatch(profilesActions.npCloseSheet())} style={{ width: "100%", fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "13px 18px", cursor: "pointer", border: `1px solid ${C.line}`, background: "transparent", color: C.ink }}>{L.npSheetDone}</button>
-    </BottomSheet>
   );
 }
 

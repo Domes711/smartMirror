@@ -127,6 +127,10 @@ def capture(name: str, file: str = None) -> dict:
     return enrollment.capture(_sup, name, file)
 
 
+def capture_upload(name: str, data: bytes, file: str = None) -> dict:
+    return enrollment.capture_upload(name, data, file)
+
+
 def encode(name: str = None) -> dict:
     return enrollment.encode(_sup, name)
 

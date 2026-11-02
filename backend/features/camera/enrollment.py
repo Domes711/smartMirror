@@ -36,6 +36,25 @@ def capture(sup, name: str, file: str = None) -> dict:
     return {"file": fname, "total": len(profiles.list_photos(name))}
 
 
+def capture_upload(name: str, data: bytes, file: str = None) -> dict:
+    """Save a photo uploaded from a client device's own camera (phone/laptop
+    browser), as opposed to `capture()` which grabs the mirror's own last
+    frame. No supervisor/learn-mode involvement — the bytes are already a
+    finished JPEG from the browser."""
+    if not data:
+        raise ValueError("empty upload")
+
+    d = profiles.person_dir(name)
+    os.makedirs(d, exist_ok=True)
+    fname = profiles._check_file(file) if file else profiles.next_filename(name)
+
+    with open(os.path.join(d, fname), "wb") as f:
+        f.write(data)
+    profiles.register_photo(name, fname)
+    log.info("uploaded %s/%s (%d bytes)", name, fname, len(data))
+    return {"file": fname, "total": len(profiles.list_photos(name))}
+
+
 def encode(sup, name: str = None) -> dict:
     """Retrain the encodings, then drop the supervisor's cached copy so the
     next frame picks up the new face."""

@@ -19,3 +19,32 @@ export function mirrorDisplayUrl(): string {
 }
 
 export const photoUrl = (name: string, file: string) => `/photo?name=${encodeURIComponent(name)}&file=${encodeURIComponent(file)}`;
+
+/** Upload a photo captured by the CLIENT device's own camera (phone/laptop
+ * browser) as training data for `name` — distinct from the MQTT RPC
+ * capturePhoto, which grabs a frame from the mirror's own camera. Raw body,
+ * same-origin as /photo and /stream.mjpg.
+ *
+ * An unreachable backend (dev proxy pointed at a LAN host that's off) makes
+ * a plain fetch hang indefinitely with no error — the caller would see no
+ * feedback at all. Abort after 15s so the UI always gets a result. */
+export async function uploadCapturedPhoto(name: string, blob: Blob, file?: string): Promise<{ file: string; total: number }> {
+  const qs = new URLSearchParams({ name });
+  if (file) qs.set("file", file);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  let res: Response;
+  try {
+    res = await fetch(`/capture-upload?${qs.toString()}`, { method: "POST", body: blob, signal: controller.signal });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw new Error("upload timed out — mirror unreachable");
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error || `upload failed (${res.status})`);
+  }
+  return res.json();
+}

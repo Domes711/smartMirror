@@ -1,7 +1,8 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
-import { BackButton } from "@/components/shell";
+import { BackButton, Spinner } from "@/components/shell";
 import { Mirror } from "@/components/Mirror";
+import { DeviceCamera } from "@/components/DeviceCamera";
 import { tokens as C } from "@/components/ui";
 import { profilesActions } from "@/features/profiles/profilesSlice";
 import * as fx from "@/app/thunks";
@@ -54,17 +55,10 @@ export default function NewProfile() {
           <>
             <h3 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 6px" }}>{L.npPhotosTitle}</h3>
             <p style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.mute, lineHeight: 1.6, margin: "0 0 16px" }}>{L.npPhotosHint}</p>
-            <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 3", borderRadius: 18, overflow: "hidden", background: "linear-gradient(160deg,#1f1f1b 0%,#14140f 100%)", border: "1px solid #2c2c26", display: "grid", placeItems: "center", marginBottom: 14 }}>
-              <div style={{ width: "46%", aspectRatio: "3 / 4", border: "2px dashed rgba(255,195,77,.5)", borderRadius: "44% 44% 42% 42%" }} />
-            </div>
-            <button onClick={() => dispatch(profilesActions.npShoot())} className="mc-lift" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9, fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "14px 18px", cursor: "pointer", border: `1px solid ${C.ink}`, background: "transparent", color: C.ink }}>
-              <svg viewBox="0 0 24 24" style={{ width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 1.7 }}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.4" /></svg>{L.npTakePhoto}
-            </button>
-            {p.npPhotos > 0 && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-                {Array.from({ length: p.npPhotos }, (_, i) => (
-                  <div key={i} style={{ width: 54, height: 54, borderRadius: 11, background: `linear-gradient(150deg, hsl(${(i * 47 + 18) % 360},34%,64%), hsl(${(i * 47 + 56) % 360},40%,40%))` }} />
-                ))}
+            <DeviceCamera L={L} uploading={p.npUploading} onShot={(blob) => dispatch(fx.uploadWizardPhoto(blob))} />
+            {p.npPhotos.length > 0 && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14, fontFamily: "var(--mono)", fontSize: 11, color: C.mute }}>
+                {L.photosWord} · {p.npPhotos.length}
               </div>
             )}
           </>
@@ -91,13 +85,19 @@ export default function NewProfile() {
         )}
       </div>
 
+      {p.npTrainStatus === "error" && step === 3 && (
+        <p style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.signal, margin: "0 0 8px" }}>{L.npTrainErrorMsg}: {p.npTrainError}</p>
+      )}
       <div style={{ flex: "0 0 auto", padding: "14px 0 18px", borderTop: `1px solid ${C.line}`, background: C.paper, display: "flex", gap: 10 }}>
         {step === 1 && primary(L.npNext, () => p.npName.trim() && dispatch(profilesActions.setNpStep(2)), !!p.npName.trim())}
-        {step === 2 && primary(L.npNext, () => dispatch(profilesActions.setNpStep(3)), p.npPhotos > 0)}
+        {step === 2 && primary(L.npNext, () => dispatch(profilesActions.setNpStep(3)), p.npPhotos.length > 0)}
         {step === 3 && (
           <>
-            <button onClick={() => dispatch(fx.finishWizard())} style={{ flex: 1, fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "14px 18px", cursor: "pointer", border: "none", background: C.ink, color: C.paper }}>{L.npSkip}</button>
-            <button onClick={() => dispatch(fx.finishWizard())} style={{ flex: 1, fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "14px 18px", cursor: "pointer", border: "none", background: C.ink, color: C.paper }}>{L.npCreate}</button>
+            <button onClick={() => dispatch(fx.finishWizard())} disabled={p.npTrainStatus === "training"} style={{ flex: 1, fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "14px 18px", cursor: p.npTrainStatus === "training" ? "not-allowed" : "pointer", border: "none", background: C.ink, color: C.paper, opacity: p.npTrainStatus === "training" ? 0.6 : 1 }}>{L.npSkip}</button>
+            <button onClick={() => dispatch(fx.finishWizard())} disabled={p.npTrainStatus === "training"} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 12, borderRadius: 999, padding: "14px 18px", cursor: p.npTrainStatus === "training" ? "not-allowed" : "pointer", border: "none", background: C.ink, color: C.paper, opacity: p.npTrainStatus === "training" ? 0.6 : 1 }}>
+              {p.npTrainStatus === "training" && <Spinner color={C.paper} track="rgba(255,255,255,.3)" />}
+              {p.npTrainStatus === "training" ? L.npTraining : p.npTrainStatus === "error" ? L.npTrainRetry : L.npCreate}
+            </button>
           </>
         )}
       </div>

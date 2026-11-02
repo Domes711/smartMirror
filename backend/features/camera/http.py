@@ -73,6 +73,12 @@ def mount(router: Router, sup) -> None:
     router.add("POST", "/capture",
               lambda r: service.capture(r.body().get("name") or "",
                                         r.body().get("file")))
+    # Raw-JPEG upload from a client device's own camera (phone/laptop
+    # browser) — distinct from /capture, which grabs the mirror's frame.
+    router.add("POST", "/capture-upload",
+              lambda r: service.capture_upload(r.query.get("name", ""),
+                                               r.raw_body(),
+                                               r.query.get("file")))
     router.add("POST", "/encode",
               lambda r: service.encode(r.body().get("name")))
     router.add("GET", "/profiles", lambda r: service.profiles_list())

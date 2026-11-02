@@ -18,10 +18,13 @@ export interface ProfilesState {
   // new-profile wizard
   npStep: 1 | 2 | 3;
   npName: string;
-  npPhotos: number;
+  /** Filenames of photos already uploaded to the backend for this
+   * in-progress profile (set by capture_upload, not a local guess). */
+  npPhotos: string[];
+  npUploading: boolean;
   npScenes: string[];
-  npSource: PhotoSource | null;
-  npSheet: boolean;
+  npTrainStatus: "idle" | "training" | "done" | "error";
+  npTrainError: string | null;
 }
 
 const initialState: ProfilesState = {
@@ -37,10 +40,11 @@ const initialState: ProfilesState = {
   sessionPhotos: [],
   npStep: 1,
   npName: "",
-  npPhotos: 0,
+  npPhotos: [],
+  npUploading: false,
   npScenes: [],
-  npSource: null,
-  npSheet: false,
+  npTrainStatus: "idle",
+  npTrainError: null,
 };
 
 const profilesSlice = createSlice({
@@ -132,11 +136,12 @@ const profilesSlice = createSlice({
     startWizard(s) {
       s.npStep = 1;
       s.npName = "";
-      s.npPhotos = 0;
+      s.npPhotos = [];
+      s.npUploading = false;
       s.npScenes = [];
       s.photoSource = "mirror";
-      s.npSource = null;
-      s.npSheet = false;
+      s.npTrainStatus = "idle";
+      s.npTrainError = null;
     },
     setNpName(s, a: PayloadAction<string>) {
       s.npName = a.payload;
@@ -147,26 +152,39 @@ const profilesSlice = createSlice({
     npBackStep(s) {
       if (s.npStep > 1) s.npStep = (s.npStep - 1) as 1 | 2 | 3;
     },
-    npShoot(s) {
-      s.npPhotos += 1;
+    npUploadStart(s) {
+      s.npUploading = true;
+    },
+    /** A photo was actually uploaded to the backend for the in-progress
+     * profile — pushed with the real filename capture_upload returned. */
+    npPhotoUploaded(s, a: PayloadAction<string>) {
+      s.npPhotos.push(a.payload);
+      s.npUploading = false;
+    },
+    npUploadFailed(s) {
+      s.npUploading = false;
+    },
+    npStartTraining(s) {
+      s.npTrainStatus = "training";
+      s.npTrainError = null;
+    },
+    npTrainingDone(s) {
+      s.npTrainStatus = "done";
+    },
+    npTrainingFailed(s, a: PayloadAction<string>) {
+      s.npTrainStatus = "error";
+      s.npTrainError = a.payload;
     },
     npToggleScene(s, a: PayloadAction<string>) {
       s.npScenes = s.npScenes.includes(a.payload)
         ? s.npScenes.filter((x) => x !== a.payload)
         : [...s.npScenes, a.payload];
     },
-    npPickSource(s, a: PayloadAction<PhotoSource>) {
-      s.npSource = a.payload;
-      s.npSheet = true;
-    },
-    npCloseSheet(s) {
-      s.npSheet = false;
-    },
     finishWizard(s, a: PayloadAction<Profile>) {
       s.profiles.push(a.payload);
       s.npStep = 1;
       s.npName = "";
-      s.npPhotos = 0;
+      s.npPhotos = [];
       s.npScenes = [];
     },
   },

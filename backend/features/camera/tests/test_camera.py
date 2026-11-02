@@ -450,3 +450,48 @@ def test_release_manual_override_resumes_presence_driving(sup_no_camera):
     sup.release_manual_override()
     assert sup.health()["presence_driven"] is True
     assert sup.mode == "idle"  # nobody was present while overridden
+
+
+# --------------------------------------------------------------------------- #
+# capture_upload: a client device's own camera (phone/laptop browser), not
+# the mirror's camera — no supervisor/learn-mode involvement.
+# --------------------------------------------------------------------------- #
+def test_capture_upload_saves_the_bytes_and_registers_the_photo(cam):
+    from features.camera import enrollment, profiles
+    _profiles, _p = cam
+    result = enrollment.capture_upload("dominik", b"\xff\xd8fakejpg")
+    assert result["file"] == "1.jpg"
+    assert result["total"] == 1
+    assert profiles.list_photos("dominik") == ["1.jpg"]
+    with open(profiles.photo_path("dominik", "1.jpg"), "rb") as f:
+        assert f.read() == b"\xff\xd8fakejpg"
+
+
+def test_capture_upload_appends_as_the_next_numbered_file(cam):
+    from features.camera import enrollment, profiles
+    _profiles, _p = cam
+    enrollment.capture_upload("dominik", b"one")
+    enrollment.capture_upload("dominik", b"two")
+    assert profiles.list_photos("dominik") == ["1.jpg", "2.jpg"]
+
+
+def test_capture_upload_with_an_explicit_file_overwrites_that_photo(cam):
+    from features.camera import enrollment, profiles
+    _profiles, _p = cam
+    enrollment.capture_upload("dominik", b"one")
+    enrollment.capture_upload("dominik", b"replaced", file="1.jpg")
+    assert profiles.list_photos("dominik") == ["1.jpg"]
+    with open(profiles.photo_path("dominik", "1.jpg"), "rb") as f:
+        assert f.read() == b"replaced"
+
+
+def test_capture_upload_rejects_an_invalid_name(cam):
+    from features.camera import enrollment
+    with pytest.raises(ValueError):
+        enrollment.capture_upload("../etc", b"data")
+
+
+def test_capture_upload_rejects_empty_bytes(cam):
+    from features.camera import enrollment
+    with pytest.raises(ValueError):
+        enrollment.capture_upload("dominik", b"")

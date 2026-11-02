@@ -13,7 +13,7 @@ import { scenesApi } from "@/app/api/scenesApi";
 import { modulesApi } from "@/app/api/modulesApi";
 import { cameraApi } from "@/app/api/cameraApi";
 import { radarApi } from "@/app/api/radarApi";
-import { photoUrl } from "@/services/api";
+import { photoUrl, uploadCapturedPhoto } from "@/services/api";
 import { resolveActiveId } from "@/app/selectors";
 
 type Thunk = (dispatch: AppDispatch, getState: () => RootState) => void;
@@ -608,20 +608,38 @@ export const confirmDeletePhoto = (): Thunk => (dispatch, getState) => {
   }
 };
 
+/** Step 2 of the new-profile wizard: upload a photo captured with THIS
+ * device's own camera (see DeviceCamera) to the in-progress profile's
+ * dataset. Real HTTP upload, real filename back — no local placeholder. */
+export const uploadWizardPhoto =
+  (blob: Blob): Thunk =>
+  (dispatch, getState) => {
+    const name = getState().profiles.npName.trim();
+    if (!name || getState().profiles.npUploading) return;
+    dispatch(profilesActions.npUploadStart());
+    uploadCapturedPhoto(name, blob)
+      .then((r) => dispatch(profilesActions.npPhotoUploaded(r.file)))
+      .catch((e) => {
+        dispatch(profilesActions.npUploadFailed());
+        dispatch(toast(`${Lof(getState()).npUploadFailedLabel}: ${e instanceof Error ? e.message : String(e)}`));
+      });
+  };
+
 export const finishWizard = (): Thunk => (dispatch, getState) => {
   const p = getState().profiles;
   const name = p.npName.trim() || "Profil";
-  dispatch(profilesActions.finishWizard({ id: "p" + Date.now(), name, photos: p.npPhotos, scenes: p.npScenes.length }));
-  dispatch(toast(Lof(getState()).tProfileAdded));
-  dispatch(nav("profiles", "profiles"));
   const L = Lof(getState());
-  dispatch(
-    startTask(L.taskNewProfile.replace("{name}", name), {
-      kind: "retrain",
-      target: null,
-      onDone: () => dispatch(toast(Lof(getState()).tProfileTrained)),
+  dispatch(profilesActions.npStartTraining());
+  dispatch(cameraApi.endpoints.encodeFaces.initiate(name))
+    .unwrap()
+    .then((r) => {
+      if (!r.ok) throw new Error(r.error || L.npTrainErrorMsg);
+      dispatch(profilesActions.npTrainingDone());
+      dispatch(profilesActions.finishWizard({ id: name, name, photos: p.npPhotos.length, scenes: p.npScenes.length }));
+      dispatch(toast(L.tProfileTrained));
+      dispatch(nav("profiles", "profiles"));
     })
-  );
+    .catch((e) => dispatch(profilesActions.npTrainingFailed(e instanceof Error ? e.message : String(e))));
 };
 
 export const startWizard = (): Thunk => (dispatch) => {
