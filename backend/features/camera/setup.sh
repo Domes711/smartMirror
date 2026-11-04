@@ -41,6 +41,15 @@ if [ -f "$TLS_DIR/key.pem" ] && [ -f "$TLS_DIR/cert.pem" ]; then
   # whoever ran setup.sh unless group/world-readable. A self-signed cert for
   # a LAN-only mirror is low-stakes enough that world-readable is fine here.
   sudo chmod 644 "$TLS_DIR/key.pem" "$TLS_DIR/cert.pem" 2>/dev/null || true
+  # chmod on the cert files isn't enough if $HOME itself blocks traversal —
+  # a home dir locked down to `other::---` (seen on this Pi) stops mosquitto
+  # from ever reaching var/tls/ regardless of the files' own permissions, and
+  # mosquitto fails silently-ish (ECONNREFUSED-on-restart-loop, no clear log
+  # line) rather than erroring on the chmod. Grant just traversal (x), not
+  # read, on $HOME so nothing else under it becomes browsable.
+  if command -v setfacl >/dev/null 2>&1; then
+    sudo setfacl -m u:mosquitto:x "$HOME" 2>/dev/null || true
+  fi
   WS_TLS_CONF="
 cafile $TLS_DIR/cert.pem
 certfile $TLS_DIR/cert.pem
