@@ -127,11 +127,10 @@ export const radarConfigApi = createApi({
       query: () => ({ cmd: "reset" }),
     }),
 
-    // Opt-in live target broadcast (daemon.py's RadarState.is_streaming) —
-    // the dev console's Radar screen sends `active: true` on mount and
-    // renews it periodically while open, `active: false` on unmount; a
-    // 15s-silence auto-stop on the daemon side covers a closed tab that
-    // never got to send the false.
+    // Opt-in live target broadcast (daemon.py's RadarState.is_streaming).
+    // The dev Radar screen drives this itself via app/useLiveStream.ts
+    // (direct publish, so the stop on pagehide is synchronous); the daemon
+    // auto-stops after 6s without renewal.
     setRadarStreaming: build.mutation<{ ok: boolean }, boolean>({
       query: (active) => ({ cmd: "stream", active }),
     }),

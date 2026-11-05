@@ -1,6 +1,6 @@
 import pytest
 from features.distance.daemon import (
-    cm_from_echo, clean_reading, average_reading, PresenceTracker,
+    cm_from_echo, clean_reading, average_reading, PresenceTracker, StreamLease,
 )
 from features.distance import constants
 
@@ -118,3 +118,30 @@ def test_absent_after_n_of_one_fires_on_first_far_reading():
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+# --- live READING stream lease ------------------------------------------
+
+def test_stream_off_by_default():
+    assert StreamLease(timeout_s=6).is_active(now=0.0) is False
+
+
+def test_stream_on_then_expires_without_renewal():
+    lease = StreamLease(timeout_s=6)
+    lease.handle(True, now=100.0)
+    assert lease.is_active(now=105.0) is True
+    assert lease.is_active(now=106.5) is False
+
+
+def test_stream_renewal_extends():
+    lease = StreamLease(timeout_s=6)
+    lease.handle(True, now=100.0)
+    lease.handle(True, now=105.0)
+    assert lease.is_active(now=110.0) is True
+
+
+def test_stream_explicit_stop_is_immediate():
+    lease = StreamLease(timeout_s=6)
+    lease.handle(True, now=100.0)
+    lease.handle(False, now=101.0)
+    assert lease.is_active(now=101.0) is False

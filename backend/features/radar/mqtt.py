@@ -6,8 +6,8 @@ import the constants.
 
 PRESENCE = "smartmirror/radar/presence"    # out: "present" | "absent"
 # out: {targets, present, zone} ~10 Hz — only while a client has sent
-# CONTROL {"cmd": "stream", "active": true} (renew every <15s; "active":
-# false or 15s of silence auto-stops it). Otherwise silent — the dev console
+# CONTROL {"cmd": "stream", "active": true} (renew every <6s; "active":
+# false or 6s of silence auto-stops it). Otherwise silent — the dev console
 # map is the only consumer, and nobody polling for ghosts shouldn't cost
 # ~600 messages/minute. Use PRESENCE/CONFIG for anything that needs to run
 # unconditionally in the background.

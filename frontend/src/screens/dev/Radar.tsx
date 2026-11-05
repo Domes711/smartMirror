@@ -1,8 +1,10 @@
-import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { useT } from "@/i18n/useT";
 import { tokens as C, h2, eyebrow } from "@/components/ui";
 import * as fx from "@/app/thunks";
+import { useLiveStream } from "@/app/useLiveStream";
+import { publish, TOPICS } from "@/services/mqtt";
+import { devActions } from "@/features/dev/devSlice";
 import { useGetDistanceConfigQuery, useSetDistanceConfigMutation } from "@/app/api/distanceApi";
 import {
   useGetRadarConfigQuery,
@@ -11,17 +13,12 @@ import {
   useFlipRadarAxisMutation,
   useLearnRadarGhostsMutation,
   useResetRadarConfigMutation,
-  useSetRadarStreamingMutation,
 } from "@/app/api/radarApi";
 
 const HX = 2.2; // half-width metres
 const MY = 3; // reach metres
 const xP = (m: number) => 50 + (m / HX) * 50;
 const yP = (m: number) => (m / MY) * 100;
-
-// Must be well under the daemon's STREAM_TIMEOUT_S (15s) so a renewal
-// always lands before the broadcast auto-stops on its own.
-const STREAM_RENEW_MS = 8000;
 
 export default function Radar() {
   const dispatch = useAppDispatch();
@@ -39,19 +36,21 @@ export default function Radar() {
   const [flipAxis] = useFlipRadarAxisMutation();
   const [learnGhosts] = useLearnRadarGhostsMutation();
   const [resetConfig] = useResetRadarConfigMutation();
-  const [setStreaming] = useSetRadarStreamingMutation();
 
-  // Live targets cost the daemon a broadcast ~10x/second — only worth it
-  // while this screen is actually open. Start on mount, renew periodically
-  // (the daemon auto-stops after 15s of silence), stop on unmount.
-  useEffect(() => {
-    setStreaming(true);
-    const renew = setInterval(() => setStreaming(true), STREAM_RENEW_MS);
-    return () => {
-      clearInterval(renew);
-      setStreaming(false);
-    };
-  }, [setStreaming]);
+  // Live sensor data goes over the broker ONLY while the matching
+  // "Start measuring" switch is on. Both start off on every visit and
+  // switch themselves off on leaving the tab / hiding or closing the app
+  // (useLiveStream); the daemons' 6s lease covers anything that can't
+  // send the stop. Published directly (not via an RTK mutation) so the
+  // stop on pagehide goes out synchronously.
+  const [radarLive, setRadarLive] = useLiveStream(
+    (a) => publish(TOPICS.radarControl, { cmd: "stream", active: a }),
+    () => dispatch(devActions.setLiveTargets([]))
+  );
+  const [distLive, setDistLive] = useLiveStream(
+    (a) => publish(TOPICS.distanceControl, { cmd: "stream", active: a }),
+    () => dispatch(devActions.setDistanceReading({ cm: null, near: false }))
+  );
 
   // Targets arrive already offset/mirror-corrected (daemon.py's apply_axis
   // runs before publish), so the detection zone on the map is always
@@ -64,7 +63,7 @@ export default function Radar() {
 
   // Real MQTT targets only — an empty array means the radar confirmed
   // nobody is in range, so the map must show nothing, not a stale demo dot.
-  const targets = d.liveTargets.map((t) => ({ x: t.x / 1000, y: t.y / 1000 }));
+  const targets = (radarLive ? d.liveTargets : []).map((t) => ({ x: t.x / 1000, y: t.y / 1000 }));
 
   const Slider = ({ label, value, min, max, step, on, fmt }: { label: string; value: number; min: number; max: number; step: number; on: (v: number) => void; fmt?: (v: number) => string }) => (
     <div style={{ marginTop: 16 }}>
@@ -73,6 +72,21 @@ export default function Radar() {
         <span style={{ color: C.ink }}>{fmt ? fmt(value) : value.toFixed(2)}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => on(parseFloat(e.target.value))} style={{ width: "100%", accentColor: C.signal }} />
+    </div>
+  );
+
+  const LiveSwitch = ({ on, set }: { on: boolean; set: (v: boolean) => void }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, padding: "10px 14px", borderRadius: 12, border: `1px solid ${on ? C.signal : C.line}`, background: C.p3 }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: C.ink }}>
+        {on ? (en ? "Measuring — live data" : "Měří se — živá data") : en ? "Start measuring" : "Začít měřit"}
+      </span>
+      <button
+        onClick={() => set(!on)}
+        aria-pressed={on}
+        style={{ width: 48, height: 28, borderRadius: 999, border: `1px solid ${on ? C.signal : C.line}`, background: on ? C.signal : C.paper, position: "relative", cursor: "pointer", padding: 0 }}
+      >
+        <span style={{ position: "absolute", top: 2, left: on ? 22 : 2, width: 22, height: 22, borderRadius: "50%", background: on ? C.paper : C.ink, transition: ".18s" }} />
+      </button>
     </div>
   );
 
@@ -88,6 +102,8 @@ export default function Radar() {
           <span style={{ fontFamily: "var(--mono)", fontSize: 12 }}>{active ? (en ? "Active" : "Aktivní") : en ? "Off" : "Vypnuto"}</span>
         </div>
       </div>
+
+      <LiveSwitch on={radarLive} set={setRadarLive} />
 
       <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(59,138,79,.12)", border: "1px solid rgba(59,138,79,.4)", borderRadius: 999, padding: "6px 12px", marginBottom: 14 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#3bd17a" }} />
@@ -224,6 +240,8 @@ export default function Radar() {
           </div>
         </div>
 
+        <LiveSwitch on={distLive} set={setDistLive} />
+
         <div
           style={{
             display: "inline-flex",
@@ -238,7 +256,7 @@ export default function Radar() {
         >
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: d.distanceCm == null ? C.mute : d.distanceNear ? "#d9614a" : "#3bd17a" }} />
           <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: C.ink }}>
-            {d.distanceCm == null ? (en ? "no echo" : "bez odezvy") : `${d.distanceCm.toFixed(1)} cm`}
+            {!distLive ? (en ? "not measuring" : "neměří se") : d.distanceCm == null ? (en ? "no echo" : "bez odezvy") : `${d.distanceCm.toFixed(1)} cm`}
           </span>
         </div>
 

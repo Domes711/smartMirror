@@ -8,9 +8,21 @@ daemon's read loop.
 
 BASE = "smartmirror/distance"
 
-READING = f"{BASE}/reading"   # out: {cm, available} ~5 Hz
+# out: {cm, available, near} once per averaging window — ONLY while a client
+# holds a live-stream lease (CONTROL {"cmd": "stream", "active": true},
+# renewed every <STREAM_TIMEOUT_S; "active": false or silence stops it).
+# The dev console is the only consumer; presence (GLOBAL_PRESENCE) is
+# published regardless, so the mirror never depends on this topic.
+READING = f"{BASE}/reading"
 STATUS = f"{BASE}/status"     # out: {active, available} (retained)
-CONTROL = f"{BASE}/control"   # in:  {"active": bool} enable/disable sampling
+# in: {"active": bool} enable/disable sampling, or
+#     {"cmd": "stream", "active": bool} open/renew/close the READING stream
+CONTROL = f"{BASE}/control"
+
+# Live READING stream auto-stops this long after the last renewal — the
+# backstop for a client that vanished without sending "active": false
+# (app killed, phone lost Wi-Fi). The app renews every 2s.
+STREAM_TIMEOUT_S = 6
 
 # Cross-feature presence signal — not distance's own topic. Any presence
 # source publishes here ("present"/"absent", plain string like radar's old

@@ -58,7 +58,7 @@ SERIAL_DEVICE = "/dev/ttyAMA0"
 SERIAL_BAUD = 256000
 
 TARGET_PUB_INTERVAL = 0.1   # s — throttle live target broadcasts (~10 Hz)
-STREAM_TIMEOUT_S = 15        # auto-stop broadcasting if no renewal arrives
+STREAM_TIMEOUT_S = 6         # auto-stop broadcasting if no renewal arrives (app renews every 2s)
 
 EXCL_RADIUS_MM = 250     # drop targets within this of a learned ghost spot
 BASELINE_GRID_MM = 150   # quantize baseline ghost points to this grid

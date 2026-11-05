@@ -229,7 +229,7 @@ def test_stream_renewal_pushes_the_deadline_out():
     state.handle({"cmd": "stream", "active": True}, now=100.0)
     state.handle({"cmd": "stream", "active": True}, now=100.0 + STREAM_TIMEOUT_S - 1)
     # Had it not renewed, this point would already be past the original deadline.
-    assert state.is_streaming(now=100.0 + STREAM_TIMEOUT_S + 5) is True
+    assert state.is_streaming(now=100.0 + STREAM_TIMEOUT_S + 1) is True
 
 
 def test_stream_command_does_not_mark_config_dirty():

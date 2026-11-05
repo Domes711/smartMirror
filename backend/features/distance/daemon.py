@@ -14,6 +14,7 @@ import json
 import logging
 import sys
 import os
+import threading
 import time
 
 sys.path.insert(0, os.path.normpath(
@@ -101,6 +102,29 @@ class PresenceTracker:
         return None
 
 
+class StreamLease:
+    """Opt-in live READING stream, held by the dev console.
+
+    Off by default and expires on its own STREAM_TIMEOUT_S after the last
+    renewal, so a client that disappears without saying "stop" can't leave
+    the broker flooded. Thread-safe: the MQTT thread calls handle(), the
+    sample loop calls is_active().
+    """
+
+    def __init__(self, timeout_s: float = constants.STREAM_TIMEOUT_S):
+        self.timeout_s = timeout_s
+        self._lock = threading.Lock()
+        self._deadline = None
+
+    def handle(self, active: bool, now: float) -> None:
+        with self._lock:
+            self._deadline = now + self.timeout_s if active else None
+
+    def is_active(self, now: float) -> bool:
+        with self._lock:
+            return self._deadline is not None and now < self._deadline
+
+
 # --- hardware-bound (lazy-imported) -------------------------------------
 
 def setup_gpio():
@@ -153,11 +177,15 @@ def main() -> int:
     # the connection (mosquitto drops the older one on a client_id clash).
     client = distance_mqtt.client()
 
+    stream = StreamLease()
+
     def on_control(_topic: str, payload: str) -> None:
         nonlocal active
         try:
             data = json.loads(payload or "{}")
-            if "active" in data:
+            if data.get("cmd") == "stream":
+                stream.handle(bool(data.get("active", True)), time.monotonic())
+            elif "active" in data:
                 active = bool(data["active"])
         except Exception as exc:  # noqa: BLE001
             log.warning("control message error: %s", exc)
@@ -198,11 +226,14 @@ def main() -> int:
             tracker.absent_after_n = max(1, cfg["absent_after_n"])
             event = tracker.update(cm)
 
-            client.publish(constants.READING, {
-                "cm": cm,
-                "available": cm is not None,
-                "near": cm is not None and cm <= cfg["warn_cm"],
-            }, qos=0)
+            # Live readings only while the dev console holds a stream
+            # lease — presence below is published either way.
+            if stream.is_active(time.monotonic()):
+                client.publish(constants.READING, {
+                    "cm": cm,
+                    "available": cm is not None,
+                    "near": cm is not None and cm <= cfg["warn_cm"],
+                }, qos=0)
 
             if event == "PRESENT":
                 log.info("PRESENT — publishing to %s", constants.GLOBAL_PRESENCE)
