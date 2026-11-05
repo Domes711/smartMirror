@@ -21,6 +21,9 @@ export interface DevState {
   sentMsgs: MqttMsg[];
 }
 
+// Kept for the message-log detail view; the Comms screen preview shows the newest few.
+const LOG_MAX = 200;
+
 const initialState: DevState = {
   devMode: false,
   pwModal: false,
@@ -98,10 +101,10 @@ const devSlice = createSlice({
     },
     /** Append a line to the monitor (sent or received). */
     logMsg(s, a: PayloadAction<MqttMsg>) {
-      s.sentMsgs = [a.payload, ...s.sentMsgs].slice(0, 14);
+      s.sentMsgs = [a.payload, ...s.sentMsgs].slice(0, LOG_MAX);
     },
     sentMsg(s, a: PayloadAction<MqttMsg>) {
-      s.sentMsgs = [a.payload, ...s.sentMsgs].slice(0, 14);
+      s.sentMsgs = [a.payload, ...s.sentMsgs].slice(0, LOG_MAX);
       s.commsPanel = false;
     },
   },

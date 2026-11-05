@@ -6,6 +6,7 @@ import { TOPICS, isConnected, resolveMqttUrl } from "@/services/mqtt";
 import * as fx from "@/app/thunks";
 import { useGetCameraProfilesQuery } from "@/app/api/cameraApi";
 import { useEffect, useState } from "react";
+import { MessageLogDetail } from "./MessageLog";
 
 export default function Comms() {
   const dispatch = useAppDispatch();
@@ -17,6 +18,7 @@ export default function Comms() {
   const { data: allProfiles } = useGetCameraProfilesQuery();
   const profiles = (allProfiles ?? []).filter((p) => !p.is_default);
   const [selectedTarget, setSelectedTarget] = useState<"user" | "monitor">("user");
+  const [logOpen, setLogOpen] = useState(false);
 
   // Default the comms target to the first non-default profile, once loaded.
   useEffect(() => {
@@ -72,10 +74,20 @@ export default function Comms() {
         </div>
       ))}
 
-      <p style={{ ...eyebrow, margin: "18px 0 8px" }}>{en ? "Message log" : "Záznam zpráv"}</p>
-      <div style={{ background: "#0c0d0b", borderRadius: 12, padding: 12, fontFamily: "var(--mono)", fontSize: 10.5, color: "#cfcec2", minHeight: 80 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 0 8px" }}>
+        <p style={{ ...eyebrow, margin: 0 }}>{en ? "Message log" : "Záznam zpráv"}</p>
+        <span style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: C.mute }}>{en ? "tap for detail ›" : "klepni pro detail ›"}</span>
+      </div>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setLogOpen(true)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setLogOpen(true)}
+        className="mc-lift"
+        style={{ background: "#0c0d0b", borderRadius: 12, padding: 12, fontFamily: "var(--mono)", fontSize: 10.5, color: "#cfcec2", minHeight: 80, cursor: "pointer" }}
+      >
         {sent.length === 0 && <div style={{ color: "#6f6e66" }}>—</div>}
-        {sent.map((m, i) => (
+        {sent.slice(0, 14).map((m, i) => (
           <div key={i} style={{ display: "flex", gap: 8, padding: "3px 0", whiteSpace: "nowrap", overflow: "hidden" }}>
             <span style={{ color: "#6f6e66" }}>{m.t}</span>
             <span style={{ color: m.dirColor }}>{m.dir}</span>
@@ -84,6 +96,8 @@ export default function Comms() {
           </div>
         ))}
       </div>
+
+      {logOpen && <MessageLogDetail msgs={sent} en={en} onClose={() => setLogOpen(false)} />}
 
       <BottomSheet open={panel} onClose={() => dispatch(devActions.closeComms())}>
         <p style={{ ...eyebrow, margin: "0 0 4px" }}>{en ? "Send MQTT message" : "Odeslat MQTT zprávu"}</p>

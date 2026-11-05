@@ -69,5 +69,5 @@ export function startMirrorBridge(store: AppStore): void {
 function line(dir: "→" | "←", dirColor: string, topic: string, payload: string) {
   const d = new Date();
   const t = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
-  return { t, dir, dirColor, topic, payload: payload.slice(0, 120) };
+  return { t, dir, dirColor, topic, payload: payload.slice(0, 20000) } // full payload for the log detail; cap only guards against huge blobs;
 }
